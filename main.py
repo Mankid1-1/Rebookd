@@ -45,6 +45,7 @@ class Settings:
     twilio_account_sid: str = os.getenv("TWILIO_ACCOUNT_SID", "")
     twilio_auth_token: str = os.getenv("TWILIO_AUTH_TOKEN", "")
     twilio_phone: str = os.getenv("TWILIO_PHONE", "")
+    base_url: str = os.getenv("BASE_URL", "")
 
     @property
     def environment(self) -> str:
@@ -103,6 +104,7 @@ def init_db() -> None:
                 user_id INTEGER NOT NULL UNIQUE,
                 business_name TEXT NOT NULL,
                 twilio_phone TEXT UNIQUE,
+                booking_url TEXT,
                 services_json TEXT NOT NULL DEFAULT '[]',
                 incentive TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -140,6 +142,7 @@ def init_db() -> None:
         ensure_column(connection, "leads", "delivery_status_updated_at", "TEXT")
         ensure_column(connection, "leads", "last_outbound_message_sid", "TEXT")
         ensure_column(connection, "tenants", "updated_at", "TEXT")
+        ensure_column(connection, "tenants", "booking_url", "TEXT")
 
         # Backfill updated_at for existing rows
         connection.execute(
@@ -534,6 +537,11 @@ def dashboard(request: Request, user_id: int = Depends(get_current_user_id)) -> 
                 "hint": tenant["twilio_phone"] or "Add the number your missed calls should route through.",
             },
             {
+                "label": "Booking URL",
+                "complete": bool(tenant["booking_url"]),
+                "hint": tenant["booking_url"] or "Add your booking link (Calendly, Jane, etc.) so callers can self-book.",
+            },
+            {
                 "label": "Service catalog",
                 "complete": len(services) > 0,
                 "hint": f"{len(services)} service(s) configured." if services else "Add services and pricing.",
@@ -567,6 +575,7 @@ def config_page(request: Request, user_id: int = Depends(get_current_user_id)) -
 
     form = {
         "twilio_phone": tenant["twilio_phone"] or "",
+        "booking_url": tenant["booking_url"] or "",
         "services": services_to_text(tenant["services_json"]),
         "incentive": tenant["incentive"] or "",
     }
@@ -589,12 +598,14 @@ def save_config(
     user_id: int = Depends(get_current_user_id),
     csrf_token: str = Form(...),
     twilio_phone: str = Form(...),
+    booking_url: str = Form(""),
     services: str = Form(""),
     incentive: str = Form(""),
 ) -> Response:
     validate_csrf(request, csrf_token, "config")
 
     cleaned_phone = twilio_phone.strip()
+    cleaned_booking_url = booking_url.strip() or None
     cleaned_services = services.strip()
     cleaned_incentive = incentive.strip()
 
@@ -608,6 +619,7 @@ def save_config(
                 "welcome": False,
                 "form": {
                     "twilio_phone": cleaned_phone,
+                    "booking_url": cleaned_booking_url or "",
                     "services": cleaned_services,
                     "incentive": cleaned_incentive,
                 },
@@ -628,6 +640,7 @@ def save_config(
                 "welcome": False,
                 "form": {
                     "twilio_phone": cleaned_phone,
+                    "booking_url": cleaned_booking_url or "",
                     "services": cleaned_services,
                     "incentive": cleaned_incentive,
                 },
@@ -641,10 +654,10 @@ def save_config(
             connection.execute(
                 """
                 UPDATE tenants
-                SET twilio_phone = ?, services_json = ?, incentive = ?, updated_at = CURRENT_TIMESTAMP
+                SET twilio_phone = ?, booking_url = ?, services_json = ?, incentive = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE user_id = ?
                 """,
-                (cleaned_phone, json.dumps(services_payload), cleaned_incentive or None, user_id),
+                (cleaned_phone, cleaned_booking_url, json.dumps(services_payload), cleaned_incentive or None, user_id),
             )
         return RedirectResponse("/dashboard?setup=saved", status_code=status.HTTP_303_SEE_OTHER)
     except sqlite3.IntegrityError:
@@ -657,6 +670,7 @@ def save_config(
                 "welcome": False,
                 "form": {
                     "twilio_phone": cleaned_phone,
+                    "booking_url": cleaned_booking_url or "",
                     "services": cleaned_services,
                     "incentive": cleaned_incentive,
                 },
@@ -828,6 +842,100 @@ async def sms_webhook(request: Request) -> dict[str, str]:
 
     logger.info("SMS webhook stored lead activity for %s", from_number)
     return {"status": "ok"}
+
+
+@app.post("/voice")
+async def voice_webhook(request: Request) -> Response:
+    """Twilio calls this when a call comes in. Returns TwiML to greet and record a voicemail."""
+    form = await request.form()
+    await validate_twilio_request(request, form)
+
+    to_number = form.get("To", "").strip()
+    from_number = form.get("From", "").strip()
+
+    business_name = "us"
+    with get_db() as connection:
+        tenant = connection.execute(
+            "SELECT business_name, booking_url FROM tenants WHERE twilio_phone = ?",
+            (to_number,),
+        ).fetchone()
+        if tenant:
+            business_name = tenant["business_name"]
+
+    recording_callback = f"{settings.base_url}/voice/recording" if settings.base_url else "/voice/recording"
+
+    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">Hi, you've reached {business_name}. We're unavailable right now. Please leave a message after the tone and we'll get back to you shortly. You can also book online — we'll send you a link by text right away.</Say>
+  <Record maxLength="60" action="{recording_callback}" transcribe="false" />
+</Response>"""
+
+    if from_number and to_number:
+        with get_db() as connection:
+            tenant_row = connection.execute(
+                "SELECT id, business_name, booking_url FROM tenants WHERE twilio_phone = ?",
+                (to_number,),
+            ).fetchone()
+            if tenant_row and twilio_client:
+                booking_url = tenant_row["booking_url"]
+                biz = tenant_row["business_name"]
+                msg = f"Hi! You just called {biz}. We'd love to get you booked"
+                if booking_url:
+                    msg += f" — here's our online booking link: {booking_url}"
+                else:
+                    msg += ". We'll be in touch shortly."
+                msg += " Reply STOP to opt out."
+                try:
+                    sent = twilio_client.messages.create(
+                        body=msg,
+                        from_=to_number,
+                        to=from_number,
+                    )
+                    connection.execute(
+                        """
+                        INSERT INTO leads (tenant_id, phone, status, recovery_method, external_id, last_message_at)
+                        VALUES (?, ?, 'new', 'missed_call', ?, CURRENT_TIMESTAMP)
+                        ON CONFLICT DO NOTHING
+                        """,
+                        (tenant_row["id"], from_number, sent.sid),
+                    )
+                    logger.info("Sent missed-call SMS to %s for tenant %s", from_number, tenant_row["id"])
+                except Exception as exc:
+                    logger.warning("Failed to send missed-call SMS to %s: %s", from_number, exc)
+
+    return Response(content=twiml, media_type="application/xml")
+
+
+@app.post("/voice/recording")
+async def voice_recording(request: Request) -> Response:
+    """Twilio posts here after the voicemail recording completes."""
+    form = await request.form()
+    await validate_twilio_request(request, form)
+
+    from_number = form.get("From", "").strip()
+    to_number = form.get("To", "").strip()
+    recording_url = form.get("RecordingUrl", "")
+    recording_sid = form.get("RecordingSid", "")
+
+    if from_number and to_number:
+        with get_db() as connection:
+            tenant_row = connection.execute(
+                "SELECT id FROM tenants WHERE twilio_phone = ?",
+                (to_number,),
+            ).fetchone()
+            if tenant_row:
+                details = json.dumps({"recording_url": recording_url, "recording_sid": recording_sid})
+                connection.execute(
+                    """
+                    UPDATE leads
+                    SET details = ?, delivery_status = 'voicemail_received', delivery_status_updated_at = CURRENT_TIMESTAMP
+                    WHERE tenant_id = ? AND phone = ? AND recovery_method = 'missed_call'
+                    """,
+                    (details, tenant_row["id"], from_number),
+                )
+                logger.info("Voicemail recording stored for %s", from_number)
+
+    return Response(content="<?xml version='1.0' encoding='UTF-8'?><Response/>", media_type="application/xml")
 
 
 if __name__ == "__main__":
