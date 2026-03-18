@@ -25,7 +25,9 @@
         </div>
         <div class="flex flex-wrap gap-3">
           <a href="/config" class="rounded-2xl bg-white px-5 py-3 text-sm font-bold text-emerald-800 shadow-lg transition hover:-translate-y-0.5">Update setup</a>
-          <a href="/metrics" class="rounded-2xl border border-white/40 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10">View metrics</a>
+          <a href="/automations" class="rounded-2xl border border-white/40 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10">Automations</a>
+          <a href="/settings" class="rounded-2xl border border-white/40 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10">Settings</a>
+          <a href="/metrics" class="rounded-2xl border border-white/40 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10">Metrics</a>
           <a href="/logout" class="rounded-2xl border border-white/25 px-5 py-3 text-sm font-bold text-white/90 transition hover:bg-white/10">Log out</a>
         </div>
       </div>
@@ -51,6 +53,11 @@
         <p class="text-sm font-semibold text-slate-500">Active follow-ups</p>
         <p class="mt-4 text-4xl font-extrabold text-slate-950">{{ stats.active_followups }}</p>
         <p class="mt-2 text-sm text-slate-500">Leads still being worked through SMS or callback.</p>
+      </article>
+      <article class="rounded-[1.75rem] bg-white p-6 shadow-lg shadow-slate-100 ring-1 ring-slate-200">
+        <p class="text-sm font-semibold text-slate-500">Automations active</p>
+        <p class="mt-4 text-4xl font-extrabold text-slate-950">{{ enabled_automations }}</p>
+        <p class="mt-2 text-sm text-slate-500"><a href="/automations" class="text-emerald-600 font-semibold hover:underline">Manage automations →</a></p>
       </article>
     </section>
 

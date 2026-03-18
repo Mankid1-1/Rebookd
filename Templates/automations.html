@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rebookd | Automations</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: "Plus Jakarta Sans", sans-serif; }
+    .section-body { display: none; }
+    .section-body.open { display: block; }
+    .chevron { transition: transform 0.2s; }
+    .chevron.open { transform: rotate(180deg); }
+  </style>
+</head>
+<body class="min-h-screen bg-[linear-gradient(180deg,_#f8fafc,_#effcf6_35%,_#ffffff)] text-slate-900">
+  <main class="mx-auto max-w-5xl px-6 py-10 lg:px-10">
+
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <p class="text-sm font-bold uppercase tracking-[0.3em] text-emerald-600">Automation engine</p>
+        <h1 class="mt-2 text-4xl font-extrabold text-slate-950">Automations</h1>
+        <p class="mt-2 text-sm text-slate-500">Configure message sequences for every recovery scenario. Each automation runs independently with its own trigger, messages, delays, and stop conditions.</p>
+      </div>
+      <div class="flex gap-3">
+        <a href="/settings" class="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-white">Global settings</a>
+        <a href="/dashboard" class="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-white">Dashboard</a>
+      </div>
+    </div>
+
+    {% if saved %}
+    <div class="mt-6 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
+      <svg class="h-5 w-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+      <p class="text-sm font-semibold text-emerald-800">Automations saved successfully.</p>
+    </div>
+    {% endif %}
+
+    <form method="post" class="mt-8 space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+      {% set categories = [
+        ("new_lead",      "New lead",       "Triggered when a new lead is created — via SMS reply, form, or import.",            "bg-blue-50 border-blue-200",   "text-blue-700",  "bg-blue-600"),
+        ("missed_call",   "Missed call",    "Triggered when a call comes in and is not answered.",                                "bg-emerald-50 border-emerald-200", "text-emerald-700", "bg-emerald-600"),
+        ("no_show",       "No-show",        "Triggered when an appointment is marked as no-show.",                               "bg-amber-50 border-amber-200", "text-amber-700", "bg-amber-600"),
+        ("cancellation",  "Cancellation",   "Triggered when an appointment is cancelled.",                                       "bg-rose-50 border-rose-200",   "text-rose-700",  "bg-rose-600"),
+        ("reactivation",  "Reactivation",   "Triggered for clients who haven't booked in a set number of days.",                 "bg-purple-50 border-purple-200","text-purple-700","bg-purple-600"),
+        ("review",        "Review request", "Triggered after an appointment is completed.",                                      "bg-slate-50 border-slate-200", "text-slate-700", "bg-slate-600")
+      ] %}
+
+      {% for key, label, description, card_class, text_class, badge_class in categories %}
+      {% set auto = automations[key] %}
+      <div class="rounded-[1.75rem] bg-white shadow-lg shadow-slate-100 ring-1 ring-slate-200 overflow-hidden">
+        <button type="button" onclick="toggleSection('{{ key }}')"
+          class="w-full flex items-center justify-between px-7 py-5 text-left">
+          <div class="flex items-center gap-4">
+            <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full {{ badge_class }} text-white text-xs font-bold">
+              {{ '✓' if auto.enabled else '–' }}
+            </span>
+            <div>
+              <p class="font-bold text-slate-900 text-base">{{ label }}</p>
+              <p class="text-xs text-slate-500 mt-0.5">{{ description }}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="rounded-full px-3 py-1 text-xs font-bold {{ 'bg-emerald-100 text-emerald-700' if auto.enabled else 'bg-slate-100 text-slate-500' }}">
+              {{ 'Active' if auto.enabled else 'Off' }}
+            </span>
+            <svg id="chevron-{{ key }}" class="chevron h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </div>
+        </button>
+
+        <div id="section-{{ key }}" class="section-body border-t border-slate-100">
+          <div class="p-7 space-y-6">
+
+            <div class="flex items-center gap-4 rounded-2xl {{ card_class }} border px-5 py-4">
+              <label class="relative inline-flex cursor-pointer items-center">
+                <input type="checkbox" name="{{ key }}_enabled" id="{{ key }}_enabled" class="peer sr-only" {{ 'checked' if auto.enabled }}>
+                <div class="peer h-6 w-11 rounded-full bg-slate-200 transition after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition peer-checked:bg-emerald-500 peer-checked:after:translate-x-5"></div>
+              </label>
+              <div>
+                <p class="text-sm font-bold {{ text_class }}">Enable {{ label }} automation</p>
+                <p class="text-xs text-slate-500 mt-0.5">When on, this automation fires automatically for matching triggers.</p>
+              </div>
+            </div>
+
+            <div class="grid gap-5 lg:grid-cols-2">
+              <div>
+                <label class="mb-2 block text-sm font-semibold text-slate-700">Message 1 <span class="font-normal text-slate-400">(sent immediately)</span></label>
+                <textarea name="{{ key }}_message_1" rows="4"
+                  class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                >{{ auto.message_1 }}</textarea>
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-semibold text-slate-700">Message 2 <span class="font-normal text-slate-400">(follow-up)</span></label>
+                <textarea name="{{ key }}_message_2" rows="4"
+                  class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                >{{ auto.message_2 }}</textarea>
+              </div>
+            </div>
+
+            <div class="text-xs text-slate-400 bg-slate-50 rounded-2xl px-4 py-3">
+              Variables: <code class="font-mono">{business}</code> business name &nbsp;·&nbsp; <code class="font-mono">{name}</code> client name &nbsp;·&nbsp; <code class="font-mono">{booking_url}</code> your booking link
+              {% if key == "review" %}&nbsp;·&nbsp; <code class="font-mono">{review_url}</code> review link{% endif %}
+            </div>
+
+            <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <label class="mb-2 block text-sm font-semibold text-slate-700">Follow-up delay</label>
+                <select name="{{ key }}_delay_minutes"
+                  class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100">
+                  {% for mins, lbl in [(60,'1 hour'),(240,'4 hours'),(480,'8 hours'),(1440,'24 hours'),(2880,'48 hours'),(4320,'72 hours')] %}
+                  <option value="{{ mins }}" {{ 'selected' if auto.delay_minutes == mins }}>{{ lbl }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              {% if key == "reactivation" %}
+              <div>
+                <label class="mb-2 block text-sm font-semibold text-slate-700">Inactivity threshold</label>
+                <select name="{{ key }}_inactivity_days"
+                  class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100">
+                  {% for days, lbl in [(30,'30 days'),(60,'60 days'),(90,'90 days'),(180,'180 days')] %}
+                  <option value="{{ days }}" {{ 'selected' if auto.inactivity_days == days }}>{{ lbl }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              {% endif %}
+
+              {% if key == "review" %}
+              <div class="lg:col-span-2">
+                <label class="mb-2 block text-sm font-semibold text-slate-700">Review link URL</label>
+                <input type="url" name="review_review_url" value="{{ auto.review_url or '' }}"
+                  placeholder="https://g.page/r/your-review-link"
+                  class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100" />
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="flex flex-wrap gap-4 pt-1">
+              <label class="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" name="{{ key }}_stop_on_reply" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" {{ 'checked' if auto.stop_on_reply }}>
+                Stop if client replies
+              </label>
+              {% if 'stop_on_booking' in auto %}
+              <label class="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" name="{{ key }}_stop_on_booking" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" {{ 'checked' if auto.stop_on_booking }}>
+                Stop if client books
+              </label>
+              {% endif %}
+              {% if key == "missed_call" %}
+              <label class="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" name="{{ key }}_voicemail_branch" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" {{ 'checked' if auto.voicemail_branch }}>
+                Enable voicemail branch
+              </label>
+              {% endif %}
+            </div>
+
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+
+      <div class="pt-4">
+        <button type="submit"
+          class="w-full rounded-2xl bg-[linear-gradient(135deg,_#111827,_#0f766e)] px-5 py-4 text-base font-bold text-white shadow-lg shadow-slate-200 transition hover:-translate-y-0.5 active:translate-y-0">
+          Save all automations
+        </button>
+      </div>
+    </form>
+  </main>
+
+  <script>
+    function toggleSection(key) {
+      const body = document.getElementById('section-' + key);
+      const chevron = document.getElementById('chevron-' + key);
+      body.classList.toggle('open');
+      chevron.classList.toggle('open');
+    }
+    // Auto-open any enabled automation on load
+    document.addEventListener('DOMContentLoaded', () => {
+      {% for key, label, description, card_class, text_class, badge_class in categories %}
+      {% if automations[key].enabled %}
+      toggleSection('{{ key }}');
+      {% endif %}
+      {% endfor %}
+    });
+  </script>
+</body>
+</html>

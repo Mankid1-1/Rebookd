@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rebookd | Global settings</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <style>body { font-family: "Plus Jakarta Sans", sans-serif; }</style>
+</head>
+<body class="min-h-screen bg-[linear-gradient(180deg,_#f8fafc,_#effcf6_35%,_#ffffff)] text-slate-900">
+  <main class="mx-auto max-w-5xl px-6 py-10 lg:px-10">
+
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <p class="text-sm font-bold uppercase tracking-[0.3em] text-emerald-600">Global configuration</p>
+        <h1 class="mt-2 text-4xl font-extrabold text-slate-950">Settings</h1>
+        <p class="mt-2 text-sm text-slate-500">These settings apply across all automations. Tone, hours, AI behavior, delays, and notification preferences.</p>
+      </div>
+      <div class="flex gap-3">
+        <a href="/automations" class="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-white">Automations</a>
+        <a href="/dashboard" class="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-white">Dashboard</a>
+      </div>
+    </div>
+
+    {% if saved %}
+    <div class="mt-6 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
+      <svg class="h-5 w-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+      <p class="text-sm font-semibold text-emerald-800">Settings saved successfully.</p>
+    </div>
+    {% endif %}
+
+    <form method="post" class="mt-8 space-y-6">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+      <!-- Tone & AI -->
+      <div class="rounded-[1.75rem] bg-white p-7 shadow-lg shadow-slate-100 ring-1 ring-slate-200">
+        <p class="text-sm font-bold uppercase tracking-[0.25em] text-slate-400">Messaging</p>
+        <h2 class="mt-2 text-xl font-extrabold text-slate-950">Tone & AI behavior</h2>
+        <div class="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+
+          <div>
+            <label class="mb-2 block text-sm font-semibold text-slate-700">Tone</label>
+            <select name="tone" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100">
+              {% for val, lbl in [('professional','Professional'),('friendly','Friendly'),('casual','Casual'),('high_energy','High energy'),('luxury','Luxury'),('short_direct','Short & direct')] %}
+              <option value="{{ val }}" {{ 'selected' if gs.tone == val }}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-semibold text-slate-700">AI behavior</label>
+            <select name="ai_behavior" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100">
+              {% for val, lbl in [('strict','Strict — no rewriting'),('flexible','Flexible — rewrite within tone'),('conversational','Conversational — expand messages')] %}
+              <option value="{{ val }}" {{ 'selected' if gs.ai_behavior == val }}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-semibold text-slate-700">Message frequency</label>
+            <select name="message_frequency" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100">
+              {% for val, lbl in [('one_touch','One message only'),('one_followup','One follow-up'),('no_followup','No follow-up')] %}
+              <option value="{{ val }}" {{ 'selected' if gs.message_frequency == val }}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-semibold text-slate-700">Booking link style</label>
+            <select name="booking_link_style" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100">
+              {% for val, lbl in [('standard','Standard link'),('shortened','Shortened link'),('deep_link','Deep link to service'),('prefilled_staff','Pre-filled staff')] %}
+              <option value="{{ val }}" {{ 'selected' if gs.booking_link_style == val }}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Business hours -->
+      <div class="rounded-[1.75rem] bg-white p-7 shadow-lg shadow-slate-100 ring-1 ring-slate-200">
+        <p class="text-sm font-bold uppercase tracking-[0.25em] text-slate-400">Scheduling</p>
+        <h2 class="mt-2 text-xl font-extrabold text-slate-950">Business hours</h2>
+        <p class="mt-1 text-sm text-slate-500">Messages respect these hours. After-hours behavior controls what happens outside them.</p>
+
+        <div class="mt-6 space-y-3">
+          {% for day in days %}
+          {% set h = gs.business_hours[day] %}
+          <div class="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-100 bg-slate-50 px-5 py-3">
+            <label class="flex w-28 cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
+              <input type="checkbox" name="hours_{{ day }}_enabled" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" {{ 'checked' if h.enabled }}>
+              {{ day.capitalize() }}
+            </label>
+            <div class="flex items-center gap-2">
+              <input type="time" name="hours_{{ day }}_open" value="{{ h.open }}"
+                class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+              <span class="text-slate-400 text-sm">to</span>
+              <input type="time" name="hours_{{ day }}_close" value="{{ h.close }}"
+                class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <div class="mt-5 grid gap-5 sm:grid-cols-2">
+          <div>
+            <label class="mb-2 block text-sm font-semibold text-slate-700">After-hours behavior</label>
+            <select name="after_hours_behavior" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100">
+              {% for val, lbl in [('send_immediately','Send immediately'),('delay','Delay until next open'),('custom_message','Custom after-hours message')] %}
+              <option value="{{ val }}" {{ 'selected' if gs.after_hours_behavior == val }}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="flex items-end pb-1">
+            <label class="flex cursor-pointer items-center gap-3 text-sm font-semibold text-slate-700">
+              <input type="checkbox" name="smart_hours" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" {{ 'checked' if gs.smart_hours }}>
+              Enable smart hours (auto-detect weekends & holidays)
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Delay defaults -->
+      <div class="rounded-[1.75rem] bg-white p-7 shadow-lg shadow-slate-100 ring-1 ring-slate-200">
+        <p class="text-sm font-bold uppercase tracking-[0.25em] text-slate-400">Timing</p>
+        <h2 class="mt-2 text-xl font-extrabold text-slate-950">Default delays</h2>
+        <div class="mt-6 grid gap-5 sm:grid-cols-3">
+          {% for field, label in [('default_message2_delay','Follow-up message delay'),('default_reactivation_delay','Reactivation delay (days)'),('default_review_delay','Review request delay (minutes)')] %}
+          <div>
+            <label class="mb-2 block text-sm font-semibold text-slate-700">{{ label }}</label>
+            <input type="number" name="{{ field }}" value="{{ gs[field] }}" min="1"
+              class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100" />
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Notifications -->
+      <div class="rounded-[1.75rem] bg-white p-7 shadow-lg shadow-slate-100 ring-1 ring-slate-200">
+        <p class="text-sm font-bold uppercase tracking-[0.25em] text-slate-400">Alerts</p>
+        <h2 class="mt-2 text-xl font-extrabold text-slate-950">Notification preferences</h2>
+        <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {% for field, label in [
+            ('notify_new_lead','New lead created'),
+            ('notify_reply','Client replies'),
+            ('notify_booking','Booking confirmed'),
+            ('notify_missed_call','Missed call received'),
+            ('notify_no_show','No-show recorded')
+          ] %}
+          <label class="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 hover:border-emerald-200 hover:bg-emerald-50/50 transition">
+            <input type="checkbox" name="{{ field }}" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" {{ 'checked' if gs[field] }}>
+            {{ label }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Tagging -->
+      <div class="rounded-[1.75rem] bg-white p-7 shadow-lg shadow-slate-100 ring-1 ring-slate-200">
+        <p class="text-sm font-bold uppercase tracking-[0.25em] text-slate-400">Organisation</p>
+        <h2 class="mt-2 text-xl font-extrabold text-slate-950">Auto-tagging rules</h2>
+        <div class="mt-6 grid gap-3 sm:grid-cols-2">
+          {% for field, label in [
+            ('auto_tag_new_leads','Auto-tag new leads'),
+            ('auto_tag_missed_calls','Auto-tag missed calls'),
+            ('auto_tag_no_shows','Auto-tag no-shows'),
+            ('auto_tag_cancellations','Auto-tag cancellations')
+          ] %}
+          <label class="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 hover:border-emerald-200 hover:bg-emerald-50/50 transition">
+            <input type="checkbox" name="{{ field }}" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" {{ 'checked' if gs[field] }}>
+            {{ label }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="pt-2">
+        <button type="submit"
+          class="w-full rounded-2xl bg-[linear-gradient(135deg,_#111827,_#0f766e)] px-5 py-4 text-base font-bold text-white shadow-lg shadow-slate-200 transition hover:-translate-y-0.5 active:translate-y-0">
+          Save settings
+        </button>
+      </div>
+    </form>
+  </main>
+</body>
+</html>
