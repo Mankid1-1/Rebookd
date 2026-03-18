@@ -148,6 +148,17 @@
           <p class="mt-4 text-lg leading-8 text-slate-100">
             {{ tenant.incentive or "Add a time-sensitive offer in configuration to increase rebooking response rates." }}
           </p>
+          {% if tenant.booking_url %}
+          <div class="mt-4 border-t border-white/10 pt-4">
+            <p class="text-xs font-bold uppercase tracking-[0.25em] text-emerald-200">Booking link</p>
+            <a href="{{ tenant.booking_url }}" target="_blank" class="mt-2 block truncate text-sm text-emerald-300 hover:text-emerald-100">{{ tenant.booking_url }}</a>
+          </div>
+          {% else %}
+          <div class="mt-4 border-t border-white/10 pt-4">
+            <p class="text-xs font-bold uppercase tracking-[0.25em] text-amber-300">Booking link missing</p>
+            <p class="mt-1 text-sm text-slate-400">Add your booking URL in <a href="/config" class="text-emerald-300 underline">setup</a> so missed-call SMS messages include a direct link.</p>
+          </div>
+          {% endif %}
         </div>
       </article>
     </section>

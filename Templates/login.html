@@ -10,11 +10,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
   <style>
     body { font-family: "Plus Jakarta Sans", sans-serif; }
+    .field-error { border-color: #fca5a5 !important; background-color: #fff7f7 !important; }
   </style>
 </head>
 <body class="min-h-screen bg-[linear-gradient(180deg,_#f8fafc,_#ecfdf5_45%,_#ffffff)]">
   <div class="mx-auto flex min-h-screen max-w-5xl items-center px-6 py-10">
     <div class="grid w-full gap-8 rounded-[2rem] bg-white/90 p-6 shadow-2xl shadow-emerald-100 ring-1 ring-slate-200 lg:grid-cols-[1.05fr_0.95fr] lg:p-10">
+
       <section class="rounded-[1.5rem] bg-[linear-gradient(160deg,_#052e2b,_#0f766e,_#6ee7b7)] p-8 text-white">
         <p class="text-sm font-bold uppercase tracking-[0.3em] text-emerald-100">Operator console</p>
         <h1 class="mt-4 text-4xl font-extrabold">Welcome back to your recovery dashboard.</h1>
@@ -24,11 +26,11 @@
         <div class="mt-10 space-y-4">
           <div class="rounded-2xl bg-white/10 p-4 backdrop-blur-sm">
             <p class="text-sm font-semibold">Real tenant data</p>
-            <p class="mt-1 text-sm text-emerald-50/80">No more fake dashboard metrics. Everything now comes from SQLite.</p>
+            <p class="mt-1 text-sm text-emerald-50/80">Every metric comes live from your database — no placeholders.</p>
           </div>
           <div class="rounded-2xl bg-white/10 p-4 backdrop-blur-sm">
-            <p class="text-sm font-semibold">Cleaner setup flow</p>
-            <p class="mt-1 text-sm text-emerald-50/80">Business config, service catalog, and incentive messaging are all in one place.</p>
+            <p class="text-sm font-semibold">Missed-call recovery</p>
+            <p class="mt-1 text-sm text-emerald-50/80">Callers get an instant SMS with your booking link before you even know you missed them.</p>
           </div>
         </div>
       </section>
@@ -37,42 +39,64 @@
         <div class="w-full p-2 sm:p-6">
           <p class="text-sm font-bold uppercase tracking-[0.3em] text-emerald-600">Secure sign-in</p>
           <h2 class="mt-3 text-3xl font-extrabold text-slate-900">Log in</h2>
-          <p class="mt-2 text-sm text-slate-500">Use the account email and password you created during signup.</p>
+          <p class="mt-2 text-sm text-slate-500">Use the email and password you created at signup.</p>
 
-          {% if error %}
-          <div class="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
-            {{ error }}
+          {% if expired %}
+          <div class="mt-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <svg class="mt-0.5 h-4 w-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+            <p class="text-sm font-medium text-amber-800">Your session has expired. Please log in again.</p>
           </div>
           {% endif %}
 
-          <form method="post" class="mt-8 space-y-5">
+          {% if errors.general %}
+          <div class="mt-6 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
+            <svg class="mt-0.5 h-4 w-4 shrink-0 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <p class="text-sm font-medium text-rose-700">{{ errors.general }}</p>
+          </div>
+          {% endif %}
+
+          <form method="post" class="mt-8 space-y-5" novalidate>
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <label class="block">
-              <span class="mb-2 block text-sm font-semibold text-slate-700">Email</span>
+            <input type="hidden" name="next_url" value="{{ next or '/dashboard' }}" />
+
+            <div>
+              <label class="mb-2 block text-sm font-semibold text-slate-700" for="email">Email</label>
               <input
+                id="email"
                 name="email"
                 type="email"
                 required
+                autocomplete="email"
                 value="{{ form.email or '' }}"
                 placeholder="you@yourbusiness.com"
-                class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100 {{ 'field-error' if errors.email }}"
               />
-            </label>
+              {% if errors.email %}
+              <p class="mt-2 text-xs font-medium text-rose-600">{{ errors.email }}</p>
+              {% endif %}
+            </div>
 
-            <label class="block">
-              <span class="mb-2 block text-sm font-semibold text-slate-700">Password</span>
+            <div>
+              <div class="mb-2 flex items-center justify-between">
+                <label class="text-sm font-semibold text-slate-700" for="password">Password</label>
+              </div>
               <input
+                id="password"
                 name="password"
                 type="password"
                 required
+                autocomplete="current-password"
                 placeholder="Your password"
-                class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100 {{ 'field-error' if errors.password }}"
               />
-            </label>
+              {% if errors.password %}
+              <p class="mt-2 text-xs font-medium text-rose-600">{{ errors.password }}</p>
+              {% endif %}
+            </div>
 
             <button
               type="submit"
-              class="w-full rounded-2xl bg-slate-950 px-5 py-4 text-base font-bold text-white shadow-lg shadow-slate-200 transition hover:-translate-y-0.5 hover:bg-slate-800"
+              class="w-full rounded-2xl bg-slate-950 px-5 py-4 text-base font-bold text-white shadow-lg shadow-slate-200 transition hover:-translate-y-0.5 hover:bg-slate-800 active:translate-y-0"
             >
               Log in
             </button>

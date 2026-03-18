@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import secrets
 import sqlite3
 from contextlib import asynccontextmanager
@@ -15,6 +16,7 @@ import stripe
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -180,6 +182,34 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Rebookd - Revenue Recovery SaaS", lifespan=lifespan)
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
+
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc: Exception) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request, "error.html",
+        {"title": "Page not found", "message": "The page you're looking for doesn't exist.", "code": 404},
+        status_code=404,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request, "error.html",
+        {"title": "Bad request", "message": "Something was missing or formatted incorrectly in your submission.", "code": 400},
+        status_code=400,
+    )
+
+
+@app.exception_handler(500)
+async def server_error_handler(request: Request, exc: Exception) -> HTMLResponse:
+    logger.exception("Unhandled server error: %s", exc)
+    return templates.TemplateResponse(
+        request, "error.html",
+        {"title": "Something went wrong", "message": "An unexpected error occurred. Please try again in a moment.", "code": 500},
+        status_code=500,
+    )
+
 # --- rest of your file stays EXACTLY the same ---
 
 def parse_services(services_text: str) -> list[dict[str, Any]]:
@@ -232,17 +262,28 @@ def create_auth_response(destination: str, user_id: int) -> RedirectResponse:
     return response
 
 
+def is_valid_email(email: str) -> bool:
+    return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email))
+
+
 def get_current_user_id(request: Request) -> int:
     token = request.cookies.get("auth_token")
+    next_url = request.url.path
+    if request.url.query:
+        next_url += f"?{request.url.query}"
     if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        raise HTTPException(
+            status_code=status.HTTP_302_FOUND,
+            headers={"Location": f"/login?next={next_url}"},
+        )
     try:
         data = serializer.loads(token, max_age=AUTH_MAX_AGE_SECONDS)
         return int(data["user_id"])
-    except (BadSignature, SignatureExpired, KeyError, ValueError) as exc:
+    except (BadSignature, SignatureExpired, KeyError, ValueError):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token"
-        ) from exc
+            status_code=status.HTTP_302_FOUND,
+            headers={"Location": f"/login?next={next_url}&expired=1"},
+        )
 
 
 def get_tenant_for_user(connection: sqlite3.Connection, user_id: int) -> sqlite3.Row | None:
@@ -388,10 +429,12 @@ def home(request: Request) -> RedirectResponse:
 
 @app.get("/signup", response_class=HTMLResponse)
 def signup_page(request: Request) -> HTMLResponse:
+    if request.cookies.get("auth_token"):
+        return RedirectResponse("/dashboard", status_code=status.HTTP_302_FOUND)
     return render_template(
         request,
         "signup.html",
-        {"error": None, "form": {}},
+        {"errors": {}, "form": {}},
         form_name="signup",
     )
 
@@ -402,32 +445,29 @@ def create_account(
     csrf_token: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
+    confirm_password: str = Form(...),
     business_name: str = Form(...),
 ) -> Response:
     validate_csrf(request, csrf_token, "signup")
 
     normalized_email = email.strip().lower()
     cleaned_business_name = business_name.strip()
-    if len(password) < 8:
-        return render_template(
-            request,
-            "signup.html",
-            {
-                "error": "Use a password with at least 8 characters.",
-                "form": {"email": normalized_email, "business_name": cleaned_business_name},
-            },
-            status_code=status.HTTP_400_BAD_REQUEST,
-            form_name="signup",
-        )
+    errors: dict[str, str] = {}
 
     if not cleaned_business_name:
+        errors["business_name"] = "Business name is required."
+    if not normalized_email or not is_valid_email(normalized_email):
+        errors["email"] = "Enter a valid email address."
+    if len(password) < 8:
+        errors["password"] = "Password must be at least 8 characters."
+    elif password != confirm_password:
+        errors["confirm_password"] = "Passwords don't match."
+
+    if errors:
         return render_template(
             request,
             "signup.html",
-            {
-                "error": "Add a business name so the tenant can be created correctly.",
-                "form": {"email": normalized_email, "business_name": cleaned_business_name},
-            },
+            {"errors": errors, "form": {"email": normalized_email, "business_name": cleaned_business_name}},
             status_code=status.HTTP_400_BAD_REQUEST,
             form_name="signup",
         )
@@ -438,27 +478,24 @@ def create_account(
         try:
             customer = stripe.Customer.create(email=normalized_email)
             stripe_customer_id = customer.id
-        except Exception as exc:  # pragma: no cover - external service variability
+        except Exception as exc:
             logger.warning("Stripe customer creation failed during signup: %s", exc)
 
     try:
         with get_db() as connection:
             cursor = connection.execute(
-                """
-                INSERT INTO users (email, hashed_pw, stripe_customer_id)
-                VALUES (?, ?, ?)
-                """,
+                "INSERT INTO users (email, hashed_pw, stripe_customer_id) VALUES (?, ?, ?)",
                 (normalized_email, hashed, stripe_customer_id),
             )
             user_id = int(cursor.lastrowid)
             ensure_tenant(connection, user_id, cleaned_business_name)
-        return create_auth_response("/dashboard", user_id)
+        return create_auth_response("/config?welcome=1", user_id)
     except sqlite3.IntegrityError:
         return render_template(
             request,
             "signup.html",
             {
-                "error": "That email is already in use.",
+                "errors": {"email": "An account with that email already exists."},
                 "form": {"email": normalized_email, "business_name": cleaned_business_name},
             },
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -468,10 +505,18 @@ def create_account(
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request) -> HTMLResponse:
+    if request.cookies.get("auth_token"):
+        return RedirectResponse("/dashboard", status_code=status.HTTP_302_FOUND)
+    expired = request.query_params.get("expired") == "1"
     return render_template(
         request,
         "login.html",
-        {"error": None, "form": {}},
+        {
+            "errors": {},
+            "form": {},
+            "next": request.query_params.get("next", "/dashboard"),
+            "expired": expired,
+        },
         form_name="login",
     )
 
@@ -482,10 +527,27 @@ def login(
     csrf_token: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
+    next_url: str = Form("/dashboard"),
 ) -> Response:
     validate_csrf(request, csrf_token, "login")
 
     normalized_email = email.strip().lower()
+    errors: dict[str, str] = {}
+
+    if not normalized_email:
+        errors["email"] = "Email is required."
+    if not password:
+        errors["password"] = "Password is required."
+
+    if errors:
+        return render_template(
+            request,
+            "login.html",
+            {"errors": errors, "form": {"email": normalized_email}, "next": next_url, "expired": False},
+            status_code=status.HTTP_400_BAD_REQUEST,
+            form_name="login",
+        )
+
     with get_db() as connection:
         user = connection.execute(
             "SELECT id, hashed_pw FROM users WHERE email = ?",
@@ -497,14 +559,17 @@ def login(
             request,
             "login.html",
             {
-                "error": "Invalid email or password.",
+                "errors": {"general": "Email or password is incorrect."},
                 "form": {"email": normalized_email},
+                "next": next_url,
+                "expired": False,
             },
             status_code=status.HTTP_400_BAD_REQUEST,
             form_name="login",
         )
 
-    return create_auth_response("/dashboard", int(user["id"]))
+    safe_next = next_url if next_url.startswith("/") else "/dashboard"
+    return create_auth_response(safe_next, int(user["id"]))
 
 
 @app.get("/logout")

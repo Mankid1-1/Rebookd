@@ -43,11 +43,25 @@
           </thead>
           <tbody class="divide-y divide-slate-100 text-sm text-slate-700">
             {% for row in rows %}
-            <tr class="bg-white">
-              <td class="px-5 py-4 font-semibold text-slate-900">{{ row.method }}</td>
+            <tr class="{{ 'bg-emerald-50/60' if row.method == 'missed_call' else 'bg-white' }}">
+              <td class="px-5 py-4 font-semibold text-slate-900">
+                {{ row.method }}
+                {% if row.method == 'missed_call' %}
+                <span class="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">Voice</span>
+                {% elif row.method == 'sms' %}
+                <span class="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700">SMS</span>
+                {% endif %}
+              </td>
               <td class="px-5 py-4">{{ row.bookings }}</td>
               <td class="px-5 py-4 font-bold text-emerald-700">${{ "{:,.0f}".format(row.revenue) }}</td>
-              <td class="px-5 py-4">{{ row.share }}%</td>
+              <td class="px-5 py-4">
+                <div class="flex items-center gap-3">
+                  <div class="h-2 w-24 overflow-hidden rounded-full bg-slate-100">
+                    <div class="h-2 rounded-full bg-emerald-500" style="width: {{ row.share }}%"></div>
+                  </div>
+                  <span>{{ row.share }}%</span>
+                </div>
+              </td>
             </tr>
             {% endfor %}
           </tbody>

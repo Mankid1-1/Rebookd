@@ -49,6 +49,18 @@
           </label>
 
           <label class="block">
+            <span class="mb-2 block text-sm font-semibold text-slate-700">Booking URL</span>
+            <input
+              name="booking_url"
+              type="url"
+              value="{{ form.booking_url }}"
+              placeholder="https://calendly.com/yourbusiness"
+              class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+            />
+            <span class="mt-2 block text-xs text-slate-500">Sent automatically in the missed-call SMS. Paste your Calendly, Jane App, or any booking link.</span>
+          </label>
+
+          <label class="block">
             <span class="mb-2 block text-sm font-semibold text-slate-700">Services</span>
             <textarea
               name="services"
@@ -93,9 +105,10 @@
           <p class="text-sm font-bold uppercase tracking-[0.25em] text-emerald-200">Recommended launch sequence</p>
           <ol class="mt-4 space-y-3 text-sm text-emerald-50/90">
             <li>1. Add the exact Twilio number wired to your webhook endpoint.</li>
-            <li>2. Enter your top services in the supported format.</li>
-            <li>3. Add a client-facing incentive with urgency.</li>
-            <li>4. Send a test SMS to confirm the lead appears in the dashboard.</li>
+            <li>2. Paste your booking link (Calendly, Jane, etc.) so callers can self-book.</li>
+            <li>3. Enter your top services in the supported format.</li>
+            <li>4. Add a client-facing incentive with urgency.</li>
+            <li>5. Send a test SMS to confirm the lead appears in the dashboard.</li>
           </ol>
         </div>
       </aside>
