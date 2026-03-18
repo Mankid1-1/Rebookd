@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rebookd | Create account</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #10231b;
+      --mint: #d9f3df;
+      --brand: #0f8f65;
+      --brand-dark: #0a6c4c;
+      --sand: #f7f3ea;
+    }
+    body { font-family: "Plus Jakarta Sans", sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen bg-[radial-gradient(circle_at_top,_#ecfdf5,_#f7f3ea_55%,_#ffffff)] text-slate-900">
+  <div class="mx-auto grid min-h-screen max-w-6xl gap-10 px-6 py-10 lg:grid-cols-[1.1fr_0.9fr] lg:px-10">
+    <section class="flex flex-col justify-center">
+      <span class="mb-5 inline-flex w-fit rounded-full bg-white/80 px-4 py-2 text-sm font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-100">
+        Missed-call recovery for appointment-based businesses
+      </span>
+      <h1 class="max-w-2xl text-5xl font-extrabold tracking-tight text-[var(--ink)] sm:text-6xl">
+        Turn dropped calls into booked revenue without adding front-desk busywork.
+      </h1>
+      <p class="mt-6 max-w-xl text-lg leading-8 text-slate-600">
+        Rebookd keeps every callback workflow, incentive, and lead in one place so your team can respond faster and your clients get a smoother booking experience.
+      </p>
+      <div class="mt-10 grid gap-4 sm:grid-cols-3">
+        <div class="rounded-3xl bg-white/90 p-5 shadow-lg shadow-emerald-100/70 ring-1 ring-emerald-100">
+          <p class="text-3xl font-extrabold text-emerald-700">24/7</p>
+          <p class="mt-2 text-sm text-slate-600">Always-on message capture for missed calls and SMS replies.</p>
+        </div>
+        <div class="rounded-3xl bg-white/90 p-5 shadow-lg shadow-emerald-100/70 ring-1 ring-emerald-100">
+          <p class="text-3xl font-extrabold text-emerald-700">1 view</p>
+          <p class="mt-2 text-sm text-slate-600">See setup, active follow-ups, and recovered revenue in one dashboard.</p>
+        </div>
+        <div class="rounded-3xl bg-white/90 p-5 shadow-lg shadow-emerald-100/70 ring-1 ring-emerald-100">
+          <p class="text-3xl font-extrabold text-emerald-700">Simple</p>
+          <p class="mt-2 text-sm text-slate-600">Easy to host locally today and ready to move behind a real domain later.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="flex items-center">
+      <div class="w-full rounded-[2rem] bg-white p-8 shadow-2xl shadow-emerald-100/80 ring-1 ring-slate-200 sm:p-10">
+        <div class="mb-8">
+          <p class="text-sm font-bold uppercase tracking-[0.3em] text-emerald-600">Create workspace</p>
+          <h2 class="mt-3 text-3xl font-extrabold text-slate-900">Start your account</h2>
+          <p class="mt-2 text-sm text-slate-500">We’ll create your tenant, secure your login, and send you straight into setup.</p>
+        </div>
+
+        {% if error %}
+        <div class="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+          {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="post" class="space-y-5">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <label class="block">
+            <span class="mb-2 block text-sm font-semibold text-slate-700">Business name</span>
+            <input
+              name="business_name"
+              type="text"
+              required
+              value="{{ form.business_name or '' }}"
+              placeholder="Brendan's Salon & Spa"
+              class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-base outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+            />
+          </label>
+
+          <label class="block">
+            <span class="mb-2 block text-sm font-semibold text-slate-700">Email</span>
+            <input
+              name="email"
+              type="email"
+              required
+              value="{{ form.email or '' }}"
+              placeholder="you@yourbusiness.com"
+              class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-base outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+            />
+          </label>
+
+          <label class="block">
+            <span class="mb-2 block text-sm font-semibold text-slate-700">Password</span>
+            <input
+              name="password"
+              type="password"
+              required
+              minlength="8"
+              placeholder="At least 8 characters"
+              class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-base outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+            />
+          </label>
+
+          <button
+            type="submit"
+            class="w-full rounded-2xl bg-[linear-gradient(135deg,_#10b981,_#0f766e)] px-5 py-4 text-base font-bold text-white shadow-lg shadow-emerald-200 transition hover:-translate-y-0.5 hover:shadow-xl"
+          >
+            Create account
+          </button>
+        </form>
+
+        <p class="mt-6 text-center text-sm text-slate-500">
+          Already have an account?
+          <a href="/login" class="font-semibold text-emerald-700 hover:text-emerald-800">Log in</a>
+        </p>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

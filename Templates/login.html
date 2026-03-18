@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rebookd | Log in</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: "Plus Jakarta Sans", sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen bg-[linear-gradient(180deg,_#f8fafc,_#ecfdf5_45%,_#ffffff)]">
+  <div class="mx-auto flex min-h-screen max-w-5xl items-center px-6 py-10">
+    <div class="grid w-full gap-8 rounded-[2rem] bg-white/90 p-6 shadow-2xl shadow-emerald-100 ring-1 ring-slate-200 lg:grid-cols-[1.05fr_0.95fr] lg:p-10">
+      <section class="rounded-[1.5rem] bg-[linear-gradient(160deg,_#052e2b,_#0f766e,_#6ee7b7)] p-8 text-white">
+        <p class="text-sm font-bold uppercase tracking-[0.3em] text-emerald-100">Operator console</p>
+        <h1 class="mt-4 text-4xl font-extrabold">Welcome back to your recovery dashboard.</h1>
+        <p class="mt-5 max-w-md text-base leading-7 text-emerald-50/90">
+          Log in to check setup progress, see which conversations are converting, and keep your booking pipeline moving.
+        </p>
+        <div class="mt-10 space-y-4">
+          <div class="rounded-2xl bg-white/10 p-4 backdrop-blur-sm">
+            <p class="text-sm font-semibold">Real tenant data</p>
+            <p class="mt-1 text-sm text-emerald-50/80">No more fake dashboard metrics. Everything now comes from SQLite.</p>
+          </div>
+          <div class="rounded-2xl bg-white/10 p-4 backdrop-blur-sm">
+            <p class="text-sm font-semibold">Cleaner setup flow</p>
+            <p class="mt-1 text-sm text-emerald-50/80">Business config, service catalog, and incentive messaging are all in one place.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="flex items-center">
+        <div class="w-full p-2 sm:p-6">
+          <p class="text-sm font-bold uppercase tracking-[0.3em] text-emerald-600">Secure sign-in</p>
+          <h2 class="mt-3 text-3xl font-extrabold text-slate-900">Log in</h2>
+          <p class="mt-2 text-sm text-slate-500">Use the account email and password you created during signup.</p>
+
+          {% if error %}
+          <div class="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+            {{ error }}
+          </div>
+          {% endif %}
+
+          <form method="post" class="mt-8 space-y-5">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <label class="block">
+              <span class="mb-2 block text-sm font-semibold text-slate-700">Email</span>
+              <input
+                name="email"
+                type="email"
+                required
+                value="{{ form.email or '' }}"
+                placeholder="you@yourbusiness.com"
+                class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+              />
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block text-sm font-semibold text-slate-700">Password</span>
+              <input
+                name="password"
+                type="password"
+                required
+                placeholder="Your password"
+                class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+              />
+            </label>
+
+            <button
+              type="submit"
+              class="w-full rounded-2xl bg-slate-950 px-5 py-4 text-base font-bold text-white shadow-lg shadow-slate-200 transition hover:-translate-y-0.5 hover:bg-slate-800"
+            >
+              Log in
+            </button>
+          </form>
+
+          <p class="mt-6 text-center text-sm text-slate-500">
+            Need an account?
+            <a href="/signup" class="font-semibold text-emerald-700 hover:text-emerald-800">Create one</a>
+          </p>
+        </div>
+      </section>
+    </div>
+  </div>
+</body>
+</html>
