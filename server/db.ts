@@ -480,4 +480,9 @@ const PREMADE_CATEGORIES: Record<PremadeKey, "follow_up" | "reactivation" | "app
 function premadeName(key: PremadeKey): string {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
-
+export async function getDb() { /* ... */ }
+export async function getAllPlans() { /* ... */ }
+export async function getUserById(id: number) { /* ... */ }
+export async function getTenantById(id: number) { /* ... */ }
+export async function getLeadsByTenantId(tenantId: number, opts?: {page?: number; limit?: number}) { /* ... */ }
+export async function getLeadById(tenantId: number, leadId: number) { /* ... */ }
