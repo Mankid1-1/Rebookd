@@ -1102,6 +1102,7 @@ async def status_webhook(request: Request) -> dict[str, str]:
                 "UPDATE leads SET delivery_status=?,delivery_status_updated_at=CURRENT_TIMESTAMP,last_message_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND (last_outbound_message_sid=? OR external_id=?)",
                 (message_status, tenant["id"], message_sid, message_sid),
             )
+            conn.commit()
     return {"status": "ok"}
 
 
@@ -1147,6 +1148,7 @@ async def sms_webhook(request: Request) -> dict[str, str]:
                 "UPDATE leads SET details=?,external_id=?,last_message_at=CURRENT_TIMESTAMP,delivery_status=NULL,delivery_status_updated_at=NULL,status=CASE WHEN status='booked' THEN status ELSE 'contacted' END,followup_sent=1 WHERE id=?",
                 (json.dumps(details_payload), message_sid, existing["id"]),
             )
+            conn.commit()
             lead_id = existing["id"]
         else:
             cursor = conn.execute(
