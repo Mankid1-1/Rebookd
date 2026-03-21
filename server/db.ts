@@ -481,5 +481,3 @@ function premadeName(key: PremadeKey): string {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export async function togglePremadeAut
-(Content truncated due to size limit. Use line ranges to read remaining content)

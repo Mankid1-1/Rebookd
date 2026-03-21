@@ -534,18 +534,6 @@ export const appRouter = router({
         await revokeApiKey(tenantId, input.keyId);
         return { success: true };
       }),
-  }),     messages: [
-              { role: "system", content: `Rewrite this SMS in ${input.tone} tone, under 160 characters, keep meaning.` },
-              { role: "user", content: input.body },
-            ],
-          });
-          const content = response.choices?.[0]?.message?.content || response.text || "";
-          return { rewritten: content.trim() };
-        } catch (err) {
-          console.error("Preview error:", err);
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Preview failed" });
-        }
-      }),
   }),
 
   // WEBHOOKS
