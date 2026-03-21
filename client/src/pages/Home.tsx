@@ -51,7 +51,7 @@ export default function Home() {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <Zap className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="font-bold text-lg tracking-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Rebookd</span>
+            <span className="font-bold text-lg tracking-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Rebooked</span>
           </div>
           <div className="flex items-center gap-4">
             <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden md:block">Features</a>
@@ -72,7 +72,7 @@ export default function Home() {
             Stop losing revenue to<br /><span className="text-primary">no-shows &amp; cancellations</span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
-            Rebookd automatically sends the right SMS at the right time — appointment reminders, no-show follow-ups, cancellation recovery, and win-back campaigns. 16 ready-made automations. Enable and go.
+            Rebooked automatically sends the right SMS at the right time — appointment reminders, no-show follow-ups, cancellation recovery, and win-back campaigns. 16 ready-made automations. Enable and go.
           </p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
             <Button size="lg" className="h-12 px-8 text-base" onClick={() => { window.location.href = getLoginUrl(); }}>
@@ -129,7 +129,7 @@ export default function Home() {
       {/* Social Proof */}
       <section className="py-20 px-6 border-t border-border/50">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-14" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Businesses love Rebookd</h2>
+          <h2 className="text-3xl font-bold text-center mb-14" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Businesses love Rebooked</h2>
           <div className="grid md:grid-cols-3 gap-6">
             {testimonials.map((t) => (
               <div key={t.name} className="p-6 rounded-2xl border border-border bg-card">
@@ -191,7 +191,7 @@ export default function Home() {
             <Zap className="w-8 h-8 text-primary" />
           </div>
           <h2 className="text-3xl font-bold mb-4" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Ready to recover lost revenue?</h2>
-          <p className="text-muted-foreground mb-8">Join appointment businesses using Rebookd to reduce no-shows, recover cancellations, and win back lapsed clients.</p>
+          <p className="text-muted-foreground mb-8">Join appointment businesses using Rebooked to reduce no-shows, recover cancellations, and win back lapsed clients.</p>
           <Button size="lg" className="h-12 px-8 text-base" onClick={() => { window.location.href = getLoginUrl(); }}>
             Start your free trial <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
@@ -206,14 +206,14 @@ export default function Home() {
             <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
               <Zap className="w-3 h-3 text-primary-foreground" />
             </div>
-            <span className="text-sm font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Rebookd</span>
+            <span className="text-sm font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Rebooked</span>
           </div>
           <div className="flex items-center gap-6 text-xs text-muted-foreground">
             <a href="#" className="hover:text-foreground transition-colors">Privacy</a>
             <a href="#" className="hover:text-foreground transition-colors">Terms</a>
             <a href="#" className="hover:text-foreground transition-colors">Support</a>
           </div>
-          <p className="text-xs text-muted-foreground">© 2025 Rebookd. All rights reserved.</p>
+          <p className="text-xs text-muted-foreground">© 2025 Rebooked. All rights reserved.</p>
         </div>
       </footer>
     </div>

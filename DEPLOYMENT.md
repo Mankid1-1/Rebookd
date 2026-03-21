@@ -1,6 +1,6 @@
-**Rebookd — Docker & Deployment Guide (Railway / Render / Docker Compose)**
+**Rebooked — Docker & Deployment Guide (Railway / Render / Docker Compose)**
 
-Quick: this guide helps you build, run, and deploy Rebookd using Docker (or container hosts such as Railway/Render).
+Quick: this guide helps you build, run, and deploy Rebooked using Docker (or container hosts such as Railway/Render).
 
 1) Build & run locally with Docker Compose
 

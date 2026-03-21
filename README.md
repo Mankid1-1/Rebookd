@@ -1,5 +1,5 @@
 <<<<<<< HEAD
-# Rebookd v2
+# Rebooked v2
 
 AI-powered SMS revenue recovery platform for appointment-based businesses.
 
@@ -18,7 +18,7 @@ pnpm install
 ### 2. Configure environment
 Create a `.env` file in the project root:
 ```env
-DATABASE_URL=mysql://user:password@host:3306/rebookd
+DATABASE_URL=mysql://user:password@host:3306/rebooked
 JWT_SECRET=your-32-char-secret-here
 VITE_APP_ID=your-oauth-app-id
 OAUTH_SERVER_URL=https://your-oauth-server.com
@@ -57,7 +57,7 @@ pnpm start
 ## Architecture
 
 ```
-rebookd/
+rebooked/
 ├── client/src/
 │   ├── pages/
 │   │   ├── Home.tsx              # Public landing page
@@ -117,9 +117,9 @@ rebookd/
 | `leads.*` | Lead CRUD + SMS sending |
 | `admin.tenants.list` | Platform-wide tenant overview |
 =======
-# Rebookd
+# Rebooked
 
-Rebookd is a small FastAPI app for appointment-based businesses that want to recover missed-call revenue through a simple dashboard, structured business setup, and Twilio-driven lead capture.
+Rebooked is a small FastAPI app for appointment-based businesses that want to recover missed-call revenue through a simple dashboard, structured business setup, and Twilio-driven lead capture.
 
 ## Current capabilities
 
@@ -134,7 +134,7 @@ Rebookd is a small FastAPI app for appointment-based businesses that want to rec
 
 ## Current limitations
 
-- The app is still a single-file FastAPI monolith in [main.py](/C:/Users/Brend/Documents/Rebookd/main.py).
+- The app is still a single-file FastAPI monolith in [main.py](/C:/Users/Brend/Documents/Rebooked/main.py).
 - SQLite is the active database and is best suited to local development or low-volume deployments.
 - There is no background job system, migrations framework, or production hosting config yet.
 - OpenAI, Google OAuth, Stripe subscriptions, and calendar flows are not implemented in the current repo even if older notes mention them.

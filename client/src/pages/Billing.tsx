@@ -10,28 +10,30 @@ export default function Billing() {
   const { data: plans = [] } = trpc.plans.list.useQuery();
   const { data: subscription } = trpc.tenant.subscription.useQuery(undefined, { retry: false });
   const { data: usage } = trpc.tenant.usage.useQuery(undefined, { retry: false });
+  const { data: billingHistory } = trpc.billing.invoices.useQuery(undefined, { retry: false });
 
-  const currentPlan = subscription?.plan ?? plans.find((p) => p.id === subscription?.sub?.planId);
+  const currentPlan = plans.find((p) => p.id === subscription?.sub?.planId);
   const { data: dashData } = trpc.analytics.dashboard.useQuery(undefined, { retry: false });
   const leadCount = dashData?.metrics?.leadCount ?? 0;
 
   const handleUpgrade = (planId: number) => {
     // Opens default email client with pre-filled upgrade request
     const plan = plans.find((p) => p.id === planId);
-    const subject = encodeURIComponent(`Rebookd Plan Upgrade Request — ${plan?.name ?? "Plan"}`);
+    const subject = encodeURIComponent(`Rebooked Plan Upgrade Request — ${plan?.name ?? "Plan"}`);
     const body = encodeURIComponent(`Hi,
 
-I'd like to upgrade my Rebookd subscription to the ${plan?.name ?? ""} plan ($${((plan?.priceMonthly ?? 0) / 100).toFixed(0)}/month).
+I'd like to upgrade my Rebooked subscription to the ${plan?.name ?? ""} plan ($${((plan?.priceMonthly ?? 0) / 100).toFixed(0)}/month).
 
 My account email: 
 
 Please send me a payment link.
 
 Thank you`);
-    window.open(`mailto:support@rebookd.com?subject=${subject}&body=${body}`);
+    window.open(`mailto:support@rebooked.com?subject=${subject}&body=${body}`);
   };
 
   const checkout = trpc.billing.createCheckoutSession.useMutation();
+  const changePlan = trpc.billing.changePlan.useMutation();
   const portal = trpc.billing.createCustomerPortal.useMutation();
 
   const handleCheckout = async (priceId?: string) => {
@@ -231,13 +233,25 @@ Thank you`);
                       className="w-full"
                       variant={isCurrentPlan ? "outline" : isPopular ? "default" : "outline"}
                       disabled={isCurrentPlan}
-                      onClick={() => {
+                      onClick={async () => {
                         if (isCurrentPlan) return;
-                        // Use Stripe Checkout when price configured, otherwise fallback to email upgrade
-                        if ((plan as any).stripePriceId) {
-                          handleCheckout((plan as any).stripePriceId);
-                        } else {
+                        if (!(plan as any).stripePriceId) {
                           handleUpgrade(plan.id);
+                          return;
+                        }
+                        if (subscription?.sub?.stripeId) {
+                          try {
+                            await changePlan.mutateAsync({
+                              priceId: (plan as any).stripePriceId,
+                              prorateImmediately: true,
+                            });
+                            window.location.reload();
+                          } catch (err) {
+                            console.error(err);
+                            alert("Could not change the plan right now");
+                          }
+                        } else {
+                          handleCheckout((plan as any).stripePriceId);
                         }
                       }}
                     >
@@ -280,6 +294,52 @@ Thank you`);
             </CardContent>
           </Card>
         )}
+
+        <Card className="border-border bg-card">
+          <CardHeader className="pb-3 border-b border-border">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-primary" /> Invoice History
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-5 space-y-3">
+            {(billingHistory?.invoices ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">Invoices will appear here once Stripe posts them.</p>
+            ) : (
+              billingHistory?.invoices.map((invoice) => (
+                <div key={invoice.stripeInvoiceId} className="flex flex-col gap-2 rounded-lg border border-border p-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="font-medium">{invoice.number || invoice.stripeInvoiceId}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(invoice.createdAt).toLocaleDateString()} · {(invoice.total / 100).toFixed(2)} {invoice.currency.toUpperCase()} · {invoice.status}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    {invoice.hostedInvoiceUrl && (
+                      <Button variant="outline" onClick={() => window.open(invoice.hostedInvoiceUrl!, "_blank")}>
+                        View
+                      </Button>
+                    )}
+                    {invoice.invoicePdfUrl && (
+                      <Button onClick={() => window.open(invoice.invoicePdfUrl!, "_blank")}>
+                        PDF
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+            {(billingHistory?.refunds ?? []).length > 0 && (
+              <div className="pt-2">
+                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground mb-2">Refunds</p>
+                {billingHistory?.refunds.map((refund) => (
+                  <div key={refund.stripeRefundId} className="text-sm text-muted-foreground">
+                    {new Date(refund.createdAt).toLocaleDateString()} · {(refund.amount / 100).toFixed(2)} {refund.currency.toUpperCase()} refunded · {refund.status}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );

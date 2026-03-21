@@ -1,4 +1,4 @@
-import fetch from 'node-fetch';
+// Uses native fetch (Node 18+)
 
 const API_BASE = process.env.E2E_API_URL || 'http://localhost:3000/api/trpc';
 

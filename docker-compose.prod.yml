@@ -1,0 +1,239 @@
+version: '3.9'
+
+services:
+  # ─── MySQL Database ───────────────────────────────────────────────────────
+  db:
+    image: mysql:8.0-alpine
+    container_name: rebookd_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_change_me}
+      MYSQL_DATABASE: ${DB_NAME:-rebookd}
+      MYSQL_USER: ${DB_USER:-rebookd}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-rebookd_change_me}
+      TZ: ${TIMEZONE:-America/New_York}
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./scripts/mysql-init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${DB_USER:-rebookd}", "-p${DB_PASSWORD:-rebookd_change_me}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - rebookd_network
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --max_connections=100
+      --max_allowed_packet=256M
+      --slow_query_log=1
+      --slow_query_log_file=/var/log/mysql/slow-query.log
+      --long_query_time=2
+
+  # ─── Redis (Optional: for caching, rate limiting) ──────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: rebookd_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rebookd_network
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+
+  # ─── Application Server ───────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    container_name: rebookd_app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Core
+      NODE_ENV: production
+      PORT: ${PORT:-3000}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      
+      # Database
+      DATABASE_URL: mysql://${DB_USER:-rebookd}:${DB_PASSWORD:-rebookd_change_me}@db:3306/${DB_NAME:-rebookd}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
+      
+      # Redis (optional)
+      REDIS_URL: redis://redis:6379
+      
+      # Auth & Security
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      
+      # SMS Providers
+      TELNYX_API_KEY: ${TELNYX_API_KEY}
+      TELNYX_FROM_NUMBER: ${TELNYX_FROM_NUMBER}
+      TELNYX_PUBLIC_KEY: ${TELNYX_PUBLIC_KEY}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
+      
+      # Email
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      
+      # AI/LLM
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      
+      # Billing
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      
+      # Monitoring
+      SENTRY_DSN: ${SENTRY_DSN}
+      
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      
+    volumes:
+      - app_logs:/app/logs
+      - /app/node_modules  # Don't bind mount node_modules
+    ports:
+      - "${PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - rebookd_network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ─── Background Worker (Automations) ──────────────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    container_name: rebookd_worker
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Core
+      NODE_ENV: production
+      WORKER_MODE: "true"
+      WORKER_INTERVAL: ${WORKER_INTERVAL:-60000}
+      
+      # Database
+      DATABASE_URL: mysql://${DB_USER:-rebookd}:${DB_PASSWORD:-rebookd_change_me}@db:3306/${DB_NAME:-rebookd}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      
+      # Redis
+      REDIS_URL: redis://redis:6379
+      
+      # Auth & Security
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      
+      # SMS Providers
+      TELNYX_API_KEY: ${TELNYX_API_KEY}
+      TELNYX_FROM_NUMBER: ${TELNYX_FROM_NUMBER}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
+      
+      # Email
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      
+      # AI/LLM
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      
+      # Billing
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      
+      # Monitoring
+      SENTRY_DSN: ${SENTRY_DSN}
+      
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      
+    volumes:
+      - worker_logs:/app/logs
+      - /app/node_modules
+    networks:
+      - rebookd_network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Worker doesn't need port exposed
+
+  # ─── Reverse Proxy (Nginx) ────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: rebookd_nginx
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_cache:/var/cache/nginx
+    networks:
+      - rebookd_network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  db_data:
+    driver: local
+  redis_data:
+    driver: local
+  app_logs:
+    driver: local
+  worker_logs:
+    driver: local
+  nginx_cache:
+    driver: local
+
+networks:
+  rebookd_network:
+    driver: bridge

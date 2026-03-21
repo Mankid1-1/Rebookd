@@ -72,8 +72,11 @@ const MAX_WIDTH = 400;
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarWidth, setSidebarWidth] = useState(() => {
-    const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
-    return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+      return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
+    }
+    return DEFAULT_WIDTH;
   });
   const { loading, user } = useAuth();
 
@@ -92,7 +95,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Zap className="w-8 h-8 text-primary" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-center font-display">
-              Sign in to Rebookd
+              Sign in to Rebooked
             </h1>
             <p className="text-sm text-muted-foreground text-center max-w-sm">
               AI-powered SMS re-engagement for your business. Sign in to access your dashboard.
@@ -190,7 +193,7 @@ function DashboardLayoutContent({
                   </div>
                   <div className="min-w-0">
                     <p className="font-bold text-sm tracking-tight truncate">
-                      Rebookd
+                      Rebooked
                     </p>
                     {tenant && (
                       <p className="text-xs text-muted-foreground truncate">{tenant.name}</p>
@@ -334,7 +337,7 @@ function DashboardLayoutContent({
                 <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
                   <Zap className="w-3 h-3 text-primary-foreground" />
                 </div>
-                  <span className="font-bold text-sm">Rebookd</span>
+                  <span className="font-bold text-sm">Rebooked</span>
               </div>
             </div>
           </div>

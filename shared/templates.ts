@@ -1,15 +1,96 @@
 export const automationTemplates = [
   {
+    key: "appointment_confirmation_chase",
+    name: "Confirmation Chase",
+    category: "appointment",
+    trigger: "appointment.booked",
+    steps: [{ type: "sms", message: "Hi {{name}}, just checking that you're still good for {{date}} at {{time}}. Reply CONFIRM or RESCHEDULE." }],
+  },
+  {
+    key: "inbound_response_sla",
+    name: "Inbound Auto-Reply",
+    category: "follow_up",
+    trigger: "message.received",
+    steps: [{ type: "sms", message: "Thanks for reaching out to {{business}}. We got your message and will text you back shortly." }],
+  },
+  {
+    key: "qualified_followup_1d",
+    name: "Qualified Lead Follow-Up (1 Day)",
+    category: "follow_up",
+    trigger: "lead.created",
+    steps: [{ type: "sms", message: "Hi {{name}}, just checking in from {{business}}. Want me to help you grab a time?" }],
+  },
+  {
+    key: "qualified_followup_3d",
+    name: "Qualified Lead Follow-Up (3 Days)",
+    category: "follow_up",
+    trigger: "lead.created",
+    steps: [{ type: "sms", message: "Still interested in booking with {{business}}? Reply YES and we'll help you lock in a spot." }],
+  },
+  {
+    key: "delivery_failure_retry",
+    name: "Delivery Failure Recovery",
+    category: "follow_up",
+    trigger: "message.sent",
+    steps: [{ type: "sms", message: "We had trouble reaching you earlier. If you still want to book with {{business}}, reply here and we'll help." }],
+  },
+  {
+    key: "next_visit_prompt",
+    name: "Next Visit Prompt",
+    category: "follow_up",
+    trigger: "appointment.booked",
+    steps: [{ type: "sms", message: "Thanks again for visiting {{business}}. Want to get your next appointment on the calendar now?" }],
+  },
+  {
+    key: "waitlist_fill",
+    name: "Waitlist Fill",
+    category: "cancellation",
+    trigger: "appointment.cancelled",
+    steps: [{ type: "sms", message: "An appointment opening just came up at {{business}}. Want it? Reply YES and we'll hold it for you." }],
+  },
+  {
+    key: "cancellation_same_day",
+    name: "Same-Day Cancellation Rescue",
+    category: "cancellation",
+    trigger: "appointment.cancelled",
+    steps: [{ type: "sms", message: "Sorry we missed you today. Want help finding a new time? Reply REBOOK and we'll make it easy." }],
+  },
+  {
+    key: "cancellation_rebooking_48h",
+    name: "Cancellation Rescue (48h)",
+    category: "cancellation",
+    trigger: "appointment.cancelled",
+    steps: [{ type: "sms", message: "We still have a few spots open this week if you'd like to rebook. Reply YES and we'll send options." }],
+  },
+  {
+    key: "cancellation_rebooking_7d",
+    name: "Cancellation Rescue (7d)",
+    category: "cancellation",
+    trigger: "appointment.cancelled",
+    steps: [{ type: "sms", message: "Last check-in from {{business}}. We'd still love to get you back on the calendar whenever you're ready." }],
+  },
+  {
+    key: "vip_winback_45d",
+    name: "VIP Win-Back (45d)",
+    category: "reactivation",
+    trigger: "appointment.booked",
+    steps: [{ type: "sms", message: "Hi {{name}}, we've missed you at {{business}}. Want priority booking for your next visit? Reply VIP." }],
+  },
+  {
+    key: "vip_winback_90d",
+    name: "VIP Win-Back (90d)",
+    category: "reactivation",
+    trigger: "appointment.booked",
+    steps: [{ type: "sms", message: "We've saved a special comeback offer for you at {{business}}. Reply YES if you want first pick of availability." }],
+  },
+  {
     key: "reduce_no_shows",
     name: "Reduce No-Shows",
     category: "no_show",
     trigger: "appointment.no_show",
     steps: [
       { type: "delay", value: 600 },
-      {
-        type: "sms",
-        message: "Hey {{first_name}}, we missed you today. Want to reschedule?"
-      }
+      { type: "sms", message: "Hey {{first_name}}, we missed you today. Want to reschedule?" },
     ],
   },
   {
@@ -18,7 +99,7 @@ export const automationTemplates = [
     category: "welcome",
     trigger: "lead.created",
     steps: [
-      { type: "sms", message: "Hi {{name}}, thanks for reaching out! Reply with a time that works and we'll book you." }
+      { type: "sms", message: "Hi {{name}}, thanks for reaching out! Reply with a time that works and we'll book you." },
     ],
   },
 ];

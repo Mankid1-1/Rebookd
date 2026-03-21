@@ -22,6 +22,34 @@
       "when": 1774041845884,
       "tag": "0002_quiet_juggernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1774119600000,
+      "tag": "0003_production_unblock",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1774200000000,
+      "tag": "0004_webhook_dedup",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1774300000000,
+      "tag": "0005_auth_billing_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1774126336644,
+      "tag": "0006_typical_revanche",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-# Rebookd 1.1 — Project TODO
+# Rebooked 1.1 — Project TODO
 
 ## Database Schema
 - [x] Tenants table (multi-tenant support)

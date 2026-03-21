@@ -1,0 +1,266 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      target: runner
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DOCKER_ENV: "true"
+      DATABASE_URL: mysql://rebooked:${DB_PASSWORD}@db:3306/rebooked
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      APP_URL: https://rebooked.org
+      CORS_ORIGIN: https://rebooked.org
+      COOKIE_DOMAIN: .rebooked.org
+      
+      # Email configuration (mail.rebooked.org)
+      SMTP_HOST: mail.rebooked.org
+      SMTP_PORT: 587
+      SMTP_SECURE: false
+      SMTP_USER: noreply@rebooked.org
+      SMTP_PASS: ${SMTP_PASSWORD}
+      EMAIL_FROM_ADDRESS: noreply@rebooked.org
+      
+      POP3_HOST: mail.rebooked.org
+      POP3_PORT: 995
+      POP3_TLS: true
+      POP3_USER: noreply@rebooked.org
+      POP3_PASSWORD: ${POP3_PASSWORD}
+      
+      # SMS providers
+      TELNYX_API_KEY: ${TELNYX_API_KEY}
+      TELNYX_FROM_NUMBER: ${TELNYX_FROM_NUMBER}
+      TELNYX_PUBLIC_KEY: ${TELNYX_PUBLIC_KEY}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
+      
+      # Other services
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      SENTRY_DSN: ${SENTRY_DSN}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      
+      # Timeouts and limits
+      SMS_HTTP_TIMEOUT_MS: 30000
+      DATA_API_TIMEOUT_MS: 30000
+      DB_QUERY_TIMEOUT_MS: 5000
+      SMS_RATE_LIMIT: 100
+      SMS_HOURLY_CAP: 1000
+      SMS_DAILY_CAP_PER_TENANT: 5000
+      
+      # Phone settings
+      PHONE_DEFAULT_REGION: US
+      INBOUND_AUTO_CREATE_LEADS: true
+      MIN_INBOUND_LEAD_BODY_LEN: 1
+      TCPA_STOP_REPLY_TEXT: You have been unsubscribed from SMS. Reply START to opt back in.
+    depends_on:
+      - db
+      - migrate
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    networks:
+      - rebooked-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  worker:
+    build:
+      context: .
+      target: runner
+    command: ["node", "dist/worker.js"]
+    environment:
+      NODE_ENV: production
+      DOCKER_ENV: "true"
+      DATABASE_URL: mysql://rebooked:${DB_PASSWORD}@db:3306/rebooked
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      APP_URL: https://rebooked.org
+      
+      # Email configuration
+      SMTP_HOST: mail.rebooked.org
+      SMTP_PORT: 587
+      SMTP_SECURE: false
+      SMTP_USER: noreply@rebooked.org
+      SMTP_PASS: ${SMTP_PASSWORD}
+      EMAIL_FROM_ADDRESS: noreply@rebooked.org
+      
+      POP3_HOST: mail.rebooked.org
+      POP3_PORT: 995
+      POP3_TLS: true
+      POP3_USER: noreply@rebooked.org
+      POP3_PASSWORD: ${POP3_PASSWORD}
+      
+      # SMS providers
+      TELNYX_API_KEY: ${TELNYX_API_KEY}
+      TELNYX_FROM_NUMBER: ${TELNYX_FROM_NUMBER}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      
+      # Timeouts
+      SMS_HTTP_TIMEOUT_MS: 30000
+      DATA_API_TIMEOUT_MS: 30000
+      DB_QUERY_TIMEOUT_MS: 5000
+    depends_on:
+      - db
+      - migrate
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+      - worker-heartbeat:/tmp
+    networks:
+      - rebooked-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: rebooked
+      MYSQL_USER: rebooked
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./drizzle/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./drizzle/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    ports:
+      - "3306:3306"
+    restart: unless-stopped
+    networks:
+      - rebooked-network
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --innodb-buffer-pool-size=512M
+      --innodb-log-file-size=128M
+      --innodb-flush-log-at-trx-commit=2
+      --innodb-flush-method=O_DIRECT
+      --max-connections=100
+      --query-cache-size=64M
+      --query-cache-type=1
+      --slow-query-log=1
+      --long-query-time=2
+      --general-log=0
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "rebooked", "-p${DB_PASSWORD}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  migrate:
+    build:
+      context: .
+      target: migrate
+    environment:
+      DATABASE_URL: mysql://rebooked:${DB_PASSWORD}@db:3306/rebooked
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - rebooked-network
+    restart: on-failure
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/sites-available:/etc/nginx/sites-available:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+      - ./uploads:/var/www/uploads:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - rebooked-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - rebooked-network
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
+volumes:
+  db_data:
+    driver: local
+  redis_data:
+    driver: local
+  worker-heartbeat:
+    driver: local
+
+networks:
+  rebooked-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

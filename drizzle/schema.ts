@@ -6,7 +6,9 @@ import {
   mysqlTable,
   text,
   timestamp,
+  uniqueIndex,
   varchar,
+  index,
 } from "drizzle-orm/mysql-core";
 
 // ─── Core Auth ────────────────────────────────────────────────────────────────
@@ -16,6 +18,7 @@ export const users = mysqlTable("users", {
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
+  emailVerifiedAt: timestamp("emailVerifiedAt"),
   loginMethod: varchar("loginMethod", { length: 64 }),
   passwordHash: varchar("passwordHash", { length: 255 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
@@ -24,10 +27,33 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-});
+}, (t) => ({
+  emailIdx: uniqueIndex("users_email_idx").on(t.email),
+  tenantIdIdx: index("users_tenant_id_idx").on(t.tenantId),
+  openIdIdx: uniqueIndex("users_open_id_idx").on(t.openId),
+}));
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+export const emailVerificationTokens = mysqlTable("email_verification_tokens", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  email: varchar("email", { length: 320 }).notNull(),
+  tokenHash: varchar("tokenHash", { length: 255 }).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  consumedAt: timestamp("consumedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const passwordResetTokens = mysqlTable("password_reset_tokens", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  tokenHash: varchar("tokenHash", { length: 255 }).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  consumedAt: timestamp("consumedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
 
 // ─── Tenants ──────────────────────────────────────────────────────────────────
 
@@ -78,6 +104,45 @@ export const subscriptions = mysqlTable("subscriptions", {
 
 export type Subscription = typeof subscriptions.$inferSelect;
 
+export const billingInvoices = mysqlTable("billing_invoices", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  subscriptionId: int("subscriptionId"),
+  stripeInvoiceId: varchar("stripeInvoiceId", { length: 255 }).notNull().unique(),
+  stripeChargeId: varchar("stripeChargeId", { length: 255 }),
+  number: varchar("number", { length: 128 }),
+  status: varchar("status", { length: 64 }).notNull(),
+  currency: varchar("currency", { length: 16 }).notNull(),
+  subtotal: int("subtotal").default(0).notNull(),
+  total: int("total").default(0).notNull(),
+  amountPaid: int("amountPaid").default(0).notNull(),
+  amountRemaining: int("amountRemaining").default(0).notNull(),
+  hostedInvoiceUrl: varchar("hostedInvoiceUrl", { length: 500 }),
+  invoicePdfUrl: varchar("invoicePdfUrl", { length: 500 }),
+  periodStart: timestamp("periodStart"),
+  periodEnd: timestamp("periodEnd"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type BillingInvoice = typeof billingInvoices.$inferSelect;
+
+export const billingRefunds = mysqlTable("billing_refunds", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  subscriptionId: int("subscriptionId"),
+  billingInvoiceId: int("billingInvoiceId"),
+  stripeRefundId: varchar("stripeRefundId", { length: 255 }).notNull().unique(),
+  stripeChargeId: varchar("stripeChargeId", { length: 255 }),
+  amount: int("amount").notNull(),
+  currency: varchar("currency", { length: 16 }).notNull(),
+  reason: varchar("reason", { length: 100 }),
+  status: varchar("status", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type BillingRefund = typeof billingRefunds.$inferSelect;
+
 // ─── Usage ────────────────────────────────────────────────────────────────────
 
 export const usage = mysqlTable("usage", {
@@ -105,6 +170,7 @@ export const phoneNumbers = mysqlTable("phone_numbers", {
   isInbound: boolean("isInbound").default(false).notNull(),
   twilioSid: varchar("twilioSid", { length: 100 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+  deletedAt: timestamp("deletedAt"),
 });
 
 export type PhoneNumber = typeof phoneNumbers.$inferSelect;
@@ -115,6 +181,7 @@ export const leads = mysqlTable("leads", {
   id: int("id").autoincrement().primaryKey(),
   tenantId: int("tenantId").notNull(),
   phone: varchar("phone", { length: 20 }).notNull(),
+  phoneHash: varchar("phoneHash", { length: 64 }).notNull(),
   name: varchar("name", { length: 255 }),
   email: varchar("email", { length: 320 }),
   status: mysqlEnum("status", ["new", "contacted", "qualified", "booked", "lost", "unsubscribed"]).default("new").notNull(),
@@ -124,9 +191,22 @@ export const leads = mysqlTable("leads", {
   lastMessageAt: timestamp("lastMessageAt"),
   lastInboundAt: timestamp("lastInboundAt"),
   appointmentAt: timestamp("appointmentAt"),
+  // TCPA Compliance fields
+  smsConsentAt: timestamp("smsConsentAt"),
+  smsConsentSource: varchar("smsConsentSource", { length: 100 }), // "form", "manual", "import", etc.
+  tcpaConsentText: text("tcpaConsentText"), // Store the exact consent language
+  unsubscribedAt: timestamp("unsubscribedAt"),
+  unsubscribeMethod: varchar("unsubscribeMethod", { length: 50 }), // "sms_stop", "manual", etc.
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (t) => ({
+  tenantIdIdx: index("leads_tenant_id_idx").on(t.tenantId),
+  phoneHashIdx: uniqueIndex("leads_phone_hash_idx").on(t.tenantId, t.phoneHash),
+  statusIdx: index("leads_status_idx").on(t.tenantId, t.status),
+  createdAtIdx: index("leads_created_at_idx").on(t.tenantId, t.createdAt),
+  searchIdx: index("leads_search_idx").on(t.tenantId, t.phone, t.name, t.email),
+  consentIdx: index("leads_consent_idx").on(t.tenantId, t.smsConsentAt),
+}));
 
 export type Lead = typeof leads.$inferSelect;
 export type InsertLead = typeof leads.$inferInsert;
@@ -143,11 +223,23 @@ export const messages = mysqlTable("messages", {
   toNumber: varchar("toNumber", { length: 20 }),
   twilioSid: varchar("twilioSid", { length: 100 }),
   status: mysqlEnum("status", ["queued", "sent", "delivered", "failed", "received"]).default("queued").notNull(),
+  provider: varchar("provider", { length: 50 }),
+  providerError: text("providerError"),
+  retryCount: int("retryCount").default(0).notNull(),
+  idempotencyKey: varchar("idempotencyKey", { length: 64 }),
+  deliveredAt: timestamp("deliveredAt"),
+  failedAt: timestamp("failedAt"),
   aiRewritten: boolean("aiRewritten").default(false).notNull(),
   tone: varchar("tone", { length: 50 }),
   automationId: int("automationId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (t) => ({
+  tenantIdIdx: index("messages_tenant_id_idx").on(t.tenantId),
+  leadIdIdx: index("messages_lead_id_idx").on(t.leadId),
+  tenantLeadIdx: index("messages_tenant_lead_idx").on(t.tenantId, t.leadId),
+  createdAtIdx: index("messages_created_at_idx").on(t.tenantId, t.createdAt),
+  idempotencyKeyIdx: uniqueIndex("messages_idempotency_key_idx").on(t.tenantId, t.idempotencyKey),
+}));
 
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = typeof messages.$inferInsert;
@@ -164,6 +256,7 @@ export const templates = mysqlTable("templates", {
   variables: json("variables").$type<string[]>(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  deletedAt: timestamp("deletedAt"),
 });
 
 export type Template = typeof templates.$inferSelect;
@@ -176,7 +269,7 @@ export const automations = mysqlTable("automations", {
   tenantId: int("tenantId").notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   key: varchar("key", { length: 100 }).notNull(),
-  category: mysqlEnum("category", ["follow_up", "reactivation", "appointment", "welcome", "custom"]).default("custom").notNull(),
+  category: mysqlEnum("category", ["follow_up", "reactivation", "appointment", "welcome", "custom", "no_show", "cancellation", "loyalty"]).default("custom").notNull(),
   enabled: boolean("enabled").default(true).notNull(),
   triggerType: mysqlEnum("triggerType", ["new_lead", "inbound_message", "status_change", "time_delay", "appointment_reminder"]).default("new_lead").notNull(),
   triggerConfig: json("triggerConfig").$type<Record<string, unknown>>(),
@@ -187,10 +280,29 @@ export const automations = mysqlTable("automations", {
   lastRunAt: timestamp("lastRunAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  deletedAt: timestamp("deletedAt"),
 });
 
 export type Automation = typeof automations.$inferSelect;
 export type InsertAutomation = typeof automations.$inferInsert;
+
+export const automationJobs = mysqlTable("automation_jobs", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  automationId: int("automationId").notNull(),
+  leadId: int("leadId"),
+  eventType: varchar("eventType", { length: 100 }).notNull(),
+  eventData: json("eventData").$type<Record<string, unknown>>(),
+  stepIndex: int("stepIndex").default(0).notNull(),
+  nextRunAt: timestamp("nextRunAt").notNull(),
+  status: mysqlEnum("status", ["pending", "running", "completed", "failed", "cancelled"]).default("pending").notNull(),
+  attempts: int("attempts").default(0).notNull(),
+  lastError: text("lastError"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AutomationJob = typeof automationJobs.$inferSelect;
 
 // ─── AI Message Logs ──────────────────────────────────────────────────────────
 
@@ -212,7 +324,7 @@ export type AIMessageLog = typeof aiMessageLogs.$inferSelect;
 
 export const webhookLogs = mysqlTable("webhook_logs", {
   id: int("id").autoincrement().primaryKey(),
-  tenantId: int("tenantId").notNull(),
+  tenantId: int("tenantId"),
   url: varchar("url", { length: 500 }).notNull(),
   payload: text("payload").notNull(),
   statusCode: int("statusCode"),
@@ -254,3 +366,58 @@ export const systemErrorLogs = mysqlTable("system_error_logs", {
 });
 
 export type SystemErrorLog = typeof systemErrorLogs.$inferSelect;
+
+export const adminAuditLogs = mysqlTable("admin_audit_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  adminUserId: int("adminUserId").notNull(),
+  adminEmail: varchar("adminEmail", { length: 320 }),
+  action: varchar("action", { length: 120 }).notNull(),
+  targetTenantId: int("targetTenantId"),
+  targetUserId: int("targetUserId"),
+  route: varchar("route", { length: 255 }),
+  metadata: json("metadata").$type<Record<string, unknown>>(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AdminAuditLog = typeof adminAuditLogs.$inferSelect;
+
+export const smsRateLimits = mysqlTable("sms_rate_limits", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  windowStart: timestamp("windowStart").notNull(),
+  count: int("count").default(0).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const llmCircuitBreakers = mysqlTable("llm_circuit_breakers", {
+  id: int("id").autoincrement().primaryKey(),
+  provider: varchar("provider", { length: 50 }).notNull(),
+  model: varchar("model", { length: 100 }).notNull(),
+  state: mysqlEnum("state", ["closed", "open", "half_open"]).default("closed").notNull(),
+  consecutiveFailures: int("consecutiveFailures").default(0).notNull(),
+  openedAt: timestamp("openedAt"),
+  cooldownUntil: timestamp("cooldownUntil"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Idempotency keys for inbound custom webhooks (trpc webhooks.receive) */
+export const webhookReceiveDedupes = mysqlTable(
+  "webhook_receive_dedupes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId").notNull(),
+    dedupeKey: varchar("dedupeKey", { length: 64 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => ({
+    tenantDedupeUid: uniqueIndex("webhook_receive_dedupes_tenant_dedupe_uidx").on(t.tenantId, t.dedupeKey),
+  }),
+);
+
+export const authRateLimits = mysqlTable("auth_rate_limits", {
+  id: int("id").autoincrement().primaryKey(),
+  email: varchar("email", { length: 320 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => ({
+  emailCreatedIdx: uniqueIndex("auth_rate_limits_email_created_idx").on(t.email, t.createdAt),
+}));
