@@ -1,4 +1,4 @@
-export type EventType =
+export type EventType = 
   | "lead.created"
   | "appointment.booked"
   | "appointment.no_show"
@@ -6,11 +6,10 @@ export type EventType =
   | "message.received"
   | "message.sent";
 
-export interface EventPayload {
-  id?: string;
+export interface Event {
   type: EventType;
-  data: Record<string, any>;
   tenantId: number;
+  data: Record<string, unknown>;
   userId?: number;
   timestamp: Date;
 }
