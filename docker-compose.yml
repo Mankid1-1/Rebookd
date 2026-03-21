@@ -1,0 +1,58 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DOCKER_ENV: "true"
+      DATABASE_URL: mysql://root:example@db:3306/rebookd
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_xxx}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_xxx}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-hello@rebookd.com}
+      JWT_SECRET: ${JWT_SECRET:-k9mX2vQpL7nRjW4tYeHcBsDuFzA8NgE1}
+      OWNER_OPEN_ID: ${OWNER_OPEN_ID:-placeholder}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: sh -c "node dist/migrate.js && node dist/worker.js"
+    environment:
+      NODE_ENV: production
+      DOCKER_ENV: "true"
+      DATABASE_URL: mysql://root:example@db:3306/rebookd
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_xxx}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: example
+      MYSQL_DATABASE: rebookd
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 5s
+      retries: 10
+      interval: 5s
+
+volumes:
+  db_data:
