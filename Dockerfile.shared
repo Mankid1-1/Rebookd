@@ -1,0 +1,37 @@
+# Shared Hosting Compatible Dockerfile
+# Single-stage build for environments that don't support multi-stage builds
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install pnpm
+RUN npm install -g pnpm@10.4.1
+
+# Copy package files
+COPY package.json pnpm-lock.yaml* ./
+
+# Install all dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN pnpm build \
+  && npx esbuild server/migrate.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/migrate.js
+
+# Clean up dev dependencies to reduce image size
+RUN pnpm prune --prod
+
+# Set environment
+ENV NODE_ENV=production
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
+  CMD node -e "const fs=require('fs');const t=fs.statSync('/tmp/worker-heartbeat',{throwIfNoEntry:false})?.mtimeMs??0;process.exit(Date.now()-t<120000?0:1)" 2>/dev/null || exit 1
+
+# Start the application
+CMD ["node", "dist/index.js"]

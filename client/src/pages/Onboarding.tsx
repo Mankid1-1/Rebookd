@@ -42,7 +42,7 @@ export default function Onboarding() {
   const utils = trpc.useUtils();
   const createTenant = trpc.onboarding.setup.useMutation({
     onSuccess: async () => {
-      toast.success("Business set up! Welcome to Rebookd.");
+      toast.success("Business set up! Welcome to Rebooked.");
       await utils.tenant.get.invalidate();
       setLocation("/dashboard");
     },
@@ -66,7 +66,7 @@ export default function Onboarding() {
           <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
             <Zap className="w-5 h-5 text-primary-foreground" />
           </div>
-          <span className="font-bold text-xl">Rebookd</span>
+          <span className="font-bold text-xl">Rebooked</span>
         </div>
 
         {/* Progress */}
@@ -148,7 +148,7 @@ export default function Onboarding() {
             <div className="flex gap-3 mt-6">
               {step > 0 && <Button variant="outline" className="flex-1" onClick={() => setStep(step - 1)}>Back</Button>}
               <Button className="flex-1" onClick={handleNext} disabled={createTenant.isPending}>
-                {createTenant.isPending ? "Setting up..." : step < 2 ? <><span>Next</span><ArrowRight className="w-4 h-4 ml-1.5" /></> : <><span>Launch Rebookd</span><Zap className="w-4 h-4 ml-1.5" /></>}
+                {createTenant.isPending ? "Setting up..." : step < 2 ? <><span>Next</span><ArrowRight className="w-4 h-4 ml-1.5" /></> : <><span>Launch Rebooked</span><Zap className="w-4 h-4 ml-1.5" /></>}
               </Button>
             </div>
           </CardContent>

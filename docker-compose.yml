@@ -1,51 +1,109 @@
 services:
+  migrate:
+    build:
+      context: .
+      target: migrate
+    environment:
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD:-example}@db:3306/rebooked
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: on-failure
+
   app:
-    build: .
+    build:
+      context: .
+      target: runner
     ports:
       - "3000:3000"
     environment:
       NODE_ENV: production
       PORT: 3000
       DOCKER_ENV: "true"
-      DATABASE_URL: mysql://root:example@db:3306/rebookd
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_xxx}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_xxx}
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD:-example}@db:3306/rebooked
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       APP_URL: ${APP_URL:-http://localhost:3000}
-      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
-      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
-      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
-      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
-      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-hello@rebookd.com}
-      JWT_SECRET: ${JWT_SECRET:-k9mX2vQpL7nRjW4tYeHcBsDuFzA8NgE1}
       OWNER_OPEN_ID: ${OWNER_OPEN_ID:-placeholder}
+      # Telnyx (preferred SMS provider)
+      TELNYX_API_KEY: ${TELNYX_API_KEY:-}
+      TELNYX_FROM_NUMBER: ${TELNYX_FROM_NUMBER:-}
+      TELNYX_PUBLIC_KEY: ${TELNYX_PUBLIC_KEY:-}
+      # Twilio (fallback SMS provider)
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      # Stripe
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      # Email
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-hello@rebooked.com}
+      # Inbound tRPC webhooks — required for production (see .env.example)
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      # AI
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # Observability
+      SENTRY_DSN: ${SENTRY_DSN:-}
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   worker:
-    build: .
-    command: sh -c "node dist/migrate.js && node dist/worker.js"
+    build:
+      context: .
+      target: runner
+    command: ["node", "dist/worker.js"]
     environment:
       NODE_ENV: production
       DOCKER_ENV: "true"
-      DATABASE_URL: mysql://root:example@db:3306/rebookd
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_xxx}
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD:-example}@db:3306/rebooked
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       APP_URL: ${APP_URL:-http://localhost:3000}
-      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
-      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
-      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
+      TELNYX_API_KEY: ${TELNYX_API_KEY:-}
+      TELNYX_FROM_NUMBER: ${TELNYX_FROM_NUMBER:-}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
 
   db:
     image: mysql:8.0
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: example
-      MYSQL_DATABASE: rebookd
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-example}
+      MYSQL_DATABASE: rebooked
     volumes:
       - db_data:/var/lib/mysql
     healthcheck:

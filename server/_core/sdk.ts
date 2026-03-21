@@ -1,11 +1,18 @@
 import { AXIOS_TIMEOUT_MS, COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
-import { ForbiddenError } from "@shared/_core/errors";
 import axios, { type AxiosInstance } from "axios";
+
+export class ForbiddenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ForbiddenError";
+  }
+}
 import { parse as parseCookieHeader } from "cookie";
 import type { Request } from "express";
 import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
-import * as db from "../db";
+import { getDb } from "../db";
+import * as UserService from "../services/user.service";
 import { ENV } from "./env";
 import type {
   ExchangeTokenRequest,
@@ -263,12 +270,17 @@ class SDKServer {
     const session = await this.verifySession(sessionCookie);
 
     if (!session) {
-      throw ForbiddenError("Invalid session cookie");
+      throw new ForbiddenError("Invalid session cookie");
     }
 
     const sessionUserId = session.openId;
     const signedInAt = new Date();
-    let user = await db.getUserByOpenId(sessionUserId);
+    const database = await getDb();
+    if (!database) {
+      throw new ForbiddenError("Database unavailable");
+    }
+
+    let user = await UserService.getUserByOpenId(database, sessionUserId);
 
     // If user not in DB, try to sync from external OAuth (skip if using local auth)
     if (!user) {
@@ -277,26 +289,26 @@ class SDKServer {
       if (isExternalOAuth) {
         try {
           const userInfo = await this.getUserInfoWithJwt(sessionCookie ?? "");
-          await db.upsertUser({
+          await UserService.upsertUser(database, {
             openId: userInfo.openId,
             name: userInfo.name || null,
             email: userInfo.email ?? null,
             loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
             lastSignedIn: signedInAt,
           });
-          user = await db.getUserByOpenId(userInfo.openId);
+          user = await UserService.getUserByOpenId(database, userInfo.openId);
         } catch (error) {
           console.error("[Auth] Failed to sync user from OAuth:", error);
-          throw ForbiddenError("Failed to sync user info");
+          throw new ForbiddenError("Failed to sync user info");
         }
       }
     }
 
     if (!user) {
-      throw ForbiddenError("User not found");
+      throw new ForbiddenError("User not found");
     }
 
-    await db.upsertUser({
+    await UserService.upsertUser(database, {
       openId: user.openId,
       lastSignedIn: signedInAt,
     });

@@ -1,3 +1,4 @@
+import nodemailer from "nodemailer";
 import { ENV } from "./env";
 
 export interface EmailResult {
@@ -5,19 +6,49 @@ export interface EmailResult {
   error?: string;
 }
 
-export async function sendEmail(options: { to: string; subject: string; text: string; html?: string }): Promise<EmailResult> {
-  const sendGridKey = ENV.sendGridApiKey;
-  const fromAddress = ENV.emailFromAddress || "hello@rebookd.com";
+function smtpConfigured(): boolean {
+  return !!(process.env.SMTP_HOST && process.env.SMTP_USER);
+}
 
+export async function sendEmail(options: { to: string; subject: string; text: string; html?: string }): Promise<EmailResult> {
+  const fromAddress = ENV.emailFromAddress || "hello@rebooked.com";
+
+  if (smtpConfigured()) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT || "587", 10),
+        secure: process.env.SMTP_SECURE === "true",
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS || "",
+        },
+      });
+      await transporter.sendMail({
+        from: `"Rebooked" <${fromAddress}>`,
+        to: options.to,
+        subject: options.subject,
+        text: options.text,
+        html: options.html ?? options.text,
+      });
+      console.log(`[Email] SMTP sent to ${options.to} subject=${options.subject}`);
+      return { success: true };
+    } catch (error) {
+      console.error("[Email] SMTP failed:", error);
+      return { success: false, error: String(error) };
+    }
+  }
+
+  const sendGridKey = ENV.sendGridApiKey;
   if (!sendGridKey) {
-    console.warn(`[Email] SendGrid API key not configured, skipping email to ${options.to}.`);
-    return { success: true };
+    console.warn(`[Email] No SMTP or SendGrid configured, skipping email to ${options.to}.`);
+    return { success: false, error: "Email not configured (set SMTP_* or SENDGRID_API_KEY)" };
   }
 
   try {
     const body = {
       personalizations: [{ to: [{ email: options.to }] }],
-      from: { email: fromAddress, name: "Rebookd" },
+      from: { email: fromAddress, name: "Rebooked" },
       subject: options.subject,
       content: [
         { type: "text/plain", value: options.text },

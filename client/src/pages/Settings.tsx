@@ -87,7 +87,7 @@ export default function Settings() {
     onError: (err: { message: string }) => toast.error(err.message),
   });
 
-  const setDefault = trpc.tenant.setDefaultNumber.useMutation({
+  const setDefault = trpc.tenant.setDefaultPhoneNumber.useMutation({
     onSuccess: () => utils.tenant.phoneNumbers.invalidate(),
     onError: (err: { message: string }) => toast.error(err.message),
   });
@@ -252,7 +252,7 @@ export default function Settings() {
                               variant="ghost"
                               size="sm"
                               className="h-7 text-xs"
-                              onClick={() => setDefault.mutate({ numberId: phone.id })}
+                              onClick={() => setDefault.mutate({ phoneNumberId: phone.id })}
                             >
                               Set default
                             </Button>
@@ -270,7 +270,7 @@ export default function Settings() {
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => removePhone.mutate({ numberId: phone.id })}>Remove</AlertDialogAction>
+                                <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => removePhone.mutate({ phoneNumberId: phone.id })}>Remove</AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
                           </AlertDialog>
@@ -293,7 +293,7 @@ export default function Settings() {
               </CardHeader>
               <CardContent className="p-5 space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Create API keys to integrate Rebookd with your other tools. Keys are only shown once.
+                  Create API keys to integrate Rebooked with your other tools. Keys are only shown once.
                 </p>
 
                 <div className="flex gap-2">

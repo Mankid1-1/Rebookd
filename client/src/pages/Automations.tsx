@@ -21,11 +21,12 @@ import { useState } from "react";
 
 type AutomationKey =
   | "appointment_reminder_24h" | "appointment_reminder_2h" | "appointment_confirmation"
+  | "appointment_confirmation_chase"
   | "no_show_follow_up" | "no_show_rebooking"
-  | "cancellation_same_day" | "cancellation_rebooking"
-  | "post_appointment_feedback" | "post_appointment_upsell"
-  | "win_back_30d" | "win_back_90d"
-  | "new_lead_welcome" | "lead_follow_up_3d" | "lead_follow_up_7d"
+  | "cancellation_same_day" | "cancellation_rebooking" | "cancellation_rebooking_48h" | "cancellation_rebooking_7d"
+  | "post_appointment_feedback" | "post_appointment_upsell" | "next_visit_prompt"
+  | "win_back_30d" | "win_back_90d" | "vip_winback_45d" | "vip_winback_90d"
+  | "new_lead_welcome" | "lead_follow_up_3d" | "lead_follow_up_7d" | "qualified_followup_1d" | "qualified_followup_3d" | "inbound_response_sla" | "delivery_failure_retry" | "waitlist_fill"
   | "birthday_promo" | "loyalty_milestone";
 
 type AutomationCategory = "appointment" | "no_show" | "cancellation" | "follow_up" | "reactivation" | "welcome" | "loyalty";
@@ -96,6 +97,20 @@ const CATALOGUE: AutomationTemplate[] = [
     recommended: true,
   },
   {
+    key: "appointment_confirmation_chase",
+    name: "Confirmation Chase",
+    category: "appointment",
+    icon: AlertTriangle,
+    description: "Follows up with booked clients who still have not confirmed and gives them a fast way to confirm or reschedule.",
+    defaultMessage: "Hi {{name}}, just checking that you're still good for {{date}} at {{time}}. Reply CONFIRM or RESCHEDULE.",
+    configFields: [
+      { key: "delayHours", label: "Send before appointment", type: "number", unit: "hours", placeholder: "12", defaultValue: 12 },
+      { key: "message", label: "Message", type: "textarea", defaultValue: "Hi {{name}}, just checking that you're still good for {{date}} at {{time}}. Reply CONFIRM or RESCHEDULE." },
+    ],
+    planRequired: "starter",
+    recommended: true,
+  },
+  {
     key: "no_show_follow_up",
     name: "No-Show Check-In",
     category: "no_show",
@@ -149,6 +164,46 @@ const CATALOGUE: AutomationTemplate[] = [
     planRequired: "growth",
   },
   {
+    key: "cancellation_rebooking_48h",
+    name: "Cancellation Rescue (48h)",
+    category: "cancellation",
+    icon: RotateCcw,
+    description: "Second rebooking attempt 48 hours after a cancellation.",
+    defaultMessage: "We still have a few spots open this week if you'd like to rebook. Reply YES and we'll send options.",
+    configFields: [
+      { key: "delayHours", label: "Send after cancellation", type: "number", unit: "hours", placeholder: "48", defaultValue: 48 },
+      { key: "message", label: "Message", type: "textarea", defaultValue: "We still have a few spots open this week if you'd like to rebook. Reply YES and we'll send options." },
+    ],
+    planRequired: "growth",
+  },
+  {
+    key: "cancellation_rebooking_7d",
+    name: "Cancellation Rescue (7 Days)",
+    category: "cancellation",
+    icon: RefreshCw,
+    description: "Final rebooking attempt one week after a cancellation.",
+    defaultMessage: "Last check-in from {{business}}. We'd still love to get you back on the calendar whenever you're ready.",
+    configFields: [
+      { key: "delayDays", label: "Send after cancellation", type: "number", unit: "days", placeholder: "7", defaultValue: 7 },
+      { key: "message", label: "Message", type: "textarea", defaultValue: "Last check-in from {{business}}. We'd still love to get you back on the calendar whenever you're ready." },
+    ],
+    planRequired: "growth",
+  },
+  {
+    key: "waitlist_fill",
+    name: "Waitlist Fill",
+    category: "cancellation",
+    icon: Zap,
+    description: "When a cancellation opens a slot, text nearby active leads to fill it fast.",
+    defaultMessage: "An appointment opening just came up at {{business}}. Want it? Reply YES and we'll hold it for you.",
+    configFields: [
+      { key: "candidateWindowDays", label: "Look back window", type: "number", unit: "days", placeholder: "30", defaultValue: 30 },
+      { key: "message", label: "Message", type: "textarea", defaultValue: "An appointment opening just came up at {{business}}. Want it? Reply YES and we'll hold it for you." },
+    ],
+    planRequired: "growth",
+    recommended: true,
+  },
+  {
     key: "post_appointment_feedback",
     name: "Post-Visit Feedback",
     category: "follow_up",
@@ -178,6 +233,20 @@ const CATALOGUE: AutomationTemplate[] = [
     planRequired: "growth",
   },
   {
+    key: "next_visit_prompt",
+    name: "Next Visit Prompt",
+    category: "follow_up",
+    icon: CalendarCheck,
+    description: "Prompts recent clients to lock in their next appointment before they go cold.",
+    defaultMessage: "Thanks again for visiting {{business}}. Want to get your next appointment on the calendar now?",
+    configFields: [
+      { key: "delayDays", label: "Send after visit", type: "number", unit: "days", placeholder: "3", defaultValue: 3 },
+      { key: "message", label: "Message", type: "textarea", defaultValue: "Thanks again for visiting {{business}}. Want to get your next appointment on the calendar now?" },
+    ],
+    planRequired: "growth",
+    recommended: true,
+  },
+  {
     key: "win_back_30d",
     name: "30-Day Win-Back",
     category: "reactivation",
@@ -201,6 +270,33 @@ const CATALOGUE: AutomationTemplate[] = [
       { key: "delayDays", label: "Days since last visit", type: "number", unit: "days", placeholder: "90", defaultValue: 90 },
       { key: "offerText", label: "Comeback offer", type: "text", placeholder: "e.g. 15% off", defaultValue: "15% off your next visit" },
       { key: "message", label: "Message", type: "textarea", defaultValue: "Hi {{name}}, we miss you! It's been a while. Reply YES to claim a special comeback offer." },
+    ],
+    planRequired: "scale",
+    recommended: true,
+  },
+  {
+    key: "vip_winback_45d",
+    name: "VIP Win-Back (45 Days)",
+    category: "reactivation",
+    icon: Star,
+    description: "Reactivates your highest-value clients before they fully lapse.",
+    defaultMessage: "Hi {{name}}, we've missed you at {{business}}. Want priority booking for your next visit? Reply VIP.",
+    configFields: [
+      { key: "delayDays", label: "Days since last visit", type: "number", unit: "days", placeholder: "45", defaultValue: 45 },
+      { key: "message", label: "Message", type: "textarea", defaultValue: "Hi {{name}}, we've missed you at {{business}}. Want priority booking for your next visit? Reply VIP." },
+    ],
+    planRequired: "scale",
+  },
+  {
+    key: "vip_winback_90d",
+    name: "VIP Win-Back (90 Days)",
+    category: "reactivation",
+    icon: Gift,
+    description: "A stronger comeback ask for VIP clients who have stayed away longer.",
+    defaultMessage: "We've saved a special comeback offer for you at {{business}}. Reply YES if you want first pick of availability.",
+    configFields: [
+      { key: "delayDays", label: "Days since last visit", type: "number", unit: "days", placeholder: "90", defaultValue: 90 },
+      { key: "message", label: "Message", type: "textarea", defaultValue: "We've saved a special comeback offer for you at {{business}}. Reply YES if you want first pick of availability." },
     ],
     planRequired: "scale",
     recommended: true,
@@ -241,6 +337,59 @@ const CATALOGUE: AutomationTemplate[] = [
     configFields: [
       { key: "delayDays", label: "Days after lead added", type: "number", unit: "days", placeholder: "7", defaultValue: 7 },
       { key: "message", label: "Message", type: "textarea", defaultValue: "Hey {{name}}, last check-in from {{business}}! We'd still love to help. Reply whenever you're ready." },
+    ],
+    planRequired: "starter",
+  },
+  {
+    key: "qualified_followup_1d",
+    name: "Qualified Follow-Up (1 Day)",
+    category: "follow_up",
+    icon: MessageSquare,
+    description: "Checks back with qualified leads who still have not booked.",
+    defaultMessage: "Hi {{name}}, just checking in from {{business}}. Want me to help you grab a time?",
+    configFields: [
+      { key: "delayDays", label: "Days after qualification", type: "number", unit: "days", placeholder: "1", defaultValue: 1 },
+      { key: "message", label: "Message", type: "textarea", defaultValue: "Hi {{name}}, just checking in from {{business}}. Want me to help you grab a time?" },
+    ],
+    planRequired: "starter",
+  },
+  {
+    key: "qualified_followup_3d",
+    name: "Qualified Follow-Up (3 Days)",
+    category: "follow_up",
+    icon: RefreshCw,
+    description: "Second touch for qualified leads still sitting without an appointment.",
+    defaultMessage: "Still interested in booking with {{business}}? Reply YES and we'll help you lock in a spot.",
+    configFields: [
+      { key: "delayDays", label: "Days after qualification", type: "number", unit: "days", placeholder: "3", defaultValue: 3 },
+      { key: "message", label: "Message", type: "textarea", defaultValue: "Still interested in booking with {{business}}? Reply YES and we'll help you lock in a spot." },
+    ],
+    planRequired: "starter",
+  },
+  {
+    key: "inbound_response_sla",
+    name: "Inbound Auto-Reply",
+    category: "follow_up",
+    icon: Bell,
+    description: "Automatically acknowledges inbound messages if staff have not replied fast enough.",
+    defaultMessage: "Thanks for reaching out to {{business}}. We got your message and will text you back shortly.",
+    configFields: [
+      { key: "delayMinutes", label: "Reply after", type: "number", unit: "minutes", placeholder: "10", defaultValue: 10 },
+      { key: "message", label: "Message", type: "textarea", defaultValue: "Thanks for reaching out to {{business}}. We got your message and will text you back shortly." },
+    ],
+    planRequired: "starter",
+    recommended: true,
+  },
+  {
+    key: "delivery_failure_retry",
+    name: "Delivery Failure Recovery",
+    category: "follow_up",
+    icon: AlertTriangle,
+    description: "Retries or recovers conversations when an outbound SMS fails.",
+    defaultMessage: "We had trouble reaching you earlier. If you still want to book with {{business}}, reply here and we'll help.",
+    configFields: [
+      { key: "delayMinutes", label: "Retry after", type: "number", unit: "minutes", placeholder: "15", defaultValue: 15 },
+      { key: "message", label: "Message", type: "textarea", defaultValue: "We had trouble reaching you earlier. If you still want to book with {{business}}, reply here and we'll help." },
     ],
     planRequired: "starter",
   },
@@ -406,6 +555,7 @@ function AutomationRow({
   saved,
   onToggle,
   onConfigure,
+  isToggling,
 }: {
   template: AutomationTemplate;
   saved?: { id?: number; enabled: boolean; runCount: number; errorCount?: number; config?: Record<string, string | number> };
@@ -499,13 +649,13 @@ function AutomationRow({
                 />
                 <Button
                   size="sm"
-                  disabled={!testPhone || !saved?.id || testMutation.isLoading}
+                  disabled={!testPhone || !saved?.id || testMutation.isPending}
                   onClick={() => {
                     if (!saved?.id || !testPhone) return;
                     testMutation.mutate({ automationId: saved.id, testPhone: testPhone.trim() });
                   }}
                 >
-                  {testMutation.isLoading ? "Sending..." : "Send Test"}
+                  {testMutation.isPending ? "Sending..." : "Send Test"}
                 </Button>
               </div>
             </div>
@@ -558,7 +708,7 @@ export default function Automations() {
     onError: (err) => toast.error(err.message),
   });
 
-  type SavedItem = { id?: number; key: string; enabled: boolean; runCount: number; errorCount?: number; lastRunAt?: string; triggerConfig?: Record<string, unknown> };
+  type SavedItem = { id?: number; key: string; enabled: boolean; runCount: number; errorCount?: number; lastRunAt?: Date | string; triggerConfig?: Record<string, unknown> };
   const savedMap: Record<string, SavedItem> = {};
   for (const s of savedList as SavedItem[]) {
     if (s.key) savedMap[s.key] = s;
@@ -676,6 +826,7 @@ export default function Automations() {
                 } : undefined}
                 onToggle={(enabled) => toggleMutation.mutate({ key: template.key, enabled })}
                 onConfigure={() => setConfigTarget(template.key)}
+                isToggling={togglingKey === template.key}
               />
             );
           })}
