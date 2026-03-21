@@ -3,7 +3,9 @@ import type { EventPayload } from "../shared/events";
 
 const processedEvents = new Set<string>();
 
-export async function emitEvent(event: EventPayload) {
+export async function emitEvent(event: Event) {
+  // Emit automation trigger events
+}
   if (event.id && processedEvents.has(event.id)) {
     console.log("[EventBus] Duplicate event ignored:", event.id);
     return;
