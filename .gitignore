@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Dependencies
 **/node_modules
 .pnpm-store/
@@ -111,3 +112,23 @@ temp/
 
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json
+=======
+.env
+.env.txt
+.env.local
+.env.*
+.pytest_cache/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-journal.txt
+*.db-wal
+*.db-shm
+*.log
+>>>>>>> d13c058bdd90ffaf7ded8c5ac5fd7108489d89df

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rebookd | Business setup</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: "Plus Jakarta Sans", sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen bg-[linear-gradient(180deg,_#f8fafc,_#effcf6_35%,_#ffffff)] text-slate-900">
+  <main class="mx-auto max-w-5xl px-6 py-10 lg:px-10">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <p class="text-sm font-bold uppercase tracking-[0.3em] text-emerald-600">Tenant configuration</p>
+        <h1 class="mt-2 text-4xl font-extrabold text-slate-950">Business setup</h1>
+        <p class="mt-2 max-w-2xl text-sm text-slate-500">
+          Keep this page accurate so Rebookd can match incoming calls and messages to the right tenant and present the right services to clients.
+        </p>
+      </div>
+      <a href="/dashboard" class="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-white">Back to dashboard</a>
+    </div>
+
+    <div class="mt-8 grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+      <section class="rounded-[2rem] bg-white p-8 shadow-lg shadow-slate-100 ring-1 ring-slate-200">
+        {% if error %}
+        <div class="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+          {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="post" class="space-y-6">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <label class="block">
+            <span class="mb-2 block text-sm font-semibold text-slate-700">Twilio number</span>
+            <input
+              name="twilio_phone"
+              type="text"
+              required
+              value="{{ form.twilio_phone }}"
+              placeholder="+15551234567"
+              class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+            />
+            <span class="mt-2 block text-xs text-slate-500">This must match the number that receives inbound webhook traffic for this business.</span>
+          </label>
+
+          <label class="block">
+            <span class="mb-2 block text-sm font-semibold text-slate-700">Booking URL</span>
+            <input
+              name="booking_url"
+              type="url"
+              value="{{ form.booking_url }}"
+              placeholder="https://calendly.com/yourbusiness"
+              class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+            />
+            <span class="mt-2 block text-xs text-slate-500">Sent automatically in the missed-call SMS. Paste your Calendly, Jane App, or any booking link.</span>
+          </label>
+
+          <label class="block">
+            <span class="mb-2 block text-sm font-semibold text-slate-700">Services</span>
+            <textarea
+              name="services"
+              rows="5"
+              placeholder="Haircut:45:65, Color:90:120, Manicure:60:50"
+              class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+            >{{ form.services }}</textarea>
+            <span class="mt-2 block text-xs text-slate-500">Use the format <strong>Name:minutes:price</strong>, separated by commas.</span>
+          </label>
+
+          <label class="block">
+            <span class="mb-2 block text-sm font-semibold text-slate-700">Recovery incentive</span>
+            <input
+              name="incentive"
+              type="text"
+              value="{{ form.incentive }}"
+              placeholder="Book today and save $10 on your first visit."
+              class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+            />
+            <span class="mt-2 block text-xs text-slate-500">Optional, but a strong urgency-based offer usually improves conversions.</span>
+          </label>
+
+          <button
+            type="submit"
+            class="w-full rounded-2xl bg-[linear-gradient(135deg,_#111827,_#0f766e)] px-5 py-4 text-base font-bold text-white shadow-lg shadow-slate-200 transition hover:-translate-y-0.5"
+          >
+            Save configuration
+          </button>
+        </form>
+      </section>
+
+      <aside class="space-y-6">
+        <div class="rounded-[2rem] bg-white p-6 shadow-lg shadow-slate-100 ring-1 ring-slate-200">
+          <p class="text-sm font-bold uppercase tracking-[0.25em] text-slate-400">Why this matters</p>
+          <h2 class="mt-2 text-2xl font-extrabold text-slate-950">Correct database matching starts here</h2>
+          <p class="mt-4 text-sm leading-7 text-slate-600">
+            The Twilio number is how inbound SMS and status callbacks find the correct tenant. The service catalog becomes structured JSON in SQLite so pricing and duration stay consistent.
+          </p>
+        </div>
+
+        <div class="rounded-[2rem] bg-[linear-gradient(155deg,_#06261f,_#134e4a)] p-6 text-white shadow-lg shadow-emerald-100">
+          <p class="text-sm font-bold uppercase tracking-[0.25em] text-emerald-200">Recommended launch sequence</p>
+          <ol class="mt-4 space-y-3 text-sm text-emerald-50/90">
+            <li>1. Add the exact Twilio number wired to your webhook endpoint.</li>
+            <li>2. Paste your booking link (Calendly, Jane, etc.) so callers can self-book.</li>
+            <li>3. Enter your top services in the supported format.</li>
+            <li>4. Add a client-facing incentive with urgency.</li>
+            <li>5. Send a test SMS to confirm the lead appears in the dashboard.</li>
+          </ol>
+        </div>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>

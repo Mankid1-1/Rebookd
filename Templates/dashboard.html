@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rebookd | Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: "Plus Jakarta Sans", sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen bg-[linear-gradient(180deg,_#f8fafc,_#eefbf3_40%,_#f8fafc)] text-slate-900">
+  <main class="mx-auto max-w-7xl px-6 py-8 lg:px-10">
+    <div class="rounded-[2rem] bg-[linear-gradient(135deg,_#0b3b2c,_#0f766e,_#34d399)] p-8 text-white shadow-2xl shadow-emerald-100">
+      <div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p class="text-sm font-bold uppercase tracking-[0.3em] text-emerald-100">Revenue recovery workspace</p>
+          <h1 class="mt-3 text-4xl font-extrabold sm:text-5xl">{{ business_name }}</h1>
+          <p class="mt-3 max-w-2xl text-base text-emerald-50/90 sm:text-lg">
+            Run your callback workflow from one dashboard. Track setup, monitor lead activity, and see exactly how much revenue has been recovered.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <a href="/config" class="rounded-2xl bg-white px-5 py-3 text-sm font-bold text-emerald-800 shadow-lg transition hover:-translate-y-0.5">Update setup</a>
+          <a href="/automations" class="rounded-2xl border border-white/40 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10">Automations</a>
+          <a href="/settings" class="rounded-2xl border border-white/40 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10">Settings</a>
+          <a href="/metrics" class="rounded-2xl border border-white/40 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10">Metrics</a>
+          <a href="/logout" class="rounded-2xl border border-white/25 px-5 py-3 text-sm font-bold text-white/90 transition hover:bg-white/10">Log out</a>
+        </div>
+      </div>
+    </div>
+
+    <section class="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <article class="rounded-[1.75rem] bg-white p-6 shadow-lg shadow-slate-100 ring-1 ring-slate-200">
+        <p class="text-sm font-semibold text-slate-500">Recovered revenue</p>
+        <p class="mt-4 text-4xl font-extrabold text-slate-950">${{ "{:,.0f}".format(stats.recovered_revenue) }}</p>
+        <p class="mt-2 text-sm text-slate-500">Booked leads attributed to recovery actions.</p>
+      </article>
+      <article class="rounded-[1.75rem] bg-white p-6 shadow-lg shadow-slate-100 ring-1 ring-slate-200">
+        <p class="text-sm font-semibold text-slate-500">Recovery rate</p>
+        <p class="mt-4 text-4xl font-extrabold text-emerald-700">{{ stats.recovery_rate }}%</p>
+        <p class="mt-2 text-sm text-slate-500">Booked leads divided by tracked leads.</p>
+      </article>
+      <article class="rounded-[1.75rem] bg-white p-6 shadow-lg shadow-slate-100 ring-1 ring-slate-200">
+        <p class="text-sm font-semibold text-slate-500">Booked conversations</p>
+        <p class="mt-4 text-4xl font-extrabold text-slate-950">{{ stats.booked_count }}</p>
+        <p class="mt-2 text-sm text-slate-500">Customers already moved back onto the calendar.</p>
+      </article>
+      <article class="rounded-[1.75rem] bg-white p-6 shadow-lg shadow-slate-100 ring-1 ring-slate-200">
+        <p class="text-sm font-semibold text-slate-500">Active follow-ups</p>
+        <p class="mt-4 text-4xl font-extrabold text-slate-950">{{ stats.active_followups }}</p>
+        <p class="mt-2 text-sm text-slate-500">Leads still being worked through SMS or callback.</p>
+      </article>
+      <article class="rounded-[1.75rem] bg-white p-6 shadow-lg shadow-slate-100 ring-1 ring-slate-200">
+        <p class="text-sm font-semibold text-slate-500">Automations active</p>
+        <p class="mt-4 text-4xl font-extrabold text-slate-950">{{ enabled_automations }}</p>
+        <p class="mt-2 text-sm text-slate-500"><a href="/automations" class="text-emerald-600 font-semibold hover:underline">Manage automations →</a></p>
+      </article>
+    </section>
+
+    <section class="mt-8 grid gap-8 xl:grid-cols-[0.95fr_1.05fr]">
+      <article class="rounded-[2rem] bg-white p-7 shadow-lg shadow-slate-100 ring-1 ring-slate-200">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-bold uppercase tracking-[0.25em] text-slate-400">Setup checklist</p>
+            <h2 class="mt-2 text-2xl font-extrabold text-slate-950">Hosting and launch readiness</h2>
+          </div>
+          <a href="/config" class="text-sm font-semibold text-emerald-700">Edit</a>
+        </div>
+
+        <div class="mt-6 space-y-4">
+          {% for item in setup_items %}
+          <div class="rounded-2xl border px-4 py-4 {{ 'border-emerald-200 bg-emerald-50/70' if item.complete else 'border-amber-200 bg-amber-50/70' }}">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="font-bold text-slate-900">{{ item.label }}</p>
+                <p class="mt-1 text-sm text-slate-600">{{ item.hint }}</p>
+              </div>
+              <span class="rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] {{ 'bg-emerald-600 text-white' if item.complete else 'bg-amber-200 text-amber-900' }}">
+                {{ 'Ready' if item.complete else 'Needs setup' }}
+              </span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </article>
+
+      <article class="rounded-[2rem] bg-white p-7 shadow-lg shadow-slate-100 ring-1 ring-slate-200">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-bold uppercase tracking-[0.25em] text-slate-400">Live queue</p>
+            <h2 class="mt-2 text-2xl font-extrabold text-slate-950">Recent lead activity</h2>
+          </div>
+        </div>
+
+        {% if stats.recent_leads %}
+        <div class="mt-6 overflow-hidden rounded-3xl border border-slate-200">
+          <table class="min-w-full divide-y divide-slate-200">
+            <thead class="bg-slate-50 text-left text-sm font-semibold text-slate-500">
+              <tr>
+                <th class="px-5 py-4">Phone</th>
+                <th class="px-5 py-4">Status</th>
+                <th class="px-5 py-4">Method</th>
+                <th class="px-5 py-4 text-right">Revenue</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 bg-white text-sm">
+              {% for lead in stats.recent_leads %}
+              <tr>
+                <td class="px-5 py-4 font-semibold text-slate-900">{{ lead.phone }}</td>
+                <td class="px-5 py-4 capitalize text-slate-600">{{ lead.status }}</td>
+                <td class="px-5 py-4 capitalize text-slate-600">{{ lead.recovery_method or 'unknown' }}</td>
+                <td class="px-5 py-4 text-right font-semibold text-emerald-700">${{ "{:,.0f}".format(lead.revenue or 0) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="mt-6 rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
+          <p class="text-lg font-bold text-slate-900">No lead activity yet</p>
+          <p class="mt-2 text-sm text-slate-500">Once SMS or callback webhooks start hitting this tenant, leads will show up here automatically.</p>
+        </div>
+        {% endif %}
+      </article>
+    </section>
+
+    <section class="mt-8 grid gap-8 xl:grid-cols-[1fr_1fr]">
+      <article class="rounded-[2rem] bg-white p-7 shadow-lg shadow-slate-100 ring-1 ring-slate-200">
+        <p class="text-sm font-bold uppercase tracking-[0.25em] text-slate-400">Service catalog</p>
+        <h2 class="mt-2 text-2xl font-extrabold text-slate-950">What clients can book</h2>
+        {% if services %}
+        <div class="mt-6 grid gap-4 sm:grid-cols-2">
+          {% for service in services %}
+          <div class="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+            <p class="font-bold text-slate-900">{{ service.name }}</p>
+            <p class="mt-2 text-sm text-slate-500">{{ service.minutes }} minutes</p>
+            <p class="mt-3 text-lg font-extrabold text-emerald-700">${{ "{:,.0f}".format(service.price) }}</p>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="mt-5 text-sm text-slate-500">No services added yet. Add your most common services in the configuration page so future booking flows have pricing context.</p>
+        {% endif %}
+      </article>
+
+      <article class="rounded-[2rem] bg-white p-7 shadow-lg shadow-slate-100 ring-1 ring-slate-200">
+        <p class="text-sm font-bold uppercase tracking-[0.25em] text-slate-400">Messaging offer</p>
+        <h2 class="mt-2 text-2xl font-extrabold text-slate-950">Recovery incentive</h2>
+        <div class="mt-6 rounded-3xl bg-[linear-gradient(145deg,_#111827,_#1f2937)] p-6 text-white">
+          <p class="text-xs font-bold uppercase tracking-[0.25em] text-emerald-200">Outbound SMS preview</p>
+          <p class="mt-4 text-lg leading-8 text-slate-100">
+            {{ tenant.incentive or "Add a time-sensitive offer in configuration to increase rebooking response rates." }}
+          </p>
+          {% if tenant.booking_url %}
+          <div class="mt-4 border-t border-white/10 pt-4">
+            <p class="text-xs font-bold uppercase tracking-[0.25em] text-emerald-200">Booking link</p>
+            <a href="{{ tenant.booking_url }}" target="_blank" class="mt-2 block truncate text-sm text-emerald-300 hover:text-emerald-100">{{ tenant.booking_url }}</a>
+          </div>
+          {% else %}
+          <div class="mt-4 border-t border-white/10 pt-4">
+            <p class="text-xs font-bold uppercase tracking-[0.25em] text-amber-300">Booking link missing</p>
+            <p class="mt-1 text-sm text-slate-400">Add your booking URL in <a href="/config" class="text-emerald-300 underline">setup</a> so missed-call SMS messages include a direct link.</p>
+          </div>
+          {% endif %}
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
