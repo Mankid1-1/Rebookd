@@ -1,0 +1,26 @@
+# 🚀 REBOOKED SERVER SETUP REQUIREMENTS
+# Dependencies needed for the server setup script
+
+# Node.js packages (install globally or in project)
+npm install -g pnpm
+npm install -g pm2
+
+# Node.js dependencies for setup script
+npm install archiver
+npm install extract-zip
+
+# System dependencies (Ubuntu/Debian)
+sudo apt-get update
+sudo apt-get install -y nginx
+sudo apt-get install -y certbot python3-certbot-nginx
+sudo apt-get install -y build-essential
+
+# System dependencies (CentOS/RHEL)
+sudo yum update
+sudo yum install -y nginx
+sudo yum install -y certbot python3-certbot-nginx
+sudo yum install -y gcc gcc-c++ make
+
+# System dependencies (macOS)
+brew install nginx
+brew install certbot
