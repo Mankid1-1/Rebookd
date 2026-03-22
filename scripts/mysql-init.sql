@@ -109,12 +109,11 @@ UPDATE users SET tenantId = @tenant_id WHERE email = 'admin@rebooked.org';
 
 -- ─── CREATE INITIAL SUBSCRIPTION PLANS ────────────────────────────────────────
 
-INSERT IGNORE INTO plans (name, slug, priceMonthly, maxAutomations, maxMessages, maxSeats, stripePriceId)
+INSERT IGNORE INTO plans (name, slug, priceMonthly, maxAutomations, maxMessages, maxSeats, stripePriceId, revenueSharePercent)
 VALUES
-    ('Free', 'free', 0, 3, 100, 1, NULL),
-    ('Starter', 'starter', 4900, 10, 5000, 3, 'price_...'),
-    ('Professional', 'professional', 9900, 25, 50000, 10, 'price_...'),
-    ('Enterprise', 'enterprise', 0, 999, 999999, 999, NULL);
+    ('Free', 'free', 0, 3, 100, 1, NULL, 0),
+    ('Professional', 'professional', 19900, 25, 50000, 10, 'price_...', 15),
+    ('Enterprise', 'enterprise', 0, 999, 999999, 999, NULL, 10);
 
 -- ─── CREATE INITIAL SUBSCRIPTION ──────────────────────────────────────────────
 

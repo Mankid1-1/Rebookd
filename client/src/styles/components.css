@@ -1,0 +1,106 @@
+/* Component-specific styles for high-impact features */
+
+/* Progress bar dynamic widths */
+.utilization-bar-20 { width: 20%; }
+.utilization-bar-30 { width: 30%; }
+.utilization-bar-40 { width: 40%; }
+.utilization-bar-50 { width: 50%; }
+.utilization-bar-60 { width: 60%; }
+.utilization-bar-70 { width: 70%; }
+.utilization-bar-80 { width: 80%; }
+.utilization-bar-90 { width: 90%; }
+
+/* After-hours coverage progress */
+.coverage-bar-10 { width: 10%; }
+.coverage-bar-20 { width: 20%; }
+.coverage-bar-30 { width: 30%; }
+.coverage-bar-40 { width: 40%; }
+.coverage-bar-50 { width: 50%; }
+.coverage-bar-60 { width: 60%; }
+.coverage-bar-70 { width: 70%; }
+.coverage-bar-80 { width: 80%; }
+.coverage-bar-90 { width: 90%; }
+.coverage-bar-100 { width: 100%; }
+
+/* Admin automation revenue impact */
+.revenue-impact-5 { width: 5%; }
+.revenue-impact-10 { width: 10%; }
+.revenue-impact-15 { width: 15%; }
+.revenue-impact-20 { width: 20%; }
+.revenue-impact-25 { width: 25%; }
+.revenue-impact-30 { width: 30%; }
+.revenue-impact-35 { width: 35%; }
+.revenue-impact-40 { width: 40%; }
+.revenue-impact-45 { width: 45%; }
+.revenue-impact-50 { width: 50%; }
+
+/* Animation classes */
+.fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* High-impact feature specific styles */
+.feature-card {
+  transition: all 0.2s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+.metric-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.metric-card.blue {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+}
+
+.metric-card.green {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.metric-card.orange {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+}
+
+.metric-card.purple {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+}
+
+/* Status indicators */
+.status-active {
+  background-color: #10b981;
+  color: white;
+}
+
+.status-inactive {
+  background-color: #6b7280;
+  color: white;
+}
+
+.status-warning {
+  background-color: #f59e0b;
+  color: white;
+}
+
+.status-error {
+  background-color: #ef4444;
+  color: white;
+}

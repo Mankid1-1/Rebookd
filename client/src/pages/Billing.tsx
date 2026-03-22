@@ -179,7 +179,8 @@ Thank you`);
           <div className="grid md:grid-cols-3 gap-4">
             {plans.map((plan) => {
               const isCurrentPlan = plan.id === subscription?.sub?.planId;
-              const isPopular = plan.name === "Growth";
+              const isPopular = plan.name === "Professional";
+              const hasRevenueShare = plan.revenueSharePercent && plan.revenueSharePercent > 0;
               return (
                 <Card
                   key={plan.id}
@@ -208,6 +209,28 @@ Thank you`);
                         <span className="text-3xl font-bold">${(plan.priceMonthly / 100).toFixed(0)}</span>
                         <span className="text-muted-foreground text-sm">/mo</span>
                       </div>
+                      {hasRevenueShare && (
+                        <div className="mt-2">
+                          <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
+                            +{plan.revenueSharePercent}% of recovered revenue
+                          </span>
+                        </div>
+                      )}
+                      {plan.hasPromotion && plan.promotionalSlots > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs bg-green-500/10 text-green-400 px-2 py-1 rounded-full font-medium">
+                              🎉 Limited Time Offer
+                            </span>
+                          </div>
+                          <p className="text-xs text-green-400">
+                            First {plan.promotionalSlots} clients: Free if total cost ≤ $199/month
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {plan.promotionalSlots} slots remaining
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <ul className="space-y-2 mb-5">
                       <li className="flex items-center gap-2 text-sm">
@@ -222,10 +245,16 @@ Thank you`);
                         <CheckCircle className="w-4 h-4 text-primary shrink-0" />
                         AI tone rewriting
                       </li>
-                      {plan.name !== "Starter" && (
+                      {plan.name !== "Free" && (
                         <li className="flex items-center gap-2 text-sm">
                           <CheckCircle className="w-4 h-4 text-primary shrink-0" />
                           Advanced analytics
+                        </li>
+                      )}
+                      {hasRevenueShare && (
+                        <li className="flex items-center gap-2 text-sm">
+                          <Zap className="w-4 h-4 text-primary shrink-0" />
+                          Revenue sharing model
                         </li>
                       )}
                     </ul>

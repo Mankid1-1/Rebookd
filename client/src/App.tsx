@@ -2,23 +2,39 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
-import ErrorBoundary from "./components/ErrorBoundary";
+import ErrorBoundary from "./components/EnhancedErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Home from "./pages/Home";
-import Dashboard from "./pages/Dashboard";
-import Leads from "./pages/Leads";
-import LeadDetail from "./pages/LeadDetail";
-import Automations from "./pages/Automations";
-import Templates from "./pages/Templates";
-import Analytics from "./pages/Analytics";
-import Settings from "./pages/Settings";
-import Billing from "./pages/Billing";
-import Onboarding from "./pages/Onboarding";
-import Inbox from "./pages/Inbox";
-import AdminTenants from "./pages/admin/AdminTenants";
-import AdminUsers from "./pages/admin/AdminUsers";
-import AdminSystemHealth from "./pages/admin/AdminSystemHealth";
-import AdminMessages from "./pages/admin/AdminMessages";
+import { lazy, Suspense } from "react";
+
+// Lazy load heavy components for code splitting
+const Home = lazy(() => import("./pages/Home"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Leads = lazy(() => import("./pages/Leads"));
+const LeadDetail = lazy(() => import("./pages/LeadDetail"));
+const Automations = lazy(() => import("./pages/Automations"));
+const Templates = lazy(() => import("./pages/Templates"));
+const Analytics = lazy(() => import("./pages/Analytics"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Billing = lazy(() => import("./pages/Billing"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
+const Inbox = lazy(() => import("./pages/Inbox"));
+
+// Admin pages - lazy loaded
+const AdminTenants = lazy(() => import("./pages/admin/AdminTenants"));
+const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
+const AdminSystemHealth = lazy(() => import("./pages/admin/AdminSystemHealth"));
+const AdminMessages = lazy(() => import("./pages/admin/AdminMessages"));
+
+// High-impact feature pages - lazy loaded
+const LeadCapture = lazy(() => import("@/pages/LeadCapture"));
+const BookingConversion = lazy(() => import("@/pages/BookingConversion"));
+const NoShowRecovery = lazy(() => import("@/pages/NoShowRecovery"));
+const CancellationRecovery = lazy(() => import("@/pages/CancellationRecovery"));
+const RetentionEngine = lazy(() => import("@/pages/RetentionEngine"));
+const SmartScheduling = lazy(() => import("@/pages/SmartScheduling"));
+const PaymentEnforcement = lazy(() => import("@/pages/PaymentEnforcement"));
+const AfterHours = lazy(() => import("@/pages/AfterHours"));
+const AdminAutomation = lazy(() => import("@/pages/AdminAutomation"));
 
 function Router() {
   return (
@@ -46,9 +62,19 @@ function Router() {
       <Route path="/admin/health" component={AdminSystemHealth} />
       <Route path="/admin/messages" component={AdminMessages} />
 
+      {/* High-Impact Feature Routes */}
+      <Route path="/lead-capture" component={LeadCapture} />
+      <Route path="/booking-conversion" component={BookingConversion} />
+      <Route path="/no-show-recovery" component={NoShowRecovery} />
+      <Route path="/cancellation-recovery" component={CancellationRecovery} />
+      <Route path="/retention-engine" component={RetentionEngine} />
+      <Route path="/smart-scheduling" component={SmartScheduling} />
+      <Route path="/payment-enforcement" component={PaymentEnforcement} />
+      <Route path="/after-hours" component={AfterHours} />
+      <Route path="/admin-automation" component={AdminAutomation} />
+
       {/* Fallback */}
       <Route path="/404" component={NotFound} />
-      <Route component={NotFound} />
     </Switch>
   );
 }
@@ -59,7 +85,9 @@ function App() {
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster richColors position="top-right" />
-          <Router />
+          <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+            <Router />
+          </Suspense>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

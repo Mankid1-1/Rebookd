@@ -1,4 +1,4 @@
-import { eq, and, sql, desc, isNotNull, gt, lt, isNull, gte } from "drizzle-orm";
+import { eq, and, sql, desc, isNotNull, gt, lt, isNull, gte, lte } from "drizzle-orm";
 import { leads, messages, automations } from "../../drizzle/schema";
 
 import type { Db } from "../_core/context";
@@ -95,7 +95,53 @@ export async function createRecoveryCampaign(
 }
 
 async function getTargetLeadsForRecovery(db: Db, tenantId: number, leakageType: string) {
-  let baseQuery = db
+  const conditions = [
+    eq(leads.tenantId, tenantId)
+  ];
+
+  // Filter based on leakage type
+  switch (leakageType) {
+    case "no_show":
+      conditions.push(
+        eq(leads.status, "booked"),
+        isNotNull(leads.appointmentAt),
+        lt(leads.appointmentAt, new Date()),
+        sql`JSON_SEARCH(COALESCE(${leads.tags}, JSON_ARRAY()), 'one', 'no_show') IS NOT NULL`,
+        gte(leads.appointmentAt, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)) // Last 7 days
+      );
+      break;
+
+    case "cancellation":
+      conditions.push(
+        sql`JSON_SEARCH(COALESCE(${leads.tags}, JSON_ARRAY()), 'one', 'cancelled') IS NOT NULL`,
+        gte(leads.updatedAt, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
+      );
+      break;
+
+    case "last_minute":
+      conditions.push(
+        sql`JSON_SEARCH(COALESCE(${leads.tags}, JSON_ARRAY()), 'one', 'cancelled') IS NOT NULL`,
+        sql`${leads.appointmentAt} IS NOT NULL`,
+        sql`TIMESTAMPDIFF(HOUR, ${leads.updatedAt}, ${leads.appointmentAt}) <= 24`,
+        gte(leads.updatedAt, new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)) // Last 3 days
+      );
+      break;
+
+    case "followup_missed":
+      conditions.push(
+        eq(leads.status, "contacted"),
+        sql`${leads.appointmentAt} IS NULL`,
+        sql`TIMESTAMPDIFF(HOUR, ${leads.lastMessageAt}, ${leads.updatedAt}) > 24`,
+        lte(leads.lastMessageAt, new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)) // Over 2 weeks
+      );
+      break;
+
+    default:
+      conditions.push(eq(leads.status, "new"));
+      break;
+  }
+
+  return await withQueryTimeout("recovery.target-leads", db
     .select({
       id: leads.id,
       name: leads.name,
@@ -108,50 +154,8 @@ async function getTargetLeadsForRecovery(db: Db, tenantId: number, leakageType: 
       updatedAt: leads.updatedAt
     })
     .from(leads)
-    .where(eq(leads.tenantId, tenantId));
-
-  // Filter based on leakage type
-  switch (leakageType) {
-    case "no_show":
-      return await withQueryTimeout("recovery.target-leads", baseQuery.where(and(
-        eq(leads.status, "booked"),
-        isNotNull(leads.appointmentAt),
-        lt(leads.appointmentAt, new Date()),
-        sql`JSON_SEARCH(COALESCE(${leads.tags}, JSON_ARRAY()), 'one', 'no_show') IS NOT NULL`,
-        gte(leads.appointmentAt, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)) // Last 7 days
-      )));
-
-    case "cancellation":
-      return await withQueryTimeout("recovery.target-leads", baseQuery.where(and(
-        sql`JSON_SEARCH(COALESCE(${leads.tags}, JSON_ARRAY()), 'one', 'cancelled') IS NOT NULL`,
-        gte(leads.updatedAt, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
-      )));
-
-    case "last_minute":
-      return await withQueryTimeout("recovery.target-leads", baseQuery.where(and(
-        sql`JSON_SEARCH(COALESCE(${leads.tags}, JSON_ARRAY()), 'one', 'cancelled') IS NOT NULL`,
-        sql`${leads.appointmentAt} IS NOT NULL`,
-        sql`TIMESTAMPDIFF(HOUR, ${leads.updatedAt}, ${leads.appointmentAt}) <= 24`,
-        gte(leads.updatedAt, new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)) // Last 3 days
-      )));
-
-    case "followup_missed":
-      return await withQueryTimeout("recovery.target-leads", baseQuery.where(and(
-        eq(leads.status, "qualified"),
-        sql`${leads.lastMessageAt} IS NULL OR ${leads.lastMessageAt} < DATE_SUB(NOW(), INTERVAL 7 DAY)`,
-        gte(leads.createdAt, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
-      )));
-
-    case "abandoned_leads":
-      return await withQueryTimeout("recovery.target-leads", baseQuery.where(and(
-        eq(leads.status, "contacted"),
-        sql`${leads.lastMessageAt} < DATE_SUB(NOW(), INTERVAL 14 DAY)`,
-        gte(leads.createdAt, new Date(Date.now() - 60 * 24 * 60 * 60 * 1000))
-      )));
-
-    default:
-      return []; // No matches for unknown types
-  }
+    .where(and(...conditions))
+  );
 }
 
 async function createRecoveryAction(

@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, ilike, or } from "drizzle-orm";
 import { leads, messages } from "../../drizzle/schema";
 import { decrypt, encryptIfNeeded } from "../_core/crypto";
 import { hashPhoneNumber, normalizePhoneNumber } from "../_core/phone";
@@ -6,6 +6,9 @@ import { logger } from "../_core/logger";
 import type { Db } from "../_core/context";
 import * as UsageService from "./usage.service";
 import * as TcpaComplianceService from "./tcpaCompliance.service";
+import { withQueryTimeout, withQueryRetry, QueryPerformanceMonitor } from "../_core/query-timeout.service";
+import { searchLeads, getLeadByIdOptimized, getSearchMemoryStats } from "./lead-search-optimization.service";
+import { encryptMessage, decryptMessage, messageEncryption } from "../_core/message-encryption";
 
 function presentLead<T extends Record<string, any> | undefined>(lead: T): T {
   if (!lead) return lead;
@@ -44,75 +47,27 @@ export async function getLeads(
   tenantId: number,
   opts?: { page?: number; limit?: number; search?: string; status?: string },
 ) {
-  const page = opts?.page || 1;
-  const limit = Math.min(opts?.limit || 50, 100); // Limit max results to prevent memory issues
-  const offset = (page - 1) * limit;
-  const search = opts?.search?.trim();
-
-  // Use indexed columns for better performance
-  const conditions = [eq(leads.tenantId, tenantId)];
-  if (opts?.status) {
-    conditions.push(eq(leads.status, opts.status as typeof leads.$inferSelect.status));
-  }
-  
-  if (search && search.length >= 2) { // Only search if we have at least 2 characters
-    // Use more efficient search with proper indexing
-    const searchPattern = `%${search.toLowerCase()}%`;
-    const searchCondition = sql`(
-      LOWER(${leads.phoneHash}) LIKE LOWER(${searchPattern}) OR
-      LOWER(${leads.name}) LIKE LOWER(${searchPattern}) OR
-      LOWER(${leads.email}) LIKE LOWER(${searchPattern})
-    )`;
-    conditions.push(searchCondition);
-  }
-  
-  const baseWhere = conditions.length > 1 ? and(...conditions) : conditions[0];
-
-  // Use streaming for large result sets to prevent memory issues
-  const results = await db
-    .select({
-      id: leads.id,
-      tenantId: leads.tenantId,
-      phone: leads.phone,
-      phoneHash: leads.phoneHash,
-      name: leads.name,
-      email: leads.email,
-      status: leads.status,
-      source: leads.source,
-      notes: leads.notes,
-      appointmentAt: leads.appointmentAt,
-      tags: leads.tags,
-      createdAt: leads.createdAt,
-      updatedAt: leads.updatedAt,
-    })
-    .from(leads)
-    .where(baseWhere)
-    .orderBy(desc(leads.createdAt))
-    .limit(limit)
-    .offset(offset);
-
-  // Get count with optimized query
-  const [{ count }] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(leads)
-    .where(baseWhere);
-
-  // Process results in batches to prevent memory issues
-  const processedLeads = [];
-  for (const lead of results) {
-    processedLeads.push(presentLead(lead));
-  }
-
-  return { leads: processedLeads, total: count };
+  // Use optimized search service with memory management
+  return await QueryPerformanceMonitor.trackQuery(
+    () => searchLeads(db, tenantId, opts),
+    'getLeads',
+    1000 // 1 second slow threshold
+  );
 }
 
-export async function getLeadById(db: Db, tenantId: number, leadId: number) {
-  const result = await db
-    .select()
-    .from(leads)
-    .where(and(eq(leads.id, leadId), eq(leads.tenantId, tenantId)))
-    .limit(1);
-  return presentLead(result[0]);
+export async function getLeadById(
+  db: Db,
+  tenantId: number,
+  leadId: number,
+) {
+  // Use optimized lead retrieval with caching and timeout
+  const lead = await QueryPerformanceMonitor.trackQuery(
+    () => getLeadByIdOptimized(db, tenantId, leadId),
+    'getLeadById',
+    500 // 500ms slow threshold
+  );
+  
+  return presentLead(lead);
 }
 
 export async function createLead(db: Db, data: {
@@ -210,8 +165,45 @@ export async function createMessage(db: Db, data: {
   deliveredAt?: Date;
   failedAt?: Date;
 }) {
+  // Check if encryption is configured
+  if (!messageEncryption.isConfigured()) {
+    logger.warn('Message encryption not configured, storing plain text');
+  }
+
+  // Encrypt message body if encryption is available
+  let encryptedBody = data.body;
+  let encryptedFromNumber = data.fromNumber;
+  let encryptedToNumber = data.toNumber;
+
+  if (messageEncryption.isConfigured()) {
+    try {
+      const encryptedMsg = encryptMessage(data.body);
+      encryptedBody = `${encryptedMsg.encrypted}:${encryptedMsg.iv}:${encryptedMsg.tag}`;
+      
+      if (data.fromNumber) {
+        encryptedFromNumber = messageEncryption.encryptPhoneNumber(data.fromNumber);
+      }
+      
+      if (data.toNumber) {
+        encryptedToNumber = messageEncryption.encryptPhoneNumber(data.toNumber);
+      }
+    } catch (error) {
+      logger.error('Message encryption failed:', error);
+      // Fall back to plain text with legacy encryption
+      encryptedBody = encryptIfNeeded(data.body);
+      encryptedFromNumber = data.fromNumber ? encryptIfNeeded(data.fromNumber) : undefined;
+      encryptedToNumber = data.toNumber ? encryptIfNeeded(data.toNumber) : undefined;
+    }
+  }
+
   return db.transaction(async (tx) => {
-    const result = await tx.insert(messages).values({ ...data, status: data.status || "sent" });
+    const result = await tx.insert(messages).values({ 
+      ...data, 
+      body: encryptedBody,
+      fromNumber: encryptedFromNumber,
+      toNumber: encryptedToNumber,
+      status: data.status || "sent" 
+    });
 
     await tx
       .update(leads)

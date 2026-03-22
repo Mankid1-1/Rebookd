@@ -82,6 +82,10 @@ export const plans = mysqlTable("plans", {
   maxMessages: int("maxMessages").default(500).notNull(),
   maxSeats: int("maxSeats").default(1).notNull(),
   stripePriceId: varchar("stripePriceId", { length: 255 }),
+  revenueSharePercent: int("revenueSharePercent").default(0).notNull(),
+  promotionalSlots: int("promotionalSlots").default(0).notNull(),
+  promotionalPriceCap: int("promotionalPriceCap").default(0).notNull(),
+  hasPromotion: boolean("hasPromotion").default(false).notNull(),
   features: json("features").$type<string[]>(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -98,6 +102,8 @@ export const subscriptions = mysqlTable("subscriptions", {
   trialReminderSent: boolean("trialReminderSent").default(false).notNull(),
   currentPeriodStart: timestamp("currentPeriodStart"),
   currentPeriodEnd: timestamp("currentPeriodEnd"),
+  isPromotional: boolean("isPromotional").default(false).notNull(),
+  promotionalExpiresAt: timestamp("promotionalExpiresAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

@@ -23,6 +23,72 @@ function makeDb(overrides: Record<string, any> = {}) {
           }),
         };
       }
+      
+      // Handle specific analytics queries
+      if (overrides.totalLeads) {
+        return {
+          from: () => ({
+            where: () => Promise.resolve(overrides.totalLeads)
+          })
+        };
+      }
+      
+      if (overrides.bookedLeads) {
+        return {
+          from: () => ({
+            where: () => Promise.resolve(overrides.bookedLeads)
+          })
+        };
+      }
+      
+      if (overrides.avgRevenuePerBooking) {
+        return {
+          from: () => ({
+            where: () => Promise.resolve(overrides.avgRevenuePerBooking)
+          })
+        };
+      }
+      
+      if (overrides.recentBookings) {
+        return {
+          from: () => ({
+            where: () => Promise.resolve(overrides.recentBookings)
+          })
+        };
+      }
+      
+      if (overrides.recoveredLeads) {
+        return {
+          from: () => ({
+            where: () => Promise.resolve(overrides.recoveredLeads)
+          })
+        };
+      }
+      
+      if (overrides.lostLeads) {
+        return {
+          from: () => ({
+            where: () => Promise.resolve(overrides.lostLeads)
+          })
+        };
+      }
+      
+      if (overrides.qualifiedLeads) {
+        return {
+          from: () => ({
+            where: () => Promise.resolve(overrides.qualifiedLeads)
+          })
+        };
+      }
+      
+      if (overrides.contactedLeads) {
+        return {
+          from: () => ({
+            where: () => Promise.resolve(overrides.contactedLeads)
+          })
+        };
+      }
+      
       return chain;
     },
     insert: () => ({ values: () => Promise.resolve({ insertId: 1 }) }),
@@ -75,7 +141,18 @@ describe("AnalyticsService", () => {
         contactedLeads: [{ count: 20 }],
       };
 
-      const db = makeDb(mockData);
+      const db = makeDb({
+        ...mockData,
+        // Map to count queries
+        totalLeads: mockData.totalLeads,
+        bookedLeads: mockData.bookedLeads,
+        avgRevenuePerBooking: mockData.avgRevenuePerBooking,
+        recentBookings: mockData.recentBookings,
+        recoveredLeads: mockData.recoveredLeads,
+        lostLeads: mockData.lostLeads,
+        qualifiedLeads: mockData.qualifiedLeads,
+        contactedLeads: mockData.contactedLeads,
+      });
       const result = await AnalyticsService.getRevenueRecoveryMetrics(db as any, 1);
 
       expect(result.totalRecoveredRevenue).toBe(25 * 250); // 6250

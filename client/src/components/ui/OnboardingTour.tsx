@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./dialog";
 import { Badge } from "./badge";
 import { ArrowRight, Sparkles, Users, MessageSquare, BarChart3, Zap } from "lucide-react";
+import { getItem, setItem } from "@/utils/storage";
 
 interface TourStep {
   id: string;
@@ -253,14 +254,14 @@ export function OnboardingTour({ isOpen, onClose, onComplete }: OnboardingTourPr
 export function useOnboardingTour() {
   const [isOpen, setIsOpen] = React.useState(false);
   const [hasSeenTour, setHasSeenTour] = React.useState(() => {
-    return localStorage.getItem("hasSeenOnboardingTour") === "true";
+    return getItem("hasSeenOnboardingTour") === "true";
   });
 
   const startTour = () => setIsOpen(true);
   const closeTour = () => setIsOpen(false);
   const completeTour = () => {
     setHasSeenTour(true);
-    localStorage.setItem("hasSeenOnboardingTour", "true");
+    setItem("hasSeenOnboardingTour", "true");
   };
 
   return {

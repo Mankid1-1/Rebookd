@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
+import { getItem, setItem } from "@/utils/storage";
 import {
   BarChart3,
   Bot,
@@ -49,13 +50,22 @@ const mainMenuItems = [
   { icon: Users, label: "Leads", path: "/leads" },
   { icon: MessageSquare, label: "Inbox", path: "/inbox" },
   { icon: Bot, label: "Automations", path: "/automations" },
-  { icon: Zap, label: "Templates", path: "/templates" },
   { icon: BarChart3, label: "Analytics", path: "/analytics" },
+  { icon: Settings, label: "Settings", path: "/settings" },
+  { icon: CreditCard, label: "Billing", path: "/billing" },
 ];
 
-const settingsMenuItems = [
-  { icon: CreditCard, label: "Billing", path: "/billing" },
-  { icon: Settings, label: "Settings", path: "/settings" },
+// High-Impact Features Menu Items
+const highImpactMenuItems = [
+  { icon: Zap, label: "Lead Capture", path: "/lead-capture" },
+  { icon: LayoutDashboard, label: "Booking Conversion", path: "/booking-conversion" },
+  { icon: Shield, label: "No-Show Recovery", path: "/no-show-recovery" },
+  { icon: PanelLeft, label: "Cancellation Recovery", path: "/cancellation-recovery" },
+  { icon: Users, label: "Retention Engine", path: "/retention-engine" },
+  { icon: MessageSquare, label: "After Hours", path: "/after-hours" },
+  { icon: BarChart3, label: "Smart Scheduling", path: "/smart-scheduling" },
+  { icon: CreditCard, label: "Payment Enforcement", path: "/payment-enforcement" },
+  { icon: Settings, label: "Admin Automation", path: "/admin-automation" },
 ];
 
 const adminMenuItems = [
@@ -73,15 +83,15 @@ const MAX_WIDTH = 400;
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
-      return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
+      const saved = getItem<number>(SIDEBAR_WIDTH_KEY);
+      return saved || DEFAULT_WIDTH;
     }
     return DEFAULT_WIDTH;
   });
   const { loading, user } = useAuth();
 
   useEffect(() => {
-    localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
+    setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
   }, [sidebarWidth]);
 
   if (loading) return <DashboardLayoutSkeleton />;

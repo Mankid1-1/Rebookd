@@ -36,7 +36,7 @@ describe("UI User Experience - Simple Tests", () => {
 
       const button = screen.getByRole('button');
       expect(button).toBeInTheDocument();
-      expect(button).toHaveAttribute('aria-label', 'Start Recovery');
+      expect(button).toHaveAttribute('aria-label', 'Start recovery');
       
       fireEvent.click(button);
       expect(handleClick).toHaveBeenCalled();
