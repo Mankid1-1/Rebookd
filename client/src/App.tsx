@@ -28,6 +28,7 @@ const AdminMessages = lazy(() => import("./pages/admin/AdminMessages"));
 // High-impact feature pages - lazy loaded
 const LeadCapture = lazy(() => import("@/pages/LeadCapture"));
 const BookingConversion = lazy(() => import("@/pages/BookingConversion"));
+const StripeConnect = lazy(() => import("./pages/StripeConnect"));
 const NoShowRecovery = lazy(() => import("@/pages/NoShowRecovery"));
 const CancellationRecovery = lazy(() => import("@/pages/CancellationRecovery"));
 const RetentionEngine = lazy(() => import("@/pages/RetentionEngine"));
@@ -55,6 +56,7 @@ function Router() {
       <Route path="/analytics" component={Analytics} />
       <Route path="/settings" component={Settings} />
       <Route path="/billing" component={Billing} />
+      <Route path="/stripe-connect" component={StripeConnect} />
 
       {/* Admin */}
       <Route path="/admin/tenants" component={AdminTenants} />

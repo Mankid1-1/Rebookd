@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod';
-import { publicProcedure, router } from '../trpc';
+import { publicProcedure, router } from '../_core/trpc';
 import { stripeConnectService } from '../services/stripe-connect.service';
 import { TRPCError } from '@trpc/server';
 

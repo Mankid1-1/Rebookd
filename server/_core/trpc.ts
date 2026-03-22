@@ -5,7 +5,6 @@ import type { TrpcContext } from "./context";
 import * as TenantService from "../services/tenant.service";
 import * as UserService from "../services/user.service";
 import * as LeadService from "../services/lead.service";
-import * as MessageService from "../services/message.service";
 import * as TemplateService from "../services/template.service";
 import * as AutomationService from "../services/automation.service";
 import * as AnalyticsService from "../services/analytics.service";
@@ -17,6 +16,7 @@ const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
 });
 
+export const createRouter = t.router;
 export const router = t.router;
 export const publicProcedure = t.procedure;
 
@@ -56,7 +56,7 @@ import { stripeConnectMainRouter } from '../api/stripe-connect-router';
 import { stripeWebhookRouter } from '../api/stripe-webhooks';
 
 // Export all procedures including Stripe Connect
-export const router = t.router({
+export const appRouter = createRouter({
   // User procedures
   me: UserService.me,
   updateProfile: UserService.updateProfile,
@@ -71,13 +71,6 @@ export const router = t.router({
   createLead: LeadService.createLead,
   updateLead: LeadService.updateLead,
   deleteLead: LeadService.deleteLead,
-  
-  // Message procedures
-  getMessages: MessageService.getMessages,
-  getMessage: MessageService.getMessage,
-  createMessage: MessageService.createMessage,
-  updateMessage: MessageService.updateMessage,
-  deleteMessage: MessageService.deleteMessage,
   
   // Template procedures
   getTemplates: TemplateService.getTemplates,

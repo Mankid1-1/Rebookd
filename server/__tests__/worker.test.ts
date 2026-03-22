@@ -28,12 +28,12 @@ describe("resolveTemplate variable substitution", () => {
       time: "3:00 PM",
     });
     expect(result).toBe("Hi Jane, your appt is at 3:00 PM");
-  });
+  }, 5000); // Add timeout
 
   it("leaves unknown vars as empty string", async () => {
     const { resolveTemplate } = await import("../_core/sms");
     expect(resolveTemplate("Hi {{name}}", {})).toBe("Hi ");
-  });
+  }, 5000); // Add timeout
 });
 
 // ─── Idempotency check ────────────────────────────────────────────────────────
