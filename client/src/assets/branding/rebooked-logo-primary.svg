@@ -1,0 +1,27 @@
+<svg width="200" height="48" viewBox="0 0 200 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Logo Icon -->
+  <g transform="translate(0, 8)">
+    <!-- Circular background with gradient -->
+    <defs>
+      <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#10b981;stop-opacity:1" />
+      </linearGradient>
+    </defs>
+    
+    <!-- Icon container -->
+    <rect x="0" y="0" width="32" height="32" rx="8" fill="url(#logoGradient)"/>
+    
+    <!-- Circular arrow symbol -->
+    <path d="M16 8C11.58 8 8 11.58 8 16C8 20.42 11.58 24 16 24C20.42 24 24 20.42 24 16C24 14.5 23.58 13.08 22.88 11.88L21.46 13.3C21.82 14.14 22 15.05 22 16C22 19.31 19.31 22 16 22C12.69 22 10 19.31 10 16C10 12.69 12.69 10 16 10C16.95 10 17.86 10.18 18.7 10.54L20.12 9.12C18.92 8.42 17.5 8 16 8Z" fill="white"/>
+    
+    <!-- Arrow head -->
+    <path d="M20.12 9.12L18.7 10.54L20.12 12L22.88 11.88L20.12 9.12Z" fill="white"/>
+  </g>
+  
+  <!-- Logo Text -->
+  <text x="44" y="20" font-family="'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif" font-size="20" font-weight="700" fill="#0f172a">REBOOKED</text>
+  
+  <!-- Tagline -->
+  <text x="44" y="36" font-family="'Inter', -apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="400" fill="#64748b" letter-spacing="0.1em">REVENUE RECOVERY</text>
+</svg>
