@@ -322,7 +322,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     outputSchema,
     output_schema,
   });
-  if (normalizedResponseFormat) payload.response_format = normalizedResponseFormat;
+  if (normalizedResponseFormat) (payload as any).response_format = normalizedResponseFormat;
 
   let lastError: unknown;
 

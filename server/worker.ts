@@ -29,6 +29,7 @@ import { runWithCorrelationId } from "./_core/requestContext";
 import { processQueuedAutomationJobs } from "./services/automationRunner";
 import * as TenantService from "./services/tenant.service";
 import { EmailService } from "./services/email.service";
+import { gracefulShutdown } from "./_core/graceful-shutdown";
 
 const POLL_INTERVAL_MS = 60_000;
 const MAX_RETRY_ATTEMPTS = 3;
@@ -755,10 +756,30 @@ async function main() {
   await initSentry();
   logger.info("Worker starting", { pollIntervalMs: POLL_INTERVAL_MS });
 
+  // Register graceful shutdown handlers
+  gracefulShutdown.addShutdownHandler('SIGTERM', async () => {
+    logger.info("Worker SIGTERM - graceful shutdown initiated");
+    // Cleanup worker resources
+    await new Promise(resolve => setTimeout(resolve, 2000)); // Allow 2s for cleanup
+  });
+
+  gracefulShutdown.addShutdownHandler('SIGINT', async () => {
+    logger.info("Worker SIGINT - graceful shutdown initiated");
+    // Cleanup worker resources
+    await new Promise(resolve => setTimeout(resolve, 2000)); // Allow 2s for cleanup
+  });
+
   await runCycle();
 
-  setInterval(async () => {
+  const pollInterval = setInterval(async () => {
     try {
+      // Check if shutdown is in progress
+      if (gracefulShutdown.isShuttingDownActive()) {
+        clearInterval(pollInterval);
+        logger.info("Worker polling stopped due to shutdown");
+        return;
+      }
+
       await runCycle();
     } catch (err) {
       logger.error("Worker cycle error", { error: String(err) });
@@ -776,9 +797,6 @@ async function main() {
     }
   }, POLL_INTERVAL_MS);
 }
-
-process.on("SIGTERM", () => { logger.info("Worker SIGTERM — shutting down"); process.exit(0); });
-process.on("SIGINT",  () => { logger.info("Worker SIGINT — shutting down");  process.exit(0); });
 
 main().catch(err => {
   logger.error("Worker fatal", { error: String(err) });

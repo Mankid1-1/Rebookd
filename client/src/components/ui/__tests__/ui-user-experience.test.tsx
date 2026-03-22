@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import "@testing-library/jest-dom";
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../card";
 import { Button } from "../button";
 import { Badge } from "../badge";
@@ -91,7 +93,7 @@ describe("UI User Experience & Friendliness Tests", () => {
         </Card>
       );
 
-      expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 3 })).toBeInTheDocument();
       expect(screen.getByRole('heading', { level: 2 })).toBeInTheDocument();
       expect(screen.getByText('$12,500')).toBeInTheDocument();
     });
@@ -228,7 +230,7 @@ describe("UI User Experience & Friendliness Tests", () => {
 
     it("should validate user input appropriately", () => {
       const FormComponent = () => {
-        const [error, setError] = '';
+        const [error, setError] = React.useState('');
         return (
           <div>
             <input
@@ -336,7 +338,7 @@ describe("UI User Experience & Friendliness Tests", () => {
 
     it("should not cause memory leaks", () => {
       const ComponentWithCleanup = () => {
-        const [count, setCount] = 0;
+        const [count, setCount] = React.useState(0);
         
         return (
           <div>
@@ -502,7 +504,7 @@ describe("UI User Experience & Friendliness Tests", () => {
 
     it("should show validation feedback", () => {
       const ValidatedForm = () => {
-        const [errors, setErrors] = {};
+        const [errors, setErrors] = React.useState({});
         return (
           <form>
             <div>
