@@ -539,7 +539,7 @@ const viewTestReport = () => {
       
       log('\n📋 CATEGORY BREAKDOWN:', 'cyan');
       Object.entries(report.categories).forEach(([category, tests]) => {
-        const passed = tests.filter((t: any) => t.success).length;
+        const passed = tests.filter(t => t.success).length;
         const total = tests.length;
         const rate = total > 0 ? Math.round((passed / total) * 100) : 0;
         

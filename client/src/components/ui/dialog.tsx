@@ -46,6 +46,16 @@ function Dialog({
     []
   );
 
+  // Clean up composition timer on unmount
+  React.useEffect(() => {
+    return () => {
+      if (endTimerRef.current) {
+        clearTimeout(endTimerRef.current);
+        endTimerRef.current = null;
+      }
+    };
+  }, []);
+
   return (
     <DialogCompositionContext.Provider value={contextValue}>
       <DialogPrimitive.Root data-slot="dialog" {...props} />

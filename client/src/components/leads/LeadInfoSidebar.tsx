@@ -8,19 +8,7 @@ import { Phone, User, Mail, Calendar } from "lucide-react";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-
-interface Lead {
-  id: number;
-  name: string | null;
-  phone: string;
-  email: string | null;
-  notes: string | null;
-  status: string;
-  source: string | null;
-  appointmentAt: Date | string | null;
-  createdAt: Date | string;
-  lastMessageAt: Date | string | null;
-}
+import type { Lead } from "../../../shared/interfaces";
 
 interface LeadInfoSidebarProps {
   lead: Lead;

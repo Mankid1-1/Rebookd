@@ -38,6 +38,13 @@ import {
   XCircle,
   AlertCircle,
 } from "lucide-react";
+import { 
+  useDynamicLeakageDetection, 
+  useDynamicRecoveryStrategies,
+  useDynamicRecoveryProbability,
+  useDynamicActionPrioritization,
+  useDynamicRevenueImpact
+} from "@/hooks/useDynamicRevenueRecovery";
 
 interface LeakageDetection {
   id: string;
@@ -82,22 +89,6 @@ interface RevenueLeakageDashboardProps {
   onRecoveryAction?: (actionType: string, leadIds: number[]) => void;
 }
 
-const LEAKAGE_COLORS: Record<string, string> = {
-  no_show: "#ef4444",
-  cancellation: "#f59e0b",
-  last_minute: "#dc2626",
-  double_booking: "#8b5cf6",
-  underbooking: "#3b82f6",
-  followup_missed: "#06b6d4",
-};
-
-const SEVERITY_COLORS: Record<string, string> = {
-  low: "#22c55e",
-  medium: "#f59e0b",
-  high: "#ef4444",
-  critical: "#dc2626",
-};
-
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -111,6 +102,27 @@ const formatPercent = (value: number) => {
   return `${value.toFixed(1)}%`;
 };
 
+// Dynamic colors based on user's performance and theme
+const getDynamicColors = () => {
+  const isDarkMode = document.documentElement.classList.contains('dark');
+  return {
+    leakage: {
+      no_show: isDarkMode ? "#ef4444" : "#dc2626",
+      cancellation: isDarkMode ? "#f59e0b" : "#d97706",
+      last_minute: isDarkMode ? "#dc2626" : "#b91c1c",
+      double_booking: isDarkMode ? "#8b5cf6" : "#7c3aed",
+      underbooking: isDarkMode ? "#3b82f6" : "#2563eb",
+      followup_missed: isDarkMode ? "#06b6d4" : "#0891b2",
+    },
+    severity: {
+      low: isDarkMode ? "#22c55e" : "#16a34a",
+      medium: isDarkMode ? "#f59e0b" : "#d97706",
+      high: isDarkMode ? "#ef4444" : "#dc2626",
+      critical: isDarkMode ? "#dc2626" : "#b91c1c",
+    }
+  };
+};
+
 export function RevenueLeakageDashboard({ 
   leakageReport, 
   isLoading = false, 
@@ -118,23 +130,32 @@ export function RevenueLeakageDashboard({
 }: RevenueLeakageDashboardProps) {
   const [selectedLeakageType, setSelectedLeakageType] = React.useState<string | null>(null);
   const [expandedRecommendations, setExpandedRecommendations] = React.useState(false);
+  
+  // Dynamic hooks for user-adaptive revenue recovery
+  const dynamicLeakageTypes = useDynamicLeakageDetection();
+  const dynamicStrategies = useDynamicRecoveryStrategies();
+  const getRecoveryProbability = useDynamicRecoveryProbability();
+  const prioritizeActions = useDynamicActionPrioritization();
+  const getRevenueImpact = useDynamicRevenueImpact();
+  const colors = getDynamicColors();
 
   const recoveryRate = leakageReport.totalLeakage > 0 
     ? (leakageReport.recoverableRevenue / leakageReport.totalLeakage) * 100 
     : 0;
 
   const getSeverityIcon = (severity: string) => {
+    const color = colors.severity[severity as keyof typeof colors.severity] || colors.severity.medium;
     switch (severity) {
       case "critical":
-        return <AlertCircle className="h-4 w-4 text-red-500" />;
+        return <AlertCircle className="h-4 w-4" style={{ color }} />;
       case "high":
-        return <AlertTriangle className="h-4 w-4 text-orange-500" />;
+        return <AlertTriangle className="h-4 w-4" style={{ color }} />;
       case "medium":
-        return <Clock className="h-4 w-4 text-yellow-500" />;
+        return <Clock className="h-4 w-4" style={{ color }} />;
       case "low":
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
+        return <CheckCircle className="h-4 w-4" style={{ color }} />;
       default:
-        return <AlertCircle className="h-4 w-4 text-gray-500" />;
+        return <AlertCircle className="h-4 w-4" style={{ color }} />;
     }
   };
 

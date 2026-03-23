@@ -26,6 +26,7 @@ import {
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { getItem, setItem } from "@/utils/storage";
+import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
 import {
   BarChart3,
   Bot,
@@ -38,6 +39,11 @@ import {
   Shield,
   Users,
   Zap,
+  FileText,
+  XCircle,
+  Heart,
+  Calendar,
+  Moon,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -45,35 +51,97 @@ import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 import { trpc } from "@/lib/trpc";
 
-const mainMenuItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-  { icon: Users, label: "Leads", path: "/leads" },
-  { icon: MessageSquare, label: "Inbox", path: "/inbox" },
-  { icon: Bot, label: "Automations", path: "/automations" },
-  { icon: BarChart3, label: "Analytics", path: "/analytics" },
-  { icon: Settings, label: "Settings", path: "/settings" },
-  { icon: CreditCard, label: "Billing", path: "/billing" },
-];
+// Dynamic menu items based on user role, permissions, and skill level
+const getDynamicMainMenuItems = (userRole?: string, userSkill?: any) => {
+  const baseItems = [
+    { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+    { icon: Users, label: "Leads", path: "/leads" },
+    { icon: MessageSquare, label: "Inbox", path: "/inbox" },
+  ];
 
-// High-Impact Features Menu Items
-const highImpactMenuItems = [
-  { icon: Zap, label: "Lead Capture", path: "/lead-capture" },
-  { icon: LayoutDashboard, label: "Booking Conversion", path: "/booking-conversion" },
-  { icon: Shield, label: "No-Show Recovery", path: "/no-show-recovery" },
-  { icon: PanelLeft, label: "Cancellation Recovery", path: "/cancellation-recovery" },
-  { icon: Users, label: "Retention Engine", path: "/retention-engine" },
-  { icon: MessageSquare, label: "After Hours", path: "/after-hours" },
-  { icon: BarChart3, label: "Smart Scheduling", path: "/smart-scheduling" },
-  { icon: CreditCard, label: "Payment Enforcement", path: "/payment-enforcement" },
-  { icon: Settings, label: "Admin Automation", path: "/admin-automation" },
-];
+  // Add advanced items for intermediate+ users
+  if (userSkill?.level !== 'beginner') {
+    baseItems.push(
+      { icon: Calendar, label: "Automations", path: "/automations" },
+      { icon: FileText, label: "Templates", path: "/templates" }
+    );
+  }
 
-const adminMenuItems = [
-  { icon: Shield, label: "Tenants", path: "/admin/tenants" },
-  { icon: Users, label: "Users", path: "/admin/users" },
-  { icon: BarChart3, label: "System Health", path: "/admin/health" },
-  { icon: MessageSquare, label: "AI Logs", path: "/admin/messages" },
-];
+  // Add expert items for advanced users
+  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
+    baseItems.push(
+      { icon: Bot, label: "AI Tools", path: "/ai-tools" },
+      { icon: BarChart3, label: "Analytics", path: "/analytics" }
+    );
+  }
+
+  return baseItems;
+};
+
+// Dynamic high-impact features based on user skill and business type
+const getDynamicHighImpactMenuItems = (userSkill?: any, businessType?: string) => {
+  const baseFeatures = [
+    { icon: Zap, label: "Lead Capture", path: "/lead-capture" },
+    { icon: LayoutDashboard, label: "Booking Conversion", path: "/booking-conversion" },
+  ];
+
+  // Add advanced features for intermediate+ users
+  if (userSkill?.level !== 'beginner') {
+    baseFeatures.push(
+      { icon: Shield, label: "No-Show Recovery", path: "/no-show-recovery" },
+      { icon: Heart, label: "Retention Engine", path: "/retention" }
+    );
+  }
+
+  // Add expert features for advanced users
+  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
+    baseFeatures.push(
+      { icon: Bot, label: "AI Automation", path: "/ai-automation" },
+      { icon: Settings, label: "Admin Automation", path: "/admin-automation" }
+    );
+  }
+
+  // Business-specific features
+  if (businessType?.includes('medical') || businessType?.includes('clinic')) {
+    baseFeatures.push(
+      { icon: FileText, label: "Patient Forms", path: "/patient-forms" }
+    );
+  }
+
+  return baseFeatures;
+};
+
+const getDynamicSettingsMenuItems = (userRole?: string) => {
+  const baseSettings = [
+    { icon: Settings, label: "Settings", path: "/settings" },
+  ];
+
+  // Add billing for non-admin users
+  if (userRole !== 'admin') {
+    baseSettings.push({ icon: CreditCard, label: "Billing", path: "/billing" });
+  }
+
+  return baseSettings;
+};
+
+const getDynamicAdminMenuItems = (userRole?: string, userSkill?: any) => {
+  // Only show admin items to admin users
+  if (userRole !== 'admin') return [];
+
+  const baseAdminItems = [
+    { icon: Shield, label: "Tenants", path: "/admin/tenants" },
+  ];
+
+  // Add advanced admin items for expert admins
+  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
+    baseAdminItems.push(
+      { icon: Users, label: "Users", path: "/admin/users" },
+      { icon: BarChart3, label: "System Health", path: "/admin/health" }
+    );
+  }
+
+  return baseAdminItems;
+};  
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 260;
@@ -81,6 +149,16 @@ const MIN_WIDTH = 200;
 const MAX_WIDTH = 400;
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const { context } = useProgressiveDisclosureContext();
+  const { data: tenant } = trpc.tenant.get.useQuery();
+  
+  // Get dynamic menu items
+  const mainMenuItems = getDynamicMainMenuItems(user?.role, context.userSkill);
+  const highImpactMenuItems = getDynamicHighImpactMenuItems(context.userSkill, tenant?.industry);
+  const settingsMenuItems = getDynamicSettingsMenuItems(user?.role);
+  const adminMenuItems = getDynamicAdminMenuItems(user?.role, context.userSkill);
+
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     if (typeof window !== "undefined") {
       const saved = getItem<number>(SIDEBAR_WIDTH_KEY);
@@ -91,7 +169,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { loading, user } = useAuth();
 
   useEffect(() => {
-    setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
+    setItem(SIDEBAR_WIDTH_KEY, sidebarWidth);
   }, [sidebarWidth]);
 
   if (loading) return <DashboardLayoutSkeleton />;
@@ -158,7 +236,8 @@ function DashboardLayoutContent({
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return;
-      const sidebarLeft = sidebarRef.current?.getBoundingClientRect().left ?? 0;
+      if (!sidebarRef.current) return;
+      const sidebarLeft = sidebarRef.current.getBoundingClientRect().left;
       const newWidth = e.clientX - sidebarLeft;
       if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) setSidebarWidth(newWidth);
     };
@@ -178,7 +257,22 @@ function DashboardLayoutContent({
   }, [isResizing, setSidebarWidth]);
 
   const isActive = (path: string) => {
+    // Special case for leads sub-paths
     if (path === "/leads" && location.startsWith("/leads")) return true;
+    // Special case for feature routes that might have sub-paths
+    const featureRoutes = [
+      "/lead-capture",
+      "/booking-conversion", 
+      "/no-show-recovery",
+      "/cancellation-recovery",
+      "/retention-engine",
+      "/smart-scheduling",
+      "/payment-enforcement",
+      "/after-hours",
+      "/admin-automation"
+    ];
+    if (featureRoutes.includes(path) && location.startsWith(path)) return true;
+    // Default exact match
     return location === path;
   };
 
@@ -221,6 +315,28 @@ function DashboardLayoutContent({
               <SidebarMenu className="px-2">
                 {mainMenuItems.map((item) => {
                   const active = isActive(item.path);
+                  return (
+                    <SidebarMenuItem key={item.label}>
+                      <SidebarMenuButton
+                        isActive={active}
+                        onClick={() => setLocation(item.path)}
+                        tooltip={item.label}
+                        className="h-9 transition-all"
+                      >
+                        <item.icon className={`h-4 w-4 ${active ? "text-primary" : ""}`} />
+                        <span>{item.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroup>
+
+            <SidebarGroup className="mt-2">
+              {!isCollapsed && <SidebarGroupLabel className="text-xs text-muted-foreground/60 px-4 mb-1">High-Impact Features</SidebarGroupLabel>}
+              <SidebarMenu className="px-2">
+                {highImpactMenuItems.map((item) => {
+                  const active = location === item.path;
                   return (
                     <SidebarMenuItem key={item.label}>
                       <SidebarMenuButton

@@ -15,6 +15,7 @@ import { referralRouter } from "../api/referral";
 import { stripeCheckoutRouter } from "../api/stripe-checkout";
 import { customerPortalRouter } from "../api/customer-portal";
 import { referralPayoutsRouter } from "../api/referral-payouts";
+import { analyticsRouter } from "../api/analytics-router";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -95,27 +96,4 @@ export const appRouter = createRouter({
   getDashboardMetrics: AnalyticsService.getDashboardMetrics,
   getRevenueRecoveryMetrics: AnalyticsService.getRevenueRecoveryMetrics,
   
-  // Billing procedures
-  getSubscription: BillingService.getSubscription,
-  updateSubscription: BillingService.updateSubscription,
-  cancelSubscription: BillingService.cancelSubscription,
-  createCheckoutSession: BillingService.createCheckoutSession,
-  
-  // Referral procedures
-  ...referralRouter,
-  
-  // Stripe Checkout procedures
-  ...stripeCheckoutRouter,
-  
-  // Customer Portal procedures
-  ...customerPortalRouter,
-  
-  // Referral Payouts procedures (admin only)
-  ...referralPayoutsRouter,
-  
-  // Stripe Connect procedures
-  ...stripeConnectMainRouter,
-  
-  // Stripe webhook procedures
-  ...stripeWebhookRouter,
 });

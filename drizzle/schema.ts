@@ -477,7 +477,7 @@ export type ReferralPayout = typeof referralPayouts.$inferSelect;
 export type InsertReferralPayout = typeof referralPayouts.$inferInsert;
 
 // Subscriptions table for Stripe integration
-export const subscriptions = mysqlTable("subscriptions", {
+export const stripeSubscriptions = mysqlTable("stripe_subscriptions", {
   id: varchar("id", { length: 255 }).primaryKey(),
   userId: int("user_id").notNull(),
   tenantId: int("tenant_id").notNull(),
@@ -503,5 +503,5 @@ export const subscriptions = mysqlTable("subscriptions", {
   statusIdx: index("idx_subscriptions_status").on(table.status),
 }));
 
-export type Subscription = typeof subscriptions.$inferSelect;
-export type InsertSubscription = typeof subscriptions.$inferInsert;
+export type StripeSubscription = typeof stripeSubscriptions.$inferSelect;
+export type InsertStripeSubscription = typeof stripeSubscriptions.$inferInsert;

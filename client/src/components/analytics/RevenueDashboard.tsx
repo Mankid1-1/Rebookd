@@ -14,6 +14,9 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
+  PieChart,
+  Pie,
+  Cell,
 } from "recharts";
 import {
   TrendingUp,
@@ -143,20 +146,34 @@ export function RevenueDashboard({ revenueMetrics, revenueTrends, isLoading }: R
   const bookingTrend = { value: 8.3, isPositive: true };
   const pipelineTrend = { value: -2.1, isPositive: false };
 
-  // Revenue funnel data
+  // Dynamic colors based on user theme
+const getDynamicChartColors = () => {
+  const isDarkMode = document.documentElement.classList.contains('dark');
+  return {
+    totalLeads: isDarkMode ? "#64748b" : "#94a3b8",
+    contacted: isDarkMode ? "#2563eb" : "#3b82f6", 
+    qualified: isDarkMode ? "#7c3aed" : "#8b5cf6",
+    booked: isDarkMode ? "#16a34a" : "#22c55e",
+    lost: isDarkMode ? "#dc2626" : "#ef4444",
+    revenueGradient: isDarkMode ? "#16a34a" : "#22c55e"
+  };
+};
+
+// Revenue funnel data
+  const chartColors = getDynamicChartColors();
   const funnelData = [
-    { stage: "Total Leads", count: revenueMetrics.totalLeadsCount, value: 0, color: "#94a3b8" },
-    { stage: "Contacted", count: revenueMetrics.contactedLeadsCount, value: revenueMetrics.pipelineRevenue, color: "#3b82f6" },
-    { stage: "Qualified", count: revenueMetrics.qualifiedLeadsCount, value: revenueMetrics.potentialRevenue, color: "#8b5cf6" },
-    { stage: "Booked", count: revenueMetrics.bookedLeadsCount, value: revenueMetrics.totalRecoveredRevenue, color: "#22c55e" },
+    { stage: "Total Leads", count: revenueMetrics.totalLeadsCount, value: 0, color: chartColors.totalLeads },
+    { stage: "Contacted", count: revenueMetrics.contactedLeadsCount, value: revenueMetrics.pipelineRevenue, color: chartColors.contacted },
+    { stage: "Qualified", count: revenueMetrics.qualifiedLeadsCount, value: revenueMetrics.potentialRevenue, color: chartColors.qualified },
+    { stage: "Booked", count: revenueMetrics.bookedLeadsCount, value: revenueMetrics.totalRecoveredRevenue, color: chartColors.booked },
   ].filter(item => item.count > 0);
 
   // Status breakdown for pie chart
   const statusData = [
-    { name: "Booked", value: revenueMetrics.bookedLeadsCount, color: "#22c55e" },
-    { name: "Qualified", value: revenueMetrics.qualifiedLeadsCount, color: "#8b5cf6" },
-    { name: "Contacted", value: revenueMetrics.contactedLeadsCount, color: "#3b82f6" },
-    { name: "Lost", value: revenueMetrics.lostLeadsCount, color: "#ef4444" },
+    { name: "Booked", value: revenueMetrics.bookedLeadsCount, color: chartColors.booked },
+    { name: "Qualified", value: revenueMetrics.qualifiedLeadsCount, color: chartColors.qualified },
+    { name: "Contacted", value: revenueMetrics.contactedLeadsCount, color: chartColors.contacted },
+    { name: "Lost", value: revenueMetrics.lostLeadsCount, color: chartColors.lost },
   ].filter(item => item.value > 0);
 
   return (
@@ -343,8 +360,8 @@ export function RevenueDashboard({ revenueMetrics, revenueTrends, isLoading }: R
               <AreaChart data={revenueTrends.slice(-30)}>
                 <defs>
                   <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                    <stop offset="5%" stopColor={chartColors.revenueGradient} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={chartColors.revenueGradient} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.1} />
@@ -376,7 +393,7 @@ export function RevenueDashboard({ revenueMetrics, revenueTrends, isLoading }: R
                 <Area
                   type="monotone"
                   dataKey="revenue"
-                  stroke="#22c55e"
+                  stroke={chartColors.revenueGradient}
                   strokeWidth={2}
                   fill="url(#revenueGrad)"
                 />

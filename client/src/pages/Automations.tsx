@@ -16,6 +16,142 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
+import { 
+  useDynamicAutomationTemplates,
+  useDynamicAutomationRecommendations,
+  useDynamicAutomationConfig,
+  useDynamicAutomationSuccessPrediction,
+  useProgressiveDisclosureContext,
+  trackFeatureUsage
+} from "@/hooks/useDynamicAutomation";
+import { useAuth } from "@/_core/hooks/useAuth";
+
+// Dynamic automation catalogue based on user skill and business type
+const getDynamicAutomationCatalogue = (userSkill?: any, businessType?: string) => {
+  const isDarkMode = document.documentElement.classList.contains('dark');
+  
+  const baseTemplates = [
+    {
+      key: "appointment_reminder_24h",
+      name: "24-Hour Reminder",
+      description: "Send reminder 24 hours before appointment",
+      category: "appointment" as const,
+      icon: <Clock className="h-4 w-4" />,
+      recommended: true,
+      impact: "high" as const,
+      setupComplexity: "low" as const,
+    },
+    {
+      key: "no_show_follow_up", 
+      name: "No-Show Follow-Up",
+      description: "Automatically follow up with no-shows",
+      category: "no_show" as const,
+      icon: <UserX className="h-4 w-4" />,
+      recommended: true,
+      impact: "high" as const,
+      setupComplexity: "medium" as const,
+    }
+  ];
+
+  // Add advanced automations for intermediate+ users
+  if (userSkill?.level !== 'beginner') {
+    baseTemplates.push(
+      {
+        key: "cancellation_rebooking",
+        name: "Cancellation Rebooking", 
+        description: "Offer rebooking when appointments are cancelled",
+        category: "cancellation" as const,
+        icon: <RotateCcw className="h-4 w-4" />,
+        recommended: true,
+        impact: "medium" as const,
+        setupComplexity: "medium" as const,
+      },
+      {
+        key: "post_appointment_feedback",
+        name: "Post-Appointment Feedback",
+        description: "Request feedback after appointments",
+        category: "follow_up" as const,
+        icon: <ThumbsUp className="h-4 w-4" />,
+        recommended: false,
+        impact: "low" as const,
+        setupComplexity: "low" as const,
+      }
+    );
+  }
+
+  // Add expert automations for advanced users
+  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
+    baseTemplates.push(
+      {
+        key: "win_back_90d",
+        name: "90-Day Win-Back",
+        description: "Re-engage clients after 90 days of inactivity",
+        category: "reactivation" as const,
+        icon: <Gift className="h-4 w-4" />,
+        recommended: false,
+        impact: "medium" as const,
+        setupComplexity: "high" as const,
+      },
+      {
+        key: "birthday_promo",
+        name: "Birthday Promotion",
+        description: "Send special offers on client birthdays",
+        category: "loyalty" as const,
+        icon: <Star className="h-4 w-4" />,
+        recommended: false,
+        impact: "low" as const,
+        setupComplexity: "medium" as const,
+      }
+    );
+  }
+
+  // Business-specific automations
+  if (businessType?.includes('medical') || businessType?.includes('clinic')) {
+    baseTemplates.push({
+      key: "medical_follow_up",
+      name: "Medical Follow-Up",
+      description: "Follow up on medical appointments and care",
+      category: "follow_up" as const,
+      icon: <AlertTriangle className="h-4 w-4" />,
+      recommended: true,
+      impact: "high" as const,
+      setupComplexity: "medium" as const,
+    });
+  }
+
+  return baseTemplates;
+};
+
+// Dynamic categories based on available automations
+const getDynamicCategories = (catalogue: any[]) => {
+  const categories = [{ key: "all" as const, label: "All" }];
+  const uniqueCategories = [...new Set(catalogue.map(t => t.category))];
+  
+  uniqueCategories.forEach(category => {
+    categories.push({
+      key: category,
+      label: category.charAt(0).toUpperCase() + category.slice(1).replace('_', ' ')
+    });
+  });
+
+  return categories;
+};
+
+// Dynamic category config based on theme
+const getDynamicCategoryConfig = () => {
+  const isDarkMode = document.documentElement.classList.contains('dark');
+  
+  return {
+    appointment: isDarkMode ? "bg-blue-500/20 text-blue-300 border-blue-500/30" : "bg-blue-500/15 text-blue-400 border-blue-500/30",
+    no_show: isDarkMode ? "bg-red-500/20 text-red-300 border-red-500/30" : "bg-red-500/15 text-red-400 border-red-500/30", 
+    cancellation: isDarkMode ? "bg-orange-500/20 text-orange-300 border-orange-500/30" : "bg-orange-500/15 text-orange-400 border-orange-500/30",
+    follow_up: isDarkMode ? "bg-green-500/20 text-green-300 border-green-500/30" : "bg-green-500/15 text-green-400 border-green-500/30",
+    reactivation: isDarkMode ? "bg-purple-500/20 text-purple-300 border-purple-500/30" : "bg-purple-500/15 text-purple-400 border-purple-500/30",
+    welcome: isDarkMode ? "bg-yellow-500/20 text-yellow-300 border-yellow-500/30" : "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+    loyalty: isDarkMode ? "bg-pink-500/20 text-pink-300 border-pink-500/30" : "bg-pink-500/15 text-pink-400 border-pink-500/30",
+    scale: isDarkMode ? "bg-purple-500/20 text-purple-300 border-purple-500/30" : "bg-purple-500/15 text-purple-400 border-purple-500/30",
+  };
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -669,6 +805,21 @@ function AutomationRow({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Automations() {
+  const { context, trackFeatureUsage } = useProgressiveDisclosureContext();
+  const { user } = useAuth();
+  const { data: tenant } = trpc.tenant.get.useQuery();
+  
+  // Dynamic hooks for user-adaptive automation system
+  const dynamicTemplates = useDynamicAutomationTemplates();
+  const dynamicRecommendations = useDynamicAutomationRecommendations();
+  const getAutomationConfig = useDynamicAutomationConfig();
+  const predictSuccess = useDynamicAutomationSuccessPrediction();
+  
+  // Get dynamic data
+  const catalogue = getDynamicAutomationCatalogue(context.userSkill, tenant?.industry);
+  const categories = getDynamicCategories(catalogue);
+  const categoryConfig = getDynamicCategoryConfig();
+  
   const utils = trpc.useUtils();
   const [activeCategory, setActiveCategory] = useState<AutomationCategory | "all">("all");
   const [configTarget, setConfigTarget] = useState<AutomationKey | null>(null);
@@ -679,9 +830,11 @@ export default function Automations() {
       toast.success("Template automation created");
       setShowTemplatePicker(false);
       utils.automations.list.invalidate();
+      trackFeatureUsage('automation_template_activated');
     },
     onError: (err) => {
       toast.error(err.message);
+      trackFeatureUsage('automation_activation_error');
     },
   });
 
@@ -693,10 +846,12 @@ export default function Automations() {
     onSuccess: () => {
       utils.automations.list.invalidate();
       setTogglingKey(null);
+      trackFeatureUsage('automation_toggled');
     },
     onError: (err) => {
       toast.error(err.message);
       setTogglingKey(null);
+      trackFeatureUsage('automation_toggle_error');
     },
   });
 
@@ -749,19 +904,21 @@ export default function Automations() {
               <div className="flex-1">
                 <p className="text-sm font-medium mb-1">No automations active yet</p>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                  Start with 3 quick wins: enable the <strong className="text-foreground">24-Hour Reminder</strong>, <strong className="text-foreground">No-Show Check-In</strong>, and <strong className="text-foreground">New Lead Welcome</strong>. Each takes under a minute to configure.
+                  Start with recommended automations for your skill level. Each takes under a minute to configure.
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {["appointment_reminder_24h", "no_show_follow_up", "new_lead_welcome"].map((key) => {
-                    const t = CATALOGUE.find((x) => x.key === key);
-                    if (!t) return null;
+                  {dynamicRecommendations.slice(0, 3).map((rec, index) => {
+                    const template = dynamicTemplates.find(t => 
+                      rec.automationKeys.includes(t.key)
+                    );
+                    if (!template) return null;
                     return (
                       <button
-                        key={key}
-                        onClick={() => setConfigTarget(key as AutomationKey)}
+                        key={rec.automationKeys[0]}
+                        onClick={() => setConfigTarget(rec.automationKeys[0] as AutomationKey)}
                         className="text-xs px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all font-medium"
                       >
-                        {t.name} →
+                        {template.name} →
                       </button>
                     );
                   })}
@@ -824,7 +981,10 @@ export default function Automations() {
                   runCount: saved.runCount,
                   config: saved.triggerConfig as Record<string, string | number> | undefined,
                 } : undefined}
-                onToggle={(enabled) => toggleMutation.mutate({ key: template.key, enabled })}
+                onToggle={(enabled) => {
+                  setTogglingKey(template.key);
+                  toggleMutation.mutate({ key: template.key, enabled });
+                }}
                 onConfigure={() => setConfigTarget(template.key)}
                 isToggling={togglingKey === template.key}
               />

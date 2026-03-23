@@ -279,45 +279,10 @@ export default function CancellationRecovery() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex items-center">
-                    <RefreshCw className="h-4 w-4 mr-2 text-green-600" />
-                    <div>
-                      <span className="font-medium">Instant Rebooking</span>
-                      <p className="text-xs text-muted-foreground">John Doe - 2:00 PM slot</p>
-                    </div>
-                  </div>
-                  <Badge className="bg-green-100 text-green-800">Just now</Badge>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex items-center">
-                    <Users className="h-4 w-4 mr-2 text-blue-600" />
-                    <div>
-                      <span className="font-medium">Waitlist Notified</span>
-                      <p className="text-xs text-muted-foreground">5 leads contacted</p>
-                    </div>
-                  </div>
-                  <Badge className="bg-blue-100 text-blue-800">2 min ago</Badge>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex items-center">
-                    <Bell className="h-4 w-4 mr-2 text-purple-600" />
-                    <div>
-                      <span className="font-medium">Slots Broadcasted</span>
-                      <p className="text-xs text-muted-foreground">20 leads notified</p>
-                    </div>
-                  </div>
-                  <Badge className="bg-purple-100 text-purple-800">5 min ago</Badge>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex items-center">
-                    <Phone className="h-4 w-4 mr-2 text-orange-600" />
-                    <div>
-                      <span className="font-medium">Slot Filled</span>
-                      <p className="text-xs text-muted-foreground">Jane Smith - 3:00 PM</p>
-                    </div>
-                  </div>
-                  <Badge className="bg-orange-100 text-orange-800">8 min ago</Badge>
+                <div className="text-center p-4 text-muted-foreground">
+                  <RefreshCw className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No recent recovery activity</p>
+                  <p className="text-xs">Recent cancellation recovery actions will appear here</p>
                 </div>
               </div>
             </CardContent>

@@ -17,9 +17,9 @@ const icons = {
 };
 
 const colors = {
-  info: "text-blue-500",
-  help: "text-purple-500", 
-  tip: "text-yellow-500",
+  info: "text-blue-600 dark:text-blue-400",
+  help: "text-purple-600 dark:text-purple-400", 
+  tip: "text-yellow-600 dark:text-yellow-400",
 };
 
 export function HelpTooltip({ 
@@ -36,10 +36,10 @@ export function HelpTooltip({
     <TooltipProvider delayDuration={300}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="inline-flex items-center gap-1">
+          <span className="inline-flex items-center gap-1">
             {children}
             <Icon className={`h-3.5 w-3.5 ${color} cursor-help`} />
-          </div>
+          </span>
         </TooltipTrigger>
         <TooltipContent 
           side={side} 
