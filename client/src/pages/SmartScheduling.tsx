@@ -294,7 +294,10 @@ export default function SmartScheduling() {
                     <div key={index} className="text-center p-2 bg-muted rounded">
                       <p className="text-xs font-medium">{time}</p>
                       <div className="w-full h-2 bg-gray-200 rounded mt-1 relative">
-                        <div className="h-2 bg-blue-500 rounded utilization-bar-60" />
+                        <div 
+                          className="h-2 bg-blue-500 rounded" 
+                          style={{ width: `${Math.min(100, Math.max(0, (metrics?.utilizationRate || 60) + (index - 3) * 10))}%` }} 
+                        />
                       </div>
                     </div>
                   ))}
@@ -357,7 +360,7 @@ export default function SmartScheduling() {
                       <p className="text-sm text-muted-foreground">Gaps Filled Today</p>
                     </div>
                     <div className="text-center p-3 bg-muted rounded-lg">
-                      <p className="text-2xl font-bold">{metrics?.totalSlots - (metrics?.filledSlots || 0)}</p>
+                      <p className="text-2xl font-bold">{(metrics?.totalSlots || 0) - (metrics?.filledSlots || 0)}</p>
                       <p className="text-sm text-muted-foreground">Available Slots</p>
                     </div>
                   </div>

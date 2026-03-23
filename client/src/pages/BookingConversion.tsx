@@ -120,7 +120,7 @@ export default function BookingConversion() {
             <CardContent className="p-4">
               <div className="flex items-center">
                 <div className="p-2 bg-purple-100 rounded-lg mr-3">
-                  <Mobile className="h-6 w-6 text-purple-600" />
+                  <Smartphone className="h-6 w-6 text-purple-600" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Mobile Rate</p>
@@ -318,35 +318,10 @@ export default function BookingConversion() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <div className="flex items-center">
-                  <Smartphone className="h-4 w-4 mr-2 text-green-600" />
-                  <div>
-                    <span className="font-medium">Mobile Booking</span>
-                    <p className="text-xs text-muted-foreground">John Doe - 9:00 AM</p>
-                  </div>
-                </div>
-                <Badge className="bg-green-100 text-green-800">2 min ago</Badge>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <div className="flex items-center">
-                  <Calendar className="h-4 w-4 mr-2 text-blue-600" />
-                  <div>
-                    <span className="font-medium">One-Click Booking</span>
-                    <p className="text-xs text-muted-foreground">Jane Smith - 2:00 PM</p>
-                  </div>
-                </div>
-                <Badge className="bg-blue-100 text-blue-800">5 min ago</Badge>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <div className="flex items-center">
-                  <Zap className="h-4 w-4 mr-2 text-purple-600" />
-                  <div>
-                    <span className="font-medium">SMS Booking</span>
-                    <p className="text-xs text-muted-foreground">Mike Johnson - 4:00 PM</p>
-                  </div>
-                </div>
-                <Badge className="bg-purple-100 text-purple-800">12 min ago</Badge>
+              <div className="text-center p-4 text-muted-foreground">
+                <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No recent conversions</p>
+                <p className="text-xs">Recent booking conversions will appear here</p>
               </div>
             </div>
           </CardContent>

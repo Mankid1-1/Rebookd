@@ -81,8 +81,8 @@ function SidebarProvider({
         _setOpen(openState);
       }
 
-      // This sets the cookie to keep the sidebar state.
-      document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+      // This sets the cookie to keep the sidebar state with proper SameSite attribute
+      document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}; SameSite=Lax`;
     },
     [setOpenProp, open]
   );
@@ -613,9 +613,11 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<"div"> & {
   showIcon?: boolean;
 }) {
-  // Random width between 50 to 90%.
+  // Use a consistent width based on index to prevent layout jumps
   const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`;
+    // Generate a deterministic width based on component mount time
+    const seed = Date.now() % 10;
+    return `${50 + (seed * 4)}%`; // 50%, 54%, 58%, 62%, 66%, 70%, 74%, 78%, 82%, 86%
   }, []);
 
   return (

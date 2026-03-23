@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { trpc } from '@/lib/trpc';
 import { 
   CreditCard, 
   Download, 
@@ -96,6 +97,13 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
   const [portalUrl, setPortalUrl] = useState<string>('');
   const [subscriptionDetails, setSubscriptionDetails] = useState<SubscriptionDetails | null>(null);
   const [error, setError] = useState<string>('');
+
+  // Get dynamic plan data
+  const { data: plans = [] } = trpc.plans.list.useQuery();
+  
+  // Find the main plan with revenue share
+  const mainPlan = plans.find(p => p.revenueSharePercent && p.revenueSharePercent > 0) || plans[0];
+  const revenueSharePercent = mainPlan?.revenueSharePercent || 15;
 
   useEffect(() => {
     loadSubscriptionDetails();
@@ -290,7 +298,7 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
                 </div>
                 <div className="text-right">
                   <p className="font-medium">
-                    {item.usageType === 'metered' ? '15% of recovered revenue' : `$${item.amount / 100}`}
+                    {item.usageType === 'metered' ? `${revenueSharePercent}% of recovered revenue` : `$${item.amount / 100}`}
                   </p>
                   {item.quantity > 1 && (
                     <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>

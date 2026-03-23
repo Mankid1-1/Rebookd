@@ -357,11 +357,11 @@ export default function PaymentEnforcement() {
               <div className="mt-6 p-4 bg-orange-50 rounded-lg">
                 <h4 className="font-medium mb-2">No-Show Reduction Progress</h4>
                 <div className="flex items-center space-x-2">
-                  <Progress value={75} className="flex-1" />
-                  <span className="text-sm font-medium">75% Reduction</span>
+                  <Progress value={metrics?.noShowsReduced || 0} className="flex-1" />
+                  <span className="text-sm font-medium">{metrics?.noShowsReduced || 0}% Reduction</span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Target: 80% reduction | Current: 75% reduction (from 20% baseline)
+                  Target: 80% reduction | Current: {metrics?.noShowsReduced || 0}% reduction (from 20% baseline)
                 </p>
               </div>
             </div>

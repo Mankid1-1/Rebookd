@@ -3,14 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MessageSquare, Bot, Copy } from "lucide-react";
 import { useRef, useEffect } from "react";
 import { toast } from "sonner";
-
-interface Message {
-  id: number;
-  direction: "inbound" | "outbound";
-  body: string;
-  createdAt: Date | string;
-  aiRewritten?: boolean | null;
-}
+import type { Message } from "../../../../shared/interfaces";
 
 interface LeadConversationProps {
   messages: Message[];

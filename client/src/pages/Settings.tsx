@@ -22,31 +22,66 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-const INDUSTRIES = [
-  "Hair Salon", "Barbershop", "Nail Salon", "Day Spa", "Medical / Clinic",
-  "Dental", "Chiropractic", "Physical Therapy", "Personal Training / Gym",
-  "Massage Therapy", "Tattoo Studio", "Aesthetics / Med Spa", "Yoga / Pilates",
-  "Pet Grooming", "Other",
-];
+// Dynamic industries based on user location and preferences
+const getDynamicIndustries = () => {
+  const userLocation = navigator.language || 'en-US';
+  const isUS = userLocation.includes('en-US');
+  
+  if (isUS) {
+    return [
+      "Hair Salon", "Barbershop", "Nail Salon", "Day Spa", "Medical / Clinic",
+      "Dental", "Chiropractic", "Physical Therapy", "Personal Training / Gym",
+      "Massage Therapy", "Tattoo Studio", "Aesthetics / Med Spa", "Yoga / Pilates",
+      "Pet Grooming", "Other",
+    ];
+  } else {
+    return [
+      "Hair Salon", "Barbershop", "Beauty Salon", "Day Spa", "Medical Clinic",
+      "Dental Practice", "Wellness Center", "Fitness Studio", "Therapy Center",
+      "Massage Therapy", "Tattoo Studio", "Aesthetic Clinic", "Yoga Studio",
+      "Pet Services", "Other",
+    ];
+  }
+};
 
-const TIMEZONES = [
-  { value: "America/New_York", label: "Eastern (ET)" },
-  { value: "America/Chicago", label: "Central (CT)" },
-  { value: "America/Denver", label: "Mountain (MT)" },
-  { value: "America/Los_Angeles", label: "Pacific (PT)" },
-  { value: "America/Phoenix", label: "Arizona (no DST)" },
-  { value: "Pacific/Honolulu", label: "Hawaii (HT)" },
-  { value: "America/Anchorage", label: "Alaska (AKT)" },
-  { value: "Europe/London", label: "London (GMT/BST)" },
-  { value: "Europe/Dublin", label: "Dublin (IST)" },
-  { value: "Australia/Sydney", label: "Sydney (AEDT)" },
-];
+// Dynamic timezones based on user location
+const getDynamicTimezones = () => {
+  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const isUS = userTimezone.includes('America/') || userTimezone.includes('Pacific/');
+  
+  if (isUS) {
+    return [
+      { value: userTimezone, label: `${userTimezone.split('/').pop()} (Local)` },
+      { value: "America/New_York", label: "Eastern (ET)" },
+      { value: "America/Chicago", label: "Central (CT)" },
+      { value: "America/Denver", label: "Mountain (MT)" },
+      { value: "America/Los_Angeles", label: "Pacific (PT)" },
+      { value: "America/Phoenix", label: "Arizona (no DST)" },
+      { value: "Pacific/Honolulu", label: "Hawaii (HT)" },
+      { value: "America/Anchorage", label: "Alaska (AKT)" },
+    ];
+  } else {
+    return [
+      { value: userTimezone, label: `${userTimezone.split('/').pop()} (Local)` },
+      { value: "Europe/London", label: "London (GMT/BST)" },
+      { value: "Europe/Dublin", label: "Dublin (IST)" },
+      { value: "Europe/Paris", label: "Paris (CET/CEST)" },
+      { value: "Europe/Berlin", label: "Berlin (CET/CEST)" },
+      { value: "Australia/Sydney", label: "Sydney (AEDT)" },
+      { value: "Asia/Tokyo", label: "Tokyo (JST)" },
+    ];
+  }
+};
 
 export default function Settings() {
   const utils = trpc.useUtils();
   const { data: tenant } = trpc.tenant.get.useQuery(undefined, { retry: false });
   const { data: phones = [] } = trpc.tenant.phoneNumbers.useQuery(undefined, { retry: false });
   const { data: apiKeys = [] } = trpc.apiKeys.list.useQuery(undefined, { retry: false });
+
+  // Dynamic configurations based on user preferences
+  const industries = getDynamicIndustries();
+  const timezones = getDynamicTimezones();
 
   const [name, setName] = useState("");
   const [timezone, setTimezone] = useState("");
@@ -168,7 +203,7 @@ export default function Settings() {
                   <Select value={industry || "other"} onValueChange={setIndustry}>
                     <SelectTrigger><SelectValue placeholder="Select your industry" /></SelectTrigger>
                     <SelectContent>
-                      {INDUSTRIES.map((ind) => (
+                      {industries.map((ind) => (
                         <SelectItem key={ind} value={ind.toLowerCase().replace(/[\s/]+/g, "_")}>{ind}</SelectItem>
                       ))}
                     </SelectContent>
@@ -179,7 +214,7 @@ export default function Settings() {
                   <Select value={timezone || "America/New_York"} onValueChange={setTimezone}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {TIMEZONES.map((tz) => (
+                      {timezones.map((tz) => (
                         <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
                       ))}
                     </SelectContent>

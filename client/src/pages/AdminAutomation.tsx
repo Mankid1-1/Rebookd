@@ -54,7 +54,7 @@ export default function AdminAutomation() {
   };
 
   const handleTestConfirmation = () => {
-    toast.success("Test confirmation sent successfully");
+    toast.info("Test confirmation not yet implemented");
   };
 
   const handleTriggerFollowUp = () => {
@@ -79,9 +79,9 @@ export default function AdminAutomation() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button onClick={handleTestConfirmation} variant="outline">
+            <Button onClick={handleTestConfirmation} variant="outline" disabled>
               <MessageSquare className="h-4 w-4 mr-2" />
-              Test Confirmation
+              Test Confirmation (Coming Soon)
             </Button>
             <Button onClick={handleTriggerFollowUp} variant="outline">
               <Calendar className="h-4 w-4 mr-2" />
@@ -191,7 +191,7 @@ export default function AdminAutomation() {
                         type="number"
                         value={config.confirmationWindow}
                         onChange={(e) => 
-                          setConfig(prev => ({ ...prev, confirmationWindow: parseInt(e.target.value) }))
+                          setConfig(prev => ({ ...prev, confirmationWindow: parseInt(e.target.value) || 1 }))
                         }
                         min={1}
                         max={168}
@@ -231,7 +231,7 @@ export default function AdminAutomation() {
                             value={days}
                             onChange={(e) => {
                               const newSchedule = [...config.followUpSchedule];
-                              newSchedule[index] = parseInt(e.target.value);
+                              newSchedule[index] = parseInt(e.target.value) || 1;
                               setConfig(prev => ({ ...prev, followUpSchedule: newSchedule }));
                             }}
                             min={1}
@@ -272,7 +272,7 @@ export default function AdminAutomation() {
                         type="number"
                         value={config.reschedulingWindow}
                         onChange={(e) => 
-                          setConfig(prev => ({ ...prev, reschedulingWindow: parseInt(e.target.value) }))
+                          setConfig(prev => ({ ...prev, reschedulingWindow: parseInt(e.target.value) || 1 }))
                         }
                         min={1}
                         max={168}
@@ -317,17 +317,23 @@ export default function AdminAutomation() {
                   <div className="text-center p-4 bg-blue-50 rounded-lg">
                     <Bot className="h-8 w-8 text-blue-600 mx-auto mb-2" />
                     <h3 className="font-medium">Automated Confirmations</h3>
-                    <Badge className="bg-green-100 text-green-800">Active</Badge>
+                    <Badge className={config.automatedConfirmations ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
+                      {config.automatedConfirmations ? "Active" : "Inactive"}
+                    </Badge>
                   </div>
                   <div className="text-center p-4 bg-green-50 rounded-lg">
                     <MessageSquare className="h-8 w-8 text-green-600 mx-auto mb-2" />
                     <h3 className="font-medium">Follow-up Campaigns</h3>
-                    <Badge className="bg-green-100 text-green-800">Active</Badge>
+                    <Badge className={config.automatedFollowUps ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
+                      {config.automatedFollowUps ? "Active" : "Inactive"}
+                    </Badge>
                   </div>
                   <div className="text-center p-4 bg-purple-50 rounded-lg">
                     <RefreshCw className="h-8 w-8 text-purple-600 mx-auto mb-2" />
                     <h3 className="font-medium">Self-Service Rescheduling</h3>
-                    <Badge className="bg-green-100 text-green-800">Active</Badge>
+                    <Badge className={config.selfServiceRescheduling ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
+                      {config.selfServiceRescheduling ? "Active" : "Inactive"}
+                    </Badge>
                   </div>
                   <div className="text-center p-4 bg-orange-50 rounded-lg">
                     <Timer className="h-8 w-8 text-orange-600 mx-auto mb-2" />
@@ -377,7 +383,10 @@ export default function AdminAutomation() {
                   <div className="flex-1">
                     <div className="text-sm text-muted-foreground mb-1">Admin Time Converted to Revenue</div>
                     <div className="w-full bg-gray-200 rounded-full h-2 relative">
-                      <div className="h-2 bg-green-500 rounded-full revenue-impact-25" />
+                      <div 
+                        className="h-2 bg-green-500 rounded-full" 
+                        style={{ width: `${Math.min(100, Math.max(0, metrics?.revenueImpact || 0))}%` }} 
+                      />
                     </div>
                   </div>
                   <span className="text-sm font-medium">${((metrics?.revenueImpact || 0) / 100).toFixed(0)}/week</span>

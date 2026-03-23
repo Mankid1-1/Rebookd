@@ -14,6 +14,12 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 interface ThemeProviderProps {
   children: React.ReactNode;
   defaultTheme?: Theme;
+  /**
+   * Controls whether users can switch between light/dark themes.
+   * When false (default), theme is fixed and toggleTheme is undefined.
+   * When true, theme preference persists to localStorage and toggleTheme is available.
+   * Current design: dark-only, non-switchable (switchable=false in App.tsx)
+   */
   switchable?: boolean;
 }
 

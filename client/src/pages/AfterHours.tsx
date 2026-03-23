@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { FeatureConfigPage } from "@/components/FeatureConfigPage";
 import { trpc } from "@/lib/trpc";
-import { useState, useEffect } from "react";
+import { useFeatureConfig } from "@/hooks/useFeatureConfig";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,8 +19,11 @@ import {
   Bell,
   CheckCircle,
   TrendingUp,
+  Activity,
+  Calendar,
   Phone,
-  Calendar
+  Target,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import "@/styles/components.css";
@@ -56,11 +60,11 @@ export default function AfterHours() {
   };
 
   const handleTestResponse = () => {
-    toast.success("Test after-hours response sent successfully");
+    toast.info("Test response not yet implemented");
   };
 
   const handleProcessQueue = () => {
-    toast.success("After-hours queue processing initiated");
+    toast.info("Queue processing not yet implemented");
   };
 
   if (isLoading) return <DashboardLayout>Loading...</DashboardLayout>;
@@ -70,9 +74,25 @@ export default function AfterHours() {
     const businessHours = config.businessHours;
     const [startHour, startMinute] = businessHours.start.split(':').map(Number);
     const [endHour, endMinute] = businessHours.end.split(':').map(Number);
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    const currentDay = now.getDay();
+    
+    // Get current time in the configured timezone
+    const currentTimeInTimezone = new Intl.DateTimeFormat('en-US', {
+      timeZone: businessHours.timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(now);
+    
+    const [currentHour, currentMinute] = currentTimeInTimezone.split(':').map(Number);
+    
+    // Get current day in the configured timezone
+    const currentDayInTimezone = new Intl.DateTimeFormat('en-US', {
+      timeZone: businessHours.timezone,
+      weekday: 'numeric',
+    }).format(now);
+    
+    // Convert to 0-6 format (Sunday = 0)
+    const currentDay = currentDayInTimezone === '7' ? 0 : parseInt(currentDayInTimezone);
     
     // Check if weekend
     const isWeekend = currentDay === 0 || currentDay === 6; // Sunday or Saturday
@@ -102,13 +122,13 @@ export default function AfterHours() {
                 {isAfterHours() ? 'After Hours' : 'Business Hours'}
               </span>
             </div>
-            <Button onClick={handleTestResponse} variant="outline">
+            <Button onClick={handleTestResponse} variant="outline" disabled>
               <MessageSquare className="h-4 w-4 mr-2" />
-              Test Response
+              Test Response (Coming Soon)
             </Button>
-            <Button onClick={handleProcessQueue} variant="outline">
+            <Button onClick={handleProcessQueue} variant="outline" disabled>
               <Bell className="h-4 w-4 mr-2" />
-              Process Queue
+              Process Queue (Coming Soon)
             </Button>
             <Button onClick={handleSaveConfig}>
               <Settings className="h-4 w-4 mr-2" />
@@ -220,7 +240,7 @@ export default function AfterHours() {
                         type="number"
                         value={config.responseDelay}
                         onChange={(e) => 
-                          setConfig(prev => ({ ...prev, responseDelay: parseInt(e.target.value) }))
+                          setConfig(prev => ({ ...prev, responseDelay: parseInt(e.target.value) || 5 }))
                         }
                         min={1}
                         max={60}
@@ -302,7 +322,7 @@ export default function AfterHours() {
                         type="number"
                         value={config.bookingLinkExpiry}
                         onChange={(e) => 
-                          setConfig(prev => ({ ...prev, bookingLinkExpiry: parseInt(e.target.value) }))
+                          setConfig(prev => ({ ...prev, bookingLinkExpiry: parseInt(e.target.value) || 24 }))
                         }
                         min={1}
                         max={168}
@@ -356,37 +376,10 @@ export default function AfterHours() {
                 
                 <div className="space-y-4">
                   <h4 className="font-medium mb-2">Recent Queue Activity</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                      <div className="flex items-center">
-                        <MessageSquare className="h-4 w-4 mr-2 text-blue-600" />
-                        <div>
-                          <span className="font-medium">After-hours response sent</span>
-                          <p className="text-xs text-muted-foreground">John Doe - 11:30 PM</p>
-                        </div>
-                      </div>
-                      <Badge className="bg-blue-100 text-blue-800">2 min ago</Badge>
-                    </div>
-                    <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                      <div className="flex items-center">
-                        <Bell className="h-4 w-4 mr-2 text-green-600" />
-                        <div>
-                          <span className="font-medium">Queue processed</span>
-                          <p className="text-xs text-muted-foreground">5 leads processed</p>
-                        </div>
-                      </div>
-                      <Badge className="bg-green-100 text-green-800">5 min ago</Badge>
-                    </div>
-                    <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                      <div className="flex items-center">
-                        <Phone className="h-4 w-4 mr-2 text-purple-600" />
-                        <div>
-                          <span className="font-medium">Business hours follow-up</span>
-                          <p className="text-xs text-muted-foreground">Jane Smith - 9:15 AM</p>
-                        </div>
-                      </div>
-                      <Badge className="bg-purple-100 text-purple-800">12 min ago</Badge>
-                    </div>
+                  <div className="text-center p-4 text-muted-foreground">
+                    <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No recent activity</p>
+                    <p className="text-xs">Activity will appear here when leads are processed</p>
                   </div>
                 </div>
               </div>
@@ -422,7 +415,10 @@ export default function AfterHours() {
                   <div className="flex-1">
                     <div className="text-sm text-muted-foreground mb-1">After-Hours Coverage</div>
                     <div className="w-full bg-gray-200 rounded-full h-2 relative">
-                      <div className="h-2 bg-green-500 rounded-full coverage-bar-60" />
+                      <div 
+                        className="h-2 bg-green-500 rounded-full" 
+                        style={{ width: `${Math.min(100, Math.max(0, metrics?.captureRate || 0))}%` }} 
+                      />
                     </div>
                   </div>
                   <span className="text-sm font-medium">{metrics?.captureRate || 0}%</span>

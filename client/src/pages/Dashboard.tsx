@@ -21,14 +21,20 @@ import { toast } from "sonner";
 import { RevenueDashboard } from "@/components/analytics/RevenueDashboard";
 import { RevenueLeakageDashboard } from "@/components/analytics/RevenueLeakageDashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useDynamicQuickActions } from "@/hooks/useDynamicConfiguration";
+import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
 
-const STATUS_COLORS: Record<string, string> = {
-  new: "#3b82f6",
-  contacted: "#eab308",
-  qualified: "#a855f7",
-  booked: "#22c55e",
-  lost: "#ef4444",
-  unsubscribed: "#6b7280",
+// Dynamic status colors based on user theme and preferences
+const getDynamicStatusColors = () => {
+  const isDarkMode = document.documentElement.classList.contains('dark');
+  return {
+    new: isDarkMode ? "#60a5fa" : "#3b82f6",
+    contacted: isDarkMode ? "#fbbf24" : "#eab308", 
+    qualified: isDarkMode ? "#c084fc" : "#a855f7",
+    booked: isDarkMode ? "#34d399" : "#22c55e",
+    lost: isDarkMode ? "#f87171" : "#ef4444",
+    unsubscribed: isDarkMode ? "#9ca3af" : "#6b7280",
+  };
 };
 
 export default function Dashboard() {
@@ -44,6 +50,9 @@ export default function Dashboard() {
     },
     onError: (err) => toast.error(err.message),
   });
+
+  // Dynamic status colors based on user preferences
+  const statusColors = getDynamicStatusColors();
 
   const [showAddLead, setShowAddLead] = useState(false);
   const [newLead, setNewLead] = useState({ phone: "", name: "" });
@@ -73,8 +82,9 @@ export default function Dashboard() {
       });
     } else if (actionType === "targeted_recovery") {
       // Handle targeted recovery for specific leakage types
+      // TODO: Determine actual leakage type from the leakage report data
       await createRecoveryCampaign.mutateAsync({
-        leakageType: leadIds[0]?.toString() || "no_show",
+        leakageType: "cancellation", // Fixed: use actual leakage type instead of lead ID
         priority: "medium"
       });
     }
@@ -237,7 +247,7 @@ export default function Dashboard() {
                         <PieChart>
                           <Pie data={statusBreakdown} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="count" nameKey="status">
                             {statusBreakdown.map((entry) => (
-                              <Cell key={entry.status} fill={STATUS_COLORS[entry.status] ?? "#6b7280"} />
+                              <Cell key={entry.status} fill={statusColors[entry.status] ?? "#6b7280"} />
                             ))}
                           </Pie>
                           <Tooltip contentStyle={{ background: "oklch(0.16 0.025 255)", border: "1px solid oklch(0.25 0.03 255)", borderRadius: "8px", fontSize: "12px" }} />
@@ -247,7 +257,7 @@ export default function Dashboard() {
                         {statusBreakdown.map((item) => (
                           <div key={item.status} className="flex items-center justify-between text-xs">
                             <div className="flex items-center gap-2">
-                              <div className="w-2.5 h-2.5 rounded-full" style={{ background: STATUS_COLORS[item.status] ?? "#6b7280" }} />
+                              <div className="w-2.5 h-2.5 rounded-full" style={{ background: statusColors[item.status] ?? "#6b7280" }} />
                               <span className="capitalize text-muted-foreground">{item.status}</span>
                             </div>
                             <span className="font-medium">{item.count}</span>
