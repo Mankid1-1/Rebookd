@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import { publicProcedure, router } from '../_core/trpc';
 import { stripeConnectService } from '../services/stripe-connect.service';
+import { processStripeWebhook } from '../webhooks/stripe-webhook-handler';
 import { TRPCError } from '@trpc/server';
 
 // Webhook event types
@@ -148,12 +149,17 @@ async function handleSubscriptionDeleted(subscription: any) {
 }
 
 async function handleCheckoutSessionCompleted(session: any) {
-  // TODO: Implement checkout completion logic
-  // - Activate subscription
-  // - Grant user access
-  // - Send welcome email
-  // - Update billing records
-  console.log('✅ Handling checkout session completion:', session.id);
+  try {
+    // Process the successful checkout using our comprehensive webhook handler
+    await processStripeWebhook({
+      type: 'checkout.session.completed',
+      data: { object: session }
+    });
+    console.log('✅ Checkout session processed successfully:', session.id);
+  } catch (error) {
+    console.error('❌ Failed to process checkout session:', error);
+    throw error;
+  }
 }
 
 async function handleCheckoutSessionFailed(session: any) {

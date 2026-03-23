@@ -5,9 +5,10 @@ import Stripe from "stripe";
 import { getDb } from "../db";
 import { billingInvoices, plans, subscriptions } from "../../drizzle/schema";
 import * as BillingService from "../services/billing.service";
+import { ENV } from "./env";
 import type { Db } from "./context";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", { apiVersion: "2022-11-15" });
+const stripe = new Stripe(ENV.stripeSecretKey || "", { apiVersion: "2022-11-15" });
 
 async function getSubscriptionByStripeId(db: Db, stripeId: string) {
   const rows = await db.select().from(subscriptions).where(eq(subscriptions.stripeId, stripeId)).limit(1);
@@ -26,7 +27,7 @@ export function registerStripeWebhook(app: Express) {
     express.raw({ type: "application/json" }),
     async (req: Request, res: Response) => {
       const sig = req.headers["stripe-signature"] as string | undefined;
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+      const webhookSecret = ENV.stripeWebhookSecret;
       if (!sig || !webhookSecret) {
         return res.status(400).send("Missing signature/webhook secret");
       }

@@ -4,6 +4,7 @@ import {
   json,
   mysqlEnum,
   mysqlTable,
+  serial,
   text,
   timestamp,
   uniqueIndex,
@@ -11,7 +12,7 @@ import {
   index,
 } from "drizzle-orm/mysql-core";
 
-// ─── Core Auth ────────────────────────────────────────────────────────────────
+// ─── Core Auth ────────────────────────────────────────────────────────
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -24,6 +25,7 @@ export const users = mysqlTable("users", {
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   tenantId: int("tenantId"),
   active: boolean("active").default(true).notNull(),
+  stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -427,3 +429,79 @@ export const authRateLimits = mysqlTable("auth_rate_limits", {
 }, (t) => ({
   emailCreatedIdx: uniqueIndex("auth_rate_limits_email_created_idx").on(t.email, t.createdAt),
 }));
+
+// ─── Referral System ─────────────────────────────────────────────────
+
+// Referral system tables
+export const referrals = mysqlTable("referrals", {
+  id: serial("id").primaryKey(),
+  referrerId: int("referrer_id").notNull(),
+  referredUserId: int("referred_user_id").notNull(),
+  referralCode: varchar("referral_code", { length: 16 }).notNull().unique(),
+  status: mysqlEnum("status", ["pending", "completed", "expired", "cancelled"]).default("pending").notNull(),
+  subscriptionId: varchar("subscription_id", { length: 255 }),
+  rewardAmount: int("reward_amount").default(50).notNull(),
+  rewardCurrency: varchar("reward_currency", { length: 3 }).default("USD").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+  expiresAt: timestamp("expires_at").notNull(),
+  payoutScheduledAt: timestamp("payout_scheduled_at"), // When payout should be processed
+  payoutProcessedAt: timestamp("payout_processed_at"), // When payout was actually processed
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  metadata: json("metadata"),
+}, (table) => ({
+  referrerIdIdx: index("idx_referrals_referrer_id").on(table.referrerId),
+  referredUserIdIdx: index("idx_referrals_referred_user_id").on(table.referredUserId),
+  statusIdx: index("idx_referrals_status").on(table.status),
+  expiresAtIdx: index("idx_referrals_expires_at").on(table.expiresAt),
+  payoutScheduledAtIdx: index("idx_referrals_payout_scheduled_at").on(table.payoutScheduledAt),
+}));
+
+export type Referral = typeof referrals.$inferSelect;
+export type InsertReferral = typeof referrals.$inferInsert;
+
+export const referralPayouts = mysqlTable("referral_payouts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  amount: int("amount").notNull(),
+  currency: varchar("currency", { length: 3 }).default("USD").notNull(),
+  status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
+  method: mysqlEnum("method", ["paypal", "stripe", "bank_transfer"]).default("paypal").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  processedAt: timestamp("processedAt"),
+  transactionId: varchar("transactionId", { length: 255 }),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ReferralPayout = typeof referralPayouts.$inferSelect;
+export type InsertReferralPayout = typeof referralPayouts.$inferInsert;
+
+// Subscriptions table for Stripe integration
+export const subscriptions = mysqlTable("subscriptions", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  userId: int("user_id").notNull(),
+  tenantId: int("tenant_id").notNull(),
+  customerId: varchar("customer_id", { length: 255 }).notNull(),
+  status: varchar("status", { length: 50 }).notNull(),
+  priceId: varchar("price_id", { length: 255 }).notNull(),
+  quantity: int("quantity").default(1).notNull(),
+  currentPeriodStart: timestamp("current_period_start").notNull(),
+  currentPeriodEnd: timestamp("current_period_end").notNull(),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false).notNull(),
+  trialEnd: timestamp("trial_end"),
+  canceledAt: timestamp("canceled_at"),
+  endedAt: timestamp("ended_at"),
+  latestInvoiceId: varchar("latest_invoice_id", { length: 255 }),
+  paymentMethodId: varchar("payment_method_id", { length: 255 }),
+  metadata: json("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("idx_subscriptions_user_id").on(table.userId),
+  tenantIdIdx: index("idx_subscriptions_tenant_id").on(table.tenantId),
+  customerIdIdx: index("idx_subscriptions_customer_id").on(table.customerId),
+  statusIdx: index("idx_subscriptions_status").on(table.status),
+}));
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = typeof subscriptions.$inferInsert;

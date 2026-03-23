@@ -8,6 +8,7 @@
     "setup-sentry": "node scripts/setup-sentry.js",
     "install": "node scripts/install-permissions.js",
     "deploy": "./scripts/deploy.sh",
+    "deploy:windows": "scripts/deploy.bat",
     "test": "node scripts/run-all-tests.js",
     "test:quick": "node scripts/run-all-tests.js quick",
     "test:unit": "vitest run",
