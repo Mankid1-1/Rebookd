@@ -1,12 +1,12 @@
 // server/routers.ts
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { createLeadSchema, updateLeadSchema, updateLeadStatusSchema, sendMessageSchema, loginSchema, paginationSchema } from "@shared/schemas";
-import { phoneSchema } from "@shared/schemas/leads";
+import { createLeadSchema, updateLeadSchema, updateLeadStatusSchema, sendMessageSchema, loginSchema, paginationSchema } from "../shared/schemas/leads";
+import { phoneSchema } from "../shared/schemas/leads";
 import Stripe from "stripe";
 import { desc, eq, and, gte, sql } from "drizzle-orm";
 import { subscriptions, messages, authRateLimits } from "../drizzle/schema";
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { invokeLLM } from "./_core/llm";
 import { sendEmail } from "./_core/email";

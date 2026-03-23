@@ -18,6 +18,19 @@ export type EnvConfig = {
   twilioAccountSid: string;
   twilioAuthToken: string;
   twilioFromNumber: string;
+  // Stripe - CRITICAL FOR BILLING
+  stripeSecretKey: string;
+  stripePublishableKey: string;
+  stripeWebhookSecret: string;
+  stripeFixedPriceId: string;
+  stripeMeteredPriceId: string;
+  frontendUrl: string;
+  backendUrl: string;
+  // Referral System
+  referralRewardAmount: number;
+  referralMinimumMonths: number;
+  referralExpiryDays: number;
+  referralProgramEnabled: boolean;
 };
 
 export const ENV: EnvConfig = {
@@ -41,4 +54,17 @@ export const ENV: EnvConfig = {
   twilioAccountSid: process.env.TWILIO_ACCOUNT_SID ?? "",
   twilioAuthToken: process.env.TWILIO_AUTH_TOKEN ?? "",
   twilioFromNumber: process.env.TWILIO_FROM_NUMBER ?? "",
+  // Stripe - CRITICAL FOR BILLING
+  stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
+  stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY ?? "",
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+  stripeFixedPriceId: process.env.STRIPE_FIXED_PRICE_ID ?? "price_FIXED_199",
+  stripeMeteredPriceId: process.env.STRIPE_METERED_PRICE_ID ?? "price_METERED_15",
+  frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:3000",
+  backendUrl: process.env.BACKEND_URL ?? "http://localhost:3001",
+  // Referral System
+  referralRewardAmount: parseInt(process.env.REFERRAL_REWARD_AMOUNT ?? "50"),
+  referralMinimumMonths: parseInt(process.env.REFERRAL_MINIMUM_MONTHS ?? "6"),
+  referralExpiryDays: parseInt(process.env.REFERRAL_EXPIRY_DAYS ?? "90"),
+  referralProgramEnabled: process.env.REFERRAL_PROGRAM_ENABLED === "true",
 };
