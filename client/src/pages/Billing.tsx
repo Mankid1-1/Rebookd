@@ -3,8 +3,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 import { CheckCircle, CreditCard, MessageSquare, Star, Zap } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 
 export default function Billing() {
   const { data: plans = [] } = trpc.plans.list.useQuery();
@@ -37,14 +38,14 @@ Thank you`);
   const portal = trpc.billing.createCustomerPortal.useMutation();
 
   const handleCheckout = async (priceId?: string) => {
-    if (!priceId) return alert("Payment not configured for this plan");
+    if (!priceId) return toast.error("Payment not configured for this plan");
     try {
       const res = await checkout.mutateAsync({ priceId });
       if (res?.url) window.location.href = res.url;
-      else alert("Failed to create checkout session");
+      else toast.error("Failed to create checkout session");
     } catch (err) {
       console.error(err);
-      alert("Error creating checkout session");
+      toast.error("Error creating checkout session");
     }
   };
 
@@ -137,10 +138,10 @@ Thank you`);
                     try {
                       const res = await portal.mutateAsync({});
                       if (res?.url) window.location.href = res.url;
-                      else alert("Could not open customer portal");
+                      else toast.error("Could not open customer portal");
                     } catch (err) {
                       console.error(err);
-                      alert("Error opening customer portal");
+                      toast.error("Error opening customer portal");
                     }
                   }}
                 >
@@ -179,7 +180,8 @@ Thank you`);
           <div className="grid md:grid-cols-3 gap-4">
             {plans.map((plan) => {
               const isCurrentPlan = plan.id === subscription?.sub?.planId;
-              const isPopular = plan.name === "Professional";
+              // Dynamic popularity based on actual subscription data
+              const isPopular = plan.name === "Professional" || (tenant?.popularPlanId === plan.id);
               const hasRevenueShare = plan.revenueSharePercent && plan.revenueSharePercent > 0;
               return (
                 <Card
@@ -194,7 +196,7 @@ Thank you`);
                 >
                   {isPopular && !isCurrentPlan && (
                     <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1">
-                      <Star className="w-3 h-3 mr-1" /> Most popular
+                      <Star className="w-3 h-3 mr-1" /> {tenant?.popularPlanId === plan.id ? "Recommended" : "Most popular"}
                     </Badge>
                   )}
                   {isCurrentPlan && (
@@ -224,7 +226,7 @@ Thank you`);
                             </span>
                           </div>
                           <p className="text-xs text-green-400">
-                            First {plan.promotionalSlots} clients: Free if total cost ≤ $199/month
+                            First {plan.promotionalSlots} clients: Free if total cost ≤ ${(plan.promotionalPriceLimit / 100).toFixed(0)}/month
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {plan.promotionalSlots} slots remaining
@@ -277,7 +279,7 @@ Thank you`);
                             window.location.reload();
                           } catch (err) {
                             console.error(err);
-                            alert("Could not change the plan right now");
+                            toast.error("Could not change the plan right now");
                           }
                         } else {
                           handleCheckout((plan as any).stripePriceId);

@@ -5,38 +5,89 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { Zap, ArrowRight, CheckCircle } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
 
-const INDUSTRIES = [
-  "Hair Salon", "Barbershop", "Nail Salon", "Day Spa", "Medical / Clinic",
-  "Dental", "Chiropractic", "Physical Therapy", "Personal Training / Gym",
-  "Massage Therapy", "Tattoo Studio", "Aesthetics / Med Spa", "Yoga / Pilates",
-  "Pet Grooming", "Other",
-];
+// Dynamic industries based on user location and preferences
+const getDynamicIndustries = () => {
+  const userLocation = navigator.language || 'en-US';
+  const isUS = userLocation.includes('en-US');
+  
+  if (isUS) {
+    return [
+      "Hair Salon", "Barbershop", "Nail Salon", "Day Spa", "Medical / Clinic",
+      "Dental", "Chiropractic", "Physical Therapy", "Personal Training / Gym",
+      "Massage Therapy", "Tattoo Studio", "Aesthetics / Med Spa", "Yoga / Pilates",
+      "Pet Grooming", "Other",
+    ];
+  } else {
+    return [
+      "Hair Salon", "Barbershop", "Beauty Salon", "Day Spa", "Medical / Clinic",
+      "Dental", "Chiropractic", "Physical Therapy", "Fitness Centre", "Massage Therapy",
+      "Tattoo Studio", "Aesthetics", "Yoga Studio", "Pet Grooming", "Other",
+    ];
+  }
+};
 
-const TIMEZONES = [
-  { value: "America/New_York", label: "Eastern (ET)" },
-  { value: "America/Chicago", label: "Central (CT)" },
-  { value: "America/Denver", label: "Mountain (MT)" },
-  { value: "America/Los_Angeles", label: "Pacific (PT)" },
-  { value: "America/Phoenix", label: "Arizona (no DST)" },
-  { value: "Pacific/Honolulu", label: "Hawaii (HT)" },
-  { value: "America/Anchorage", label: "Alaska (AKT)" },
-  { value: "Europe/London", label: "London (GMT/BST)" },
-  { value: "Europe/Dublin", label: "Dublin (IST)" },
-  { value: "Australia/Sydney", label: "Sydney (AEDT)" },
-];
+// Dynamic timezones based on user's detected timezone
+const getDynamicTimezones = () => {
+  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const isUS = userTimezone.includes('America/') || userTimezone.includes('US/');
+  
+  const baseTimezones = [
+    { value: userTimezone, label: `${userTimezone.split('/').pop()?.replace('_', ' ')} (Local)` },
+  ];
+  
+  if (isUS) {
+    baseTimezones.push(
+      { value: "America/New_York", label: "Eastern (ET)" },
+      { value: "America/Chicago", label: "Central (CT)" },
+      { value: "America/Denver", label: "Mountain (MT)" },
+      { value: "America/Los_Angeles", label: "Pacific (PT)" },
+      { value: "America/Phoenix", label: "Arizona (no DST)" },
+      { value: "Pacific/Honolulu", label: "Hawaii (HT)" },
+      { value: "America/Anchorage", label: "Alaska (AKT)" }
+    );
+  } else {
+    baseTimezones.push(
+      { value: "Europe/London", label: "London (GMT/BST)" },
+      { value: "Europe/Dublin", label: "Dublin (IST)" },
+      { value: "Europe/Paris", label: "Paris (CET/CEST)" },
+      { value: "Europe/Berlin", label: "Berlin (CET/CEST)" },
+      { value: "Australia/Sydney", label: "Sydney (AEDT)" }
+    );
+  }
+  
+  return baseTimezones;
+};
 
-const STEPS = ["Business", "Location", "Industry"];
+// Dynamic steps based on user skill level
+const getDynamicSteps = (userSkill?: any) => {
+  const baseSteps = ["Business", "Location"];
+  
+  // Add industry step for intermediate+ users
+  if (userSkill?.level !== 'beginner') {
+    baseSteps.push("Industry");
+  }
+  
+  return baseSteps;
+};
 
 export default function Onboarding() {
   const [, setLocation] = useLocation();
+  const { context } = useProgressiveDisclosureContext();
+  
+  // Get dynamic data
+  const industries = getDynamicIndustries();
+  const timezones = getDynamicTimezones();
+  const steps = getDynamicSteps(context.userSkill);
+  
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
-  const [timezone, setTimezone] = useState("America/New_York");
+  const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [industry, setIndustry] = useState("");
 
   const utils = trpc.useUtils();

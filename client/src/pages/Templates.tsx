@@ -21,13 +21,19 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
+import { useAuth } from "@/_core/hooks/useAuth";
 
-const CATEGORY_STYLES: Record<string, string> = {
-  follow_up: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  reactivation: "bg-purple-500/20 text-purple-300 border-purple-500/30",
-  appointment: "bg-green-500/20 text-green-300 border-green-500/30",
-  welcome: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
-  custom: "bg-gray-500/20 text-gray-300 border-gray-500/30",
+// Dynamic category styles based on user theme
+const getDynamicCategoryStyles = () => {
+  const isDarkMode = document.documentElement.classList.contains('dark');
+  return {
+    follow_up: isDarkMode ? "bg-blue-500/25 text-blue-300 border-blue-500/40" : "bg-blue-500/15 text-blue-400 border-blue-500/30",
+    reactivation: isDarkMode ? "bg-purple-500/25 text-purple-300 border-purple-500/40" : "bg-purple-500/15 text-purple-400 border-purple-500/30",
+    appointment: isDarkMode ? "bg-green-500/25 text-green-300 border-green-500/40" : "bg-green-500/15 text-green-400 border-green-500/30",
+    welcome: isDarkMode ? "bg-yellow-500/25 text-yellow-300 border-yellow-500/40" : "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+    custom: isDarkMode ? "bg-gray-500/25 text-gray-300 border-gray-500/40" : "bg-gray-500/15 text-gray-400 border-gray-500/30",
+  };
 };
 
 type TemplateForm = {
@@ -39,6 +45,13 @@ type TemplateForm = {
 const EMPTY_FORM: TemplateForm = { name: "", body: "", tone: "friendly" };
 
 export default function Templates() {
+  const { context } = useProgressiveDisclosureContext();
+  const { user } = useAuth();
+  const { data: tenant } = trpc.tenant.get.useQuery();
+  
+  // Dynamic category styles
+  const categoryStyles = getDynamicCategoryStyles();
+  
   const utils = trpc.useUtils();
   const [showCreate, setShowCreate] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -108,6 +121,7 @@ export default function Templates() {
   const openEdit = (tpl: typeof templates[0]) => {
     setEditId(tpl.id);
     setForm({ name: tpl.name, body: tpl.body, tone: tpl.tone });
+    setCategory((tpl as any).category || "custom");
     setShowCreate(true);
   };
 

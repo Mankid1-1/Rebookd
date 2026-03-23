@@ -23,19 +23,59 @@ import {
   Repeat
 } from "lucide-react";
 import { toast } from "sonner";
+import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
+import { useAuth } from "@/_core/hooks/useAuth";
+
+// Dynamic loyalty tiers based on business type and user skill
+const getDynamicLoyaltyTiers = (businessType?: string, userSkill?: any) => {
+  const baseTiers = [
+    { visits: 3, reward: '10% discount', message: 'Loyalty reward: 10% off your next booking!' }
+  ];
+
+  // Add intermediate tiers for non-beginners
+  if (userSkill?.level !== 'beginner') {
+    baseTiers.push(
+      { visits: 5, reward: '15% discount', message: 'VIP reward: 15% off your next booking!' }
+    );
+  }
+
+  // Add expert tiers for advanced users
+  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
+    baseTiers.push(
+      { visits: 10, reward: '20% discount', message: 'Elite reward: 20% off your next booking!' },
+      { visits: 15, reward: 'Free service', message: 'Platinum reward: Free service on your next visit!' }
+    );
+  }
+
+  // Business-specific tiers
+  if (businessType?.includes('medical') || businessType?.includes('clinic')) {
+    baseTiers.push(
+      { visits: 8, reward: 'Free consultation', message: 'Wellness reward: Free follow-up consultation!' }
+    );
+  } else if (businessType?.includes('salon') || businessType?.includes('spa')) {
+    baseTiers.push(
+      { visits: 8, reward: 'Free upgrade', message: 'Beauty reward: Free service upgrade on next visit!' }
+    );
+  }
+
+  return baseTiers;
+};
 
 export default function RetentionEngine() {
+  const { context } = useProgressiveDisclosureContext();
+  const { user } = useAuth();
+  const { data: tenant } = trpc.tenant.get.useQuery();
+  
+  // Get dynamic loyalty tiers
+  const dynamicLoyaltyTiers = getDynamicLoyaltyTiers(tenant?.industry, context.userSkill);
+  
   const [activeTab, setActiveTab] = useState("rebooking");
   const [config, setConfig] = useState({
     timeBasedRebooking: true,
     loyaltyProgram: true,
     reactivationCampaigns: true,
     rebookingIntervals: [4, 6, 8], // weeks
-    loyaltyTiers: [
-      { visits: 3, reward: '10% discount', message: 'Loyalty reward: 10% off your next booking!' },
-      { visits: 5, reward: '15% discount', message: 'VIP reward: 15% off your next booking!' },
-      { visits: 10, reward: '20% discount', message: 'Elite reward: 20% off your next booking!' }
-    ]
+    loyaltyTiers: dynamicLoyaltyTiers
   });
 
   const { data: metrics, isLoading } = trpc.analytics.retentionMetrics.useQuery(undefined, { refetchInterval: 30000 });
@@ -291,19 +331,19 @@ export default function RetentionEngine() {
                     <Award className="h-8 w-8 text-blue-600 mx-auto mb-2" />
                     <h3 className="font-medium">Bronze Tier</h3>
                     <p className="text-sm text-muted-foreground">3+ Visits</p>
-                    <Badge className="bg-blue-100 text-blue-800">12 Clients</Badge>
+                    <Badge className="bg-blue-100 text-blue-800">{metrics?.bronzeClients || 0} Clients</Badge>
                   </div>
                   <div className="text-center p-4 bg-green-50 rounded-lg">
                     <Award className="h-8 w-8 text-green-600 mx-auto mb-2" />
                     <h3 className="font-medium">Silver Tier</h3>
                     <p className="text-sm text-muted-foreground">5+ Visits</p>
-                    <Badge className="bg-green-100 text-green-800">8 Clients</Badge>
+                    <Badge className="bg-green-100 text-green-800">{metrics?.silverClients || 0} Clients</Badge>
                   </div>
                   <div className="text-center p-4 bg-purple-50 rounded-lg">
                     <Award className="h-8 w-8 text-purple-600 mx-auto mb-2" />
                     <h3 className="font-medium">Gold Tier</h3>
                     <p className="text-sm text-muted-foreground">10+ Visits</p>
-                    <Badge className="bg-purple-100 text-purple-800">5 Clients</Badge>
+                    <Badge className="bg-purple-100 text-purple-800">{metrics?.goldClients || 0} Clients</Badge>
                   </div>
                 </div>
                 <div className="p-4 bg-muted rounded-lg">

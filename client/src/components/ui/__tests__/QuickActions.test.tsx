@@ -2,26 +2,37 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QuickActions, getLeadsQuickActions } from "../QuickActions";
+import { Users, MessageSquare } from "lucide-react";
+
+// Local interface definition for testing
+interface QuickAction {
+  id: string;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  action: () => void;
+  variant?: "default" | "outline" | "secondary" | "ghost";
+  badge?: string;
+  shortcut?: string;
+}
 
 describe("QuickActions", () => {
-  const mockActions = [
+  const mockActions: QuickAction[] = [
     {
       id: "add-lead",
-      label: "Add Lead",
+      title: "Add Lead",
       description: "Create a new lead",
-      icon: "Plus",
-      onClick: vi.fn(),
+      icon: <Users className="h-5 w-5" />,
+      action: vi.fn(),
       shortcut: "Ctrl+N",
-      badge: null,
     },
     {
       id: "send-message",
-      label: "Send Message",
+      title: "Send Message", 
       description: "Send a message to leads",
-      icon: "MessageSquare",
-      onClick: vi.fn(),
+      icon: <MessageSquare className="h-5 w-5" />,
+      action: vi.fn(),
       shortcut: "Ctrl+M",
-      badge: null,
     },
   ];
 

@@ -5,6 +5,9 @@
 
 import { getDb } from "../db";
 import { TRPCError } from "@trpc/server";
+import { and, eq, isNull, lte } from "drizzle-orm";
+import { referrals, referralPayouts, systemErrorLogs, users } from "../../drizzle/schema";
+import { stripe } from "../_core/stripe";
 
 export interface Referral {
   id: string;
@@ -226,36 +229,73 @@ export async function completeReferral(
 export async function processScheduledPayouts(): Promise<{ processed: number; total: number }> {
   const db = await getDb();
   
-  // Find referrals where payout is scheduled and due
-  const dueReferrals = await (db as any).select({
-    id: true,
-    referrerId: true,
-    rewardAmount: true,
-    payoutScheduledAt: true,
+  const dueReferrals = await db.select({
+    id: referrals.id,
+    referrerId: referrals.referrerId,
+    rewardAmount: referrals.rewardAmount,
+    referredUserId: referrals.referredUserId,
   })
-    .from("referrals")
-    .where("status", "=", "completed")
-    .where("payoutScheduledAt", "<=", new Date())
-    .where("payoutProcessedAt", "=", null);
+    .from(referrals)
+    .where(and(
+      eq(referrals.status, "completed"),
+      lte(referrals.payoutScheduledAt, new Date()),
+      isNull(referrals.payoutProcessedAt)
+    ));
 
   let processed = 0;
   
   for (const referral of dueReferrals) {
+    let tenantId: number | null = null;
     try {
-      // Create payout record
-      await createPayoutRecord(referral.referrerId, referral.rewardAmount);
+      const userResults = await db.select({
+        stripeCustomerId: users.stripeCustomerId,
+        tenantId: users.tenantId
+      }).from(users).where(eq(users.id, referral.referrerId)).limit(1);
+
+      const referrer = userResults[0];
+      if (referrer && referrer.tenantId) {
+        tenantId = referrer.tenantId;
+      }
+
+      if (!referrer?.stripeCustomerId) {
+        throw new Error(`No Stripe Connect account for referrer ${referral.referrerId}`);
+      }
+
+      const payout = await stripe.transfers.create({
+        amount: referral.rewardAmount * 100,
+        currency: 'usd',
+        destination: referrer.stripeCustomerId, // Assuming this is the connect ID
+        description: `Referral payout for referred user ${referral.referredUserId}`,
+        metadata: {
+          referralId: referral.id,
+          type: 'referral_payout',
+        },
+      });
+
+      await db.insert(referralPayouts).values({
+        userId: referral.referrerId,
+        amount: referral.rewardAmount,
+        transactionId: payout.id,
+        status: 'completed',
+        method: 'stripe',
+        processedAt: new Date(),
+      });
       
-      // Mark referral as payout processed
-      await (db as any).update("referrals")
+      await db.update(referrals)
         .set({
           payoutProcessedAt: new Date(),
-          updatedAt: new Date()
         })
-        .where("id", "=", referral.id);
+        .where(eq(referrals.id, referral.id));
       
       processed++;
     } catch (error) {
       console.error(`Failed to process payout for referral ${referral.id}:`, error);
+      await db.insert(systemErrorLogs).values({
+          type: 'billing',
+          message: `Failed to process payout for referral ${referral.id}`,
+          detail: error.message,
+          tenantId: tenantId,
+      });
     }
   }
   
@@ -326,22 +366,7 @@ export async function getUserReferrals(userId: string): Promise<Referral[]> {
     .orderBy("createdAt", "desc");
 }
 
-/**
- * Create a payout record
- */
-async function createPayoutRecord(userId: string, amount: number): Promise<void> {
-  const db = await getDb();
-  
-  await (db as any).insert("referral_payouts")
-    .values({
-      id: crypto.randomUUID(),
-      userId,
-      amount,
-      currency: "USD",
-      status: "pending",
-      createdAt: new Date(),
-    });
-}
+
 
 /**
  * Request payout of available referral earnings

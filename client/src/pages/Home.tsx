@@ -5,38 +5,88 @@ import { getLoginUrl } from "@/const";
 import { ArrowRight, Bot, BarChart3, MessageSquare, Zap, CheckCircle, Star, Bell, UserX, XCircle, Gift, ThumbsUp, RotateCcw } from "lucide-react";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
+import { trpc } from "@/lib/trpc";
+import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
 
-const features = [
-  { icon: Bot, title: "AI-Powered Messaging", description: "Rewrite every SMS in the perfect tone — friendly, professional, or urgent — automatically using built-in AI.", color: "text-purple-400", bg: "bg-purple-500/10" },
-  { icon: Zap, title: "16 Ready-Made Automations", description: "Enable pre-built workflows for reminders, no-shows, cancellations, win-backs and more. No setup required.", color: "text-yellow-400", bg: "bg-yellow-500/10" },
-  { icon: MessageSquare, title: "Two-Way Conversations", description: "Manage all client SMS conversations in one inbox. Respond manually or let automations handle replies.", color: "text-blue-400", bg: "bg-blue-500/10" },
-  { icon: BarChart3, title: "Revenue Analytics", description: "Track booking rates, no-show rates, re-engagement success, and actual revenue recovered over time.", color: "text-green-400", bg: "bg-green-500/10" },
-];
+const [, setLocation] = useLocation();
 
-const automationPreviews = [
-  { icon: Bell, label: "24-hr Appointment Reminder", cat: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", catLabel: "appointment" },
-  { icon: UserX, label: "No-Show Follow-Up", cat: "bg-red-500/15 text-red-400 border-red-500/30", catLabel: "no-show" },
-  { icon: XCircle, label: "Cancellation Rebook", cat: "bg-orange-500/15 text-orange-400 border-orange-500/30", catLabel: "cancellation" },
-  { icon: Gift, label: "90-Day Win-Back", cat: "bg-purple-500/15 text-purple-400 border-purple-500/30", catLabel: "re-engagement" },
-  { icon: ThumbsUp, label: "Post-Visit Feedback", cat: "bg-blue-500/15 text-blue-400 border-blue-500/30", catLabel: "follow-up" },
-  { icon: RotateCcw, label: "Loyalty Milestone", cat: "bg-pink-500/15 text-pink-400 border-pink-500/30", catLabel: "loyalty" },
-];
+// Dynamic features based on user skill and business type
+const getDynamicFeatures = (userSkill?: any, businessType?: string) => {
+  const isDarkMode = document.documentElement.classList.contains('dark');
+  const baseFeatures = [
+    { 
+      icon: Bot, 
+      title: "AI-Powered Messaging", 
+      description: "Rewrite every SMS in the perfect tone — friendly, professional, or urgent — automatically using built-in AI.", 
+      color: isDarkMode ? "text-purple-300" : "text-purple-400", 
+      bg: isDarkMode ? "bg-purple-500/20" : "bg-purple-500/10" 
+    },
+    { 
+      icon: MessageSquare, 
+      title: "Two-Way Conversations", 
+      description: "Manage all client SMS conversations in one inbox. Respond manually or let automations handle replies.", 
+      color: isDarkMode ? "text-blue-300" : "text-blue-400", 
+      bg: isDarkMode ? "bg-blue-500/20" : "bg-blue-500/10" 
+    },
+    { 
+      icon: BarChart3, 
+      title: "Revenue Analytics", 
+      description: "Track booking rates, no-show rates, re-engagement success, and actual revenue recovered over time.", 
+      color: isDarkMode ? "text-green-300" : "text-green-400", 
+      bg: isDarkMode ? "bg-green-500/20" : "bg-green-500/10" 
+    },
+  ];
 
-const plans = [
-  { name: "Starter", price: "$49", description: "Perfect for solo operators", features: ["500 SMS/month", "6 automations", "AI tone rewriting", "Basic analytics", "Email support"], cta: "Start free trial", popular: false },
-  { name: "Growth", price: "$99", description: "For growing businesses", features: ["2,000 SMS/month", "12 automations", "AI tone rewriting", "Advanced analytics", "Phone number management", "Priority support"], cta: "Start free trial", popular: true },
-  { name: "Scale", price: "$199", description: "For high-volume teams", features: ["10,000 SMS/month", "All 16 automations", "AI tone rewriting", "Full analytics suite", "Multiple phone numbers", "API access", "Dedicated support"], cta: "Contact sales", popular: false },
-];
+  // Add advanced features for expert users
+  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
+    baseFeatures.push({
+      icon: Zap,
+      title: "16 Ready-Made Automations", 
+      description: "Enable pre-built workflows for reminders, no-shows, cancellations, win-backs and more. No setup required.",
+      color: isDarkMode ? "text-yellow-300" : "text-yellow-400",
+      bg: isDarkMode ? "bg-yellow-500/20" : "bg-yellow-500/10"
+    });
+  }
 
-const testimonials = [
-  { name: "Sarah M.", business: "Bloom Beauty Studio", quote: "Our no-show rate dropped from 22% to under 6% in the first month. The automations literally pay for themselves.", stat: "−73% no-shows" },
-  { name: "Derek K.", business: "Peak Performance PT", quote: "We re-engaged over 40 lapsed clients in the first 90 days. I couldn't believe how many people just needed one message.", stat: "40 clients reactivated" },
-  { name: "Priya N.", business: "Serene Day Spa", quote: "Setting up automations took 10 minutes. Now it's completely hands-off and our booking rate has never been higher.", stat: "+34% booking rate" },
-];
+  return baseFeatures;
+};
+
+// Dynamic automation previews based on business type
+const getDynamicAutomationPreviews = (businessType?: string) => {
+  const isDarkMode = document.documentElement.classList.contains('dark');
+  const basePreviews = [
+    { icon: Bell, label: "24-hr Appointment Reminder", cat: isDarkMode ? "bg-emerald-500/25 text-emerald-300 border-emerald-500/40" : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", catLabel: "appointment" },
+    { icon: UserX, label: "No-Show Follow-Up", cat: isDarkMode ? "bg-red-500/25 text-red-300 border-red-500/40" : "bg-red-500/15 text-red-400 border-red-500/30", catLabel: "no-show" },
+  ];
+
+  // Business-specific automations
+  if (businessType?.includes('medical') || businessType?.includes('clinic')) {
+    basePreviews.push(
+      { icon: Gift, label: "90-Day Win-Back", cat: isDarkMode ? "bg-purple-500/25 text-purple-300 border-purple-500/40" : "bg-purple-500/15 text-purple-400 border-purple-500/30", catLabel: "re-engagement" },
+      { icon: ThumbsUp, label: "Post-Visit Feedback", cat: isDarkMode ? "bg-blue-500/25 text-blue-300 border-blue-500/40" : "bg-blue-500/15 text-blue-400 border-blue-500/30", catLabel: "follow-up" }
+    );
+  } else {
+    basePreviews.push(
+      { icon: XCircle, label: "Cancellation Rebook", cat: isDarkMode ? "bg-orange-500/25 text-orange-300 border-orange-500/40" : "bg-orange-500/15 text-orange-400 border-orange-500/30", catLabel: "cancellation" },
+      { icon: RotateCcw, label: "Loyalty Milestone", cat: isDarkMode ? "bg-pink-500/25 text-pink-300 border-pink-500/40" : "bg-pink-500/15 text-pink-400 border-pink-500/30", catLabel: "loyalty" }
+    );
+  }
+
+  return basePreviews;
+};
 
 export default function Home() {
   const { user, loading } = useAuth();
+  const { context } = useProgressiveDisclosureContext();
   const [, setLocation] = useLocation();
+  
+  // Get dynamic data
+  const { data: plansData } = trpc.plans.list.useQuery();
+  const { data: testimonialsData } = trpc.testimonials.list.useQuery();
+  const { data: tenant } = trpc.tenant.get.useQuery();
+
+  const features = getDynamicFeatures(context.userSkill, tenant?.industry);
+  const automationPreviews = getDynamicAutomationPreviews(tenant?.industry);
 
   useEffect(() => {
     if (!loading && user) setLocation("/dashboard");
@@ -56,8 +106,8 @@ export default function Home() {
           <div className="flex items-center gap-4">
             <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden md:block">Features</a>
             <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden md:block">Pricing</a>
-            <Button variant="outline" size="sm" onClick={() => { window.location.href = getLoginUrl(); }}>Sign in</Button>
-            <Button size="sm" onClick={() => { window.location.href = getLoginUrl(); }}>Start free trial <ArrowRight className="w-3.5 h-3.5 ml-1.5" /></Button>
+            <Button variant="outline" size="sm" onClick={() => setLocation(getLoginUrl())}>Sign in</Button>
+            <Button size="sm" onClick={() => setLocation(getLoginUrl())}>Start free trial <ArrowRight className="w-3.5 h-3.5 ml-1.5" /></Button>
           </div>
         </div>
       </nav>
@@ -75,7 +125,7 @@ export default function Home() {
             Rebooked automatically sends the right SMS at the right time — appointment reminders, no-show follow-ups, cancellation recovery, and win-back campaigns. 16 ready-made automations. Enable and go.
           </p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
-            <Button size="lg" className="h-12 px-8 text-base" onClick={() => { window.location.href = getLoginUrl(); }}>
+            <Button size="lg" className="h-12 px-8 text-base" onClick={() => setLocation(getLoginUrl())}>
               Start your free trial <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
             <p className="text-sm text-muted-foreground">14-day free trial · No credit card required</p>
@@ -175,7 +225,7 @@ export default function Home() {
                     </li>
                   ))}
                 </ul>
-                <Button className="w-full" variant={plan.popular ? "default" : "outline"} onClick={() => { window.location.href = getLoginUrl(); }}>
+                <Button className="w-full" variant={plan.popular ? "default" : "outline"} onClick={() => setLocation(getLoginUrl())}>
                   {plan.cta}
                 </Button>
               </div>
@@ -192,7 +242,7 @@ export default function Home() {
           </div>
           <h2 className="text-3xl font-bold mb-4" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Ready to recover lost revenue?</h2>
           <p className="text-muted-foreground mb-8">Join appointment businesses using Rebooked to reduce no-shows, recover cancellations, and win back lapsed clients.</p>
-          <Button size="lg" className="h-12 px-8 text-base" onClick={() => { window.location.href = getLoginUrl(); }}>
+          <Button size="lg" className="h-12 px-8 text-base" onClick={() => setLocation(getLoginUrl())}>
             Start your free trial <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
           <p className="text-xs text-muted-foreground mt-4">14-day trial · Cancel anytime · No credit card required</p>

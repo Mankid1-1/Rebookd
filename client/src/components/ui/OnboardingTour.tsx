@@ -5,6 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./dialog";
 import { Badge } from "./badge";
 import { ArrowRight, Sparkles, Users, MessageSquare, BarChart3, Zap } from "lucide-react";
 import { getItem, setItem } from "@/utils/storage";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useProgressiveDisclosureContext } from "./ProgressiveDisclosure";
 
 interface TourStep {
   id: string;
@@ -15,39 +17,43 @@ interface TourStep {
   tips?: string[];
 }
 
-const tourSteps: TourStep[] = [
-  {
-    id: "welcome",
-    title: "Welcome to Rebooked! 🎉",
-    description: "Let's get you started with a quick tour of your new lead management system.",
-    icon: <Sparkles className="h-6 w-6 text-yellow-500" />,
-    tips: [
-      "This tour will take about 2 minutes",
-      "You can skip any step if you're already familiar",
-      "All features are designed to be intuitive and easy to use"
-    ]
-  },
-  {
-    id: "dashboard",
-    title: "Your Dashboard",
-    description: "Get a bird's-eye view of your business performance at a glance.",
-    icon: <BarChart3 className="h-6 w-6 text-blue-500" />,
-    action: "View key metrics like total leads, conversion rates, and revenue",
-    tips: [
-      "Check your dashboard daily for important updates",
-      "Click on any metric to see detailed information",
-      "The dashboard updates in real-time"
-    ]
-  },
-  {
-    id: "leads",
-    title: "Manage Your Leads",
-    description: "This is where you'll manage all your potential customers.",
-    icon: <Users className="h-6 w-6 text-green-500" />,
-    action: "Add, view, and manage your leads from the Leads page",
-    tips: [
-      "Click 'Add Lead' to manually add new customers",
-      "Use the search bar to find specific leads quickly",
+// Dynamic tour steps based on user skill level and business type
+const getDynamicTourSteps = (userSkill: any, businessType?: string) => {
+  const isDarkMode = document.documentElement.classList.contains('dark');
+  
+  const baseSteps = [
+    {
+      id: "welcome",
+      title: "Welcome to Rebooked! 🎉",
+      description: "Let's get you started with a quick tour of your new lead management system.",
+      icon: <Sparkles className={`h-6 w-6 ${isDarkMode ? 'text-yellow-400' : 'text-yellow-500'}`} />,
+      tips: [
+        "This tour will take about 2 minutes",
+        "You can skip any step if you're already familiar",
+        "All features are designed to be intuitive and easy to use"
+      ]
+    },
+    {
+      id: "dashboard",
+      title: "Your Dashboard",
+      description: "Get a bird's-eye view of your business performance at a glance.",
+      icon: <BarChart3 className={`h-6 w-6 ${isDarkMode ? 'text-blue-400' : 'text-blue-500'}`} />,
+      action: "View key metrics like total leads, conversion rates, and revenue",
+      tips: [
+        "Check your dashboard daily for important updates",
+        "Click on any metric to see detailed information",
+        "The dashboard updates in real-time"
+      ]
+    },
+    {
+      id: "leads",
+      title: "Manage Your Leads",
+      description: "This is where you'll manage all your potential customers.",
+      icon: <Users className={`h-6 w-6 ${isDarkMode ? 'text-green-400' : 'text-green-500'}`} />,
+      action: "Add, view, and manage your leads from the Leads page",
+      tips: [
+        "Click 'Add Lead' to manually add new customers",
+        "Use the search bar to find specific leads quickly",
       "Filter leads by status to focus on what matters most"
     ]
   },
@@ -77,6 +83,10 @@ const tourSteps: TourStep[] = [
   }
 ];
 
+// Return the dynamic tour steps
+return baseSteps;
+};
+
 interface OnboardingTourProps {
   isOpen: boolean;
   onClose: () => void;
@@ -87,6 +97,8 @@ export function OnboardingTour({ isOpen, onClose, onComplete }: OnboardingTourPr
   const [currentStep, setCurrentStep] = React.useState(0);
   const [isCompleted, setIsCompleted] = React.useState(false);
 
+  // Get dynamic tour steps
+  const tourSteps = getDynamicTourSteps(null, null);
   const currentStepData = tourSteps[currentStep];
   const isLastStep = currentStep === tourSteps.length - 1;
 
@@ -115,8 +127,8 @@ export function OnboardingTour({ isOpen, onClose, onComplete }: OnboardingTourPr
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="sm:max-w-md">
           <div className="text-center py-8">
-            <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-              <Sparkles className="h-8 w-8 text-green-600" />
+            <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+              <Sparkles className="h-8 w-8 text-primary" />
             </div>
             <DialogTitle className="text-xl font-semibold mb-2">
               You're all set! 🎉
@@ -126,13 +138,13 @@ export function OnboardingTour({ isOpen, onClose, onComplete }: OnboardingTourPr
             </p>
             <div className="space-y-2 text-left bg-muted/50 p-4 rounded-lg">
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="bg-green-100 text-green-800">
+                <Badge variant="secondary" className="bg-primary/10 text-primary">
                   Quick Start
                 </Badge>
                 <span className="text-sm">Add your first lead to get started</span>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                <Badge variant="secondary" className="bg-accent text-accent-foreground">
                   Pro Tip
                 </Badge>
                 <span className="text-sm">Check out the automation features</span>
@@ -254,14 +266,14 @@ export function OnboardingTour({ isOpen, onClose, onComplete }: OnboardingTourPr
 export function useOnboardingTour() {
   const [isOpen, setIsOpen] = React.useState(false);
   const [hasSeenTour, setHasSeenTour] = React.useState(() => {
-    return getItem("hasSeenOnboardingTour") === "true";
+    return getItem("hasSeenOnboarding") === "true";
   });
 
   const startTour = () => setIsOpen(true);
   const closeTour = () => setIsOpen(false);
   const completeTour = () => {
     setHasSeenTour(true);
-    setItem("hasSeenOnboardingTour", "true");
+    setItem("hasSeenOnboarding", "true");
   };
 
   return {

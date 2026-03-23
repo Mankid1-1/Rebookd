@@ -276,45 +276,10 @@ export default function NoShowRecovery() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex items-center">
-                    <Bell className="h-4 w-4 mr-2 text-blue-600" />
-                    <div>
-                      <span className="font-medium">24h Reminder Sent</span>
-                      <p className="text-xs text-muted-foreground">John Doe - Tomorrow 9:00 AM</p>
-                    </div>
-                  </div>
-                  <Badge variant="secondary">Just now</Badge>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex items-center">
-                    <MessageSquare className="h-4 w-4 mr-2 text-green-600" />
-                    <div>
-                      <span className="font-medium">Confirmation Received</span>
-                      <p className="text-xs text-muted-foreground">Jane Smith - YES response</p>
-                    </div>
-                  </div>
-                  <Badge className="bg-green-100 text-green-800">5 min ago</Badge>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex items-center">
-                    <Users className="h-4 w-4 mr-2 text-purple-600" />
-                    <div>
-                      <span className="font-medium">Waitlist Filled</span>
-                      <p className="text-xs text-muted-foreground">Mike Johnson - 2:00 PM slot</p>
-                    </div>
-                  </div>
-                  <Badge className="bg-purple-100 text-purple-800">12 min ago</Badge>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex items-center">
-                    <Phone className="h-4 w-4 mr-2 text-orange-600" />
-                    <div>
-                      <span className="font-medium">Auto-Cancel Triggered</span>
-                      <p className="text-xs text-muted-foreground">Sarah Wilson - No response</p>
-                    </div>
-                  </div>
-                  <Badge className="bg-orange-100 text-orange-800">18 min ago</Badge>
+                <div className="text-center p-4 text-muted-foreground">
+                  <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No recent activity</p>
+                  <p className="text-xs">No-show recovery activity will appear here</p>
                 </div>
               </div>
             </CardContent>

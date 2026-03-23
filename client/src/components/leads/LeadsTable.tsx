@@ -22,16 +22,8 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { StatusBadge, CommunicationBadge, ActivityBadge } from "@/components/ui/StatusBadge";
 import { HelpTooltip } from "@/components/ui/HelpTooltip";
-
-interface Lead {
-  id: number;
-  name: string | null;
-  phone: string;
-  status: string;
-  source: string | null;
-  lastMessageAt: Date | string | null;
-  createdAt: Date | string;
-}
+import { useDynamicStatuses } from "@/hooks/useDynamicConfiguration";
+import type { Lead } from "../../../shared/interfaces";
 
 interface LeadsTableProps {
   leads: Lead[];
@@ -41,23 +33,11 @@ interface LeadsTableProps {
   onClearFilters: () => void;
 }
 
-const statusOptions = [
-  { value: "new", label: "New", color: "bg-blue-500" },
-  { value: "contacted", label: "Contacted", color: "bg-yellow-500" },
-  { value: "qualified", label: "Qualified", color: "bg-purple-500" },
-  { value: "booked", label: "Booked", color: "bg-green-500" },
-  { value: "lost", label: "Lost", color: "bg-red-500" },
-  { value: "unsubscribed", label: "Unsubscribed", color: "bg-gray-500" },
-];
-
-export function LeadsTable({
-  leads,
-  isLoading,
-  onAddClick,
-  isFiltered,
-  onClearFilters,
-}: LeadsTableProps) {
-  const [, navigate] = useLocation();
+export function LeadsTable({ leads, isLoading, onAddClick, isFiltered, onClearFilters }: LeadsTableProps) {
+  const statuses = useDynamicStatuses();
+  const [, setLocation] = useLocation();
+  
+  const statusOptions = statuses;
   const utils = trpc.useUtils();
 
   const updateLeadStatus = trpc.leads.update.useMutation({
@@ -98,7 +78,8 @@ export function LeadsTable({
   };
 
   const handleSendMessage = (leadId: number, leadName: string | null) => {
-    navigate(`/inbox?lead=${leadId}`);
+    const [, setLocation] = useLocation();
+    setLocation(`/inbox?lead=${leadId}`);
   };
 
   const handleCall = (phone: string) => {

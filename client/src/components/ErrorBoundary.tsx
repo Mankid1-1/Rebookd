@@ -13,23 +13,33 @@ interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+  retryCount: number;
 }
 
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null, errorInfo: null };
+    this.state = { hasError: false, error: null, errorInfo: null, retryCount: 0 };
   }
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error, errorInfo: null };
+    return { hasError: true, error, errorInfo: null, retryCount: 0 };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    this.setState({ error, errorInfo });
+    this.setState(prevState => ({ 
+      error, 
+      errorInfo, 
+      retryCount: prevState.retryCount + 1 
+    }));
 
-    // Log error to monitoring service
-    console.error("Error caught by boundary:", error, errorInfo);
+    // Log error to monitoring service (redacted in production)
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error caught by boundary:', error, errorInfo);
+    } else {
+      // In production, log only essential error info without full component stack
+      console.error('Error caught by boundary:', error.message, error.name);
+    }
 
     // Call custom error handler if provided
     if (this.props.onError) {
@@ -41,12 +51,15 @@ class ErrorBoundary extends Component<Props, State> {
     this.setState({
       hasError: false,
       error: null,
-      errorInfo: null,
+      errorInfo: null
     });
   };
 
   render() {
     if (this.state.hasError) {
+      const maxRetries = 3;
+      const canRetry = this.state.retryCount <= maxRetries;
+      
       return this.props.fallback || (
         <div className="min-h-screen flex items-center justify-center bg-background p-4">
           <Card className="w-full max-w-md border-red-200">
@@ -58,32 +71,46 @@ class ErrorBoundary extends Component<Props, State> {
             </CardHeader>
             <CardContent className="text-center space-y-4">
               <p className="text-muted-foreground">
-                {this.state.error?.message ||
-                  "An unexpected error occurred"}
+                {canRetry 
+                  ? "An unexpected error occurred. Please try again."
+                  : "A persistent error occurred. Please contact support if the problem continues."
+                }
               </p>
 
-              {process.env.NODE_ENV === "development" && (
-                <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
-                  <pre className="text-sm text-muted-foreground whitespace-break-spaces">
-                    {this.state.error?.stack}
+              {process.env.NODE_ENV === 'development' && this.state.error && (
+                <details className="text-left">
+                  <summary className="cursor-pointer text-sm font-mono text-muted-foreground hover:text-foreground">
+                    Error Details (Attempt {this.state.retryCount})
+                  </summary>
+                  <pre className="mt-2 text-xs overflow-auto bg-muted p-2 rounded">
+                    {this.state.error.toString()}
+                    {this.state.errorInfo && (
+                      <div className="mt-2">
+                        <strong>Component Stack:</strong>
+                        <pre className="whitespace-pre-wrap">
+                          {this.state.errorInfo.componentStack}
+                        </pre>
+                      </div>
+                    )}
                   </pre>
+                </details>
+              )}
+
+              {canRetry ? (
+                <Button onClick={this.handleRetry} className="w-full">
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Try Again ({maxRetries - this.state.retryCount + 1} attempts left)
+                </Button>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Maximum retry attempts reached. This appears to be a persistent issue.
+                  </p>
+                  <Button onClick={() => window.location.reload()} variant="outline" className="w-full">
+                    Reload Page
+                  </Button>
                 </div>
               )}
-
-              {process.env.NODE_ENV !== "development" && (
-                <p className="text-muted-foreground text-sm mb-6">
-                  Something went wrong. Please reload the page. If the issue
-                  persists, contact support.
-                </p>
-              )}
-
-              <Button
-                onClick={() => window.location.reload()}
-                className="w-full"
-              >
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Reload Page
-              </Button>
             </CardContent>
           </Card>
         </div>
@@ -94,4 +121,4 @@ class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-export default ErrorBoundary;
+export { ErrorBoundary };

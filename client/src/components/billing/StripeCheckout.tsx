@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { trpc } from '@/lib/trpc';
 import { 
   CreditCard, 
   Check, 
@@ -30,6 +31,14 @@ export function StripeCheckout({ onSuccess, onCancel, referralCode }: StripeChec
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [customerEmail, setCustomerEmail] = useState('');
+
+  // Get dynamic plan data
+  const { data: plans = [] } = trpc.plans.list.useQuery();
+  
+  // Find the main plan (should be the $199 + 15% plan)
+  const mainPlan = plans.find(p => p.revenueSharePercent && p.revenueSharePercent > 0) || plans[0];
+  const fixedPrice = mainPlan ? (mainPlan.priceMonthly / 100).toFixed(0) : '199';
+  const revenueSharePercent = mainPlan?.revenueSharePercent || 15;
 
   const handleCheckout = async () => {
     if (!customerEmail) {
@@ -91,7 +100,7 @@ export function StripeCheckout({ onSuccess, onCancel, referralCode }: StripeChec
                 <Badge variant="outline">Fixed</Badge>
               </div>
               <div className="space-y-2">
-                <div className="text-3xl font-bold">$199</div>
+                <div className="text-3xl font-bold">${fixedPrice}</div>
                 <div className="text-sm text-gray-500">per month</div>
               </div>
               <ul className="space-y-2 text-sm">
@@ -125,7 +134,7 @@ export function StripeCheckout({ onSuccess, onCancel, referralCode }: StripeChec
                 <Badge className="bg-blue-100 text-blue-800">Performance</Badge>
               </div>
               <div className="space-y-2">
-                <div className="text-3xl font-bold">15%</div>
+                <div className="text-3xl font-bold">{revenueSharePercent}%</div>
                 <div className="text-sm text-gray-500">of recovered revenue</div>
               </div>
               <ul className="space-y-2 text-sm">
@@ -202,7 +211,7 @@ export function StripeCheckout({ onSuccess, onCancel, referralCode }: StripeChec
               ) : (
                 <>
                   <CreditCard className="w-4 h-4 mr-2" />
-                  Subscribe to Rebooked - $199/mo + 15% recovered
+                  Subscribe to Rebooked - ${fixedPrice}/mo + {revenueSharePercent}% recovered
                 </>
               )}
             </Button>
@@ -234,14 +243,14 @@ export function StripeCheckout({ onSuccess, onCancel, referralCode }: StripeChec
             <div>
               <h4 className="font-semibold mb-2">Fixed Monthly Fee</h4>
               <p className="text-sm text-gray-600">
-                $199 per month for unlimited access to all platform features, 
+                ${fixedPrice} per month for unlimited access to all platform features, 
                 including automation, messaging, and analytics.
               </p>
             </div>
             <div>
               <h4 className="font-semibold mb-2">Performance-Based Fee</h4>
               <p className="text-sm text-gray-600">
-                15% of revenue recovered through our AI-powered system. 
+                {revenueSharePercent}% of revenue recovered through our AI-powered system. 
                 Only pay for actual results - no recovery, no fee.
               </p>
             </div>
@@ -252,19 +261,19 @@ export function StripeCheckout({ onSuccess, onCancel, referralCode }: StripeChec
             <div className="bg-gray-50 rounded-lg p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span>Platform Access (Fixed)</span>
-                <span>$199.00</span>
+                <span>${fixedPrice}.00</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span>Revenue Recovered: $2,500</span>
-                <span>$375.00</span>
+                <span>${(2500 * revenueSharePercent / 100).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span>Revenue Recovered: $1,200</span>
-                <span>$180.00</span>
+              <div className="flex justify-between text-sm font-semibold border-t pt-2">
+                <span>Total Monthly</span>
+                <span>${(parseFloat(fixedPrice) + (2500 * revenueSharePercent / 100)).toFixed(2)}</span>
               </div>
               <div className="border-t pt-2 flex justify-between font-semibold">
                 <span>Total Monthly Bill</span>
-                <span>$754.00</span>
+                <span>${(parseFloat(fixedPrice) + (2500 * revenueSharePercent / 100)).toFixed(2)}</span>
               </div>
             </div>
           </div>
