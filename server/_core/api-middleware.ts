@@ -178,11 +178,11 @@ export function trustProxyMiddleware(req: Request, res: Response, next: NextFunc
   // Get real IP from X-Forwarded-For header (set by reverse proxy like Nginx)
   if (req.headers['x-forwarded-for']) {
     const ips = (req.headers['x-forwarded-for'] as string).split(',');
-    req.ip = ips[0].trim();
+    (req as any).ip = ips[0].trim();
   }
 
   if (req.headers['x-forwarded-proto']) {
-    req.protocol = req.headers['x-forwarded-proto'] as any;
+    (req as any).protocol = req.headers['x-forwarded-proto'] as any;
   }
 
   next();

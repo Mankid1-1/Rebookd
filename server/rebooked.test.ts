@@ -91,6 +91,11 @@ function makeCtx(overrides: Partial<TrpcContext> = {}): TrpcContext {
       name: "Test User",
       loginMethod: "manus",
       role: "user",
+      emailVerifiedAt: new Date(),
+      passwordHash: "",
+      tenantId: 1,
+      active: true,
+      stripeCustomerId: "",
       createdAt: new Date(),
       updatedAt: new Date(),
       lastSignedIn: new Date(),
@@ -99,7 +104,7 @@ function makeCtx(overrides: Partial<TrpcContext> = {}): TrpcContext {
     res: {
       clearCookie: vi.fn(),
     } as unknown as TrpcContext["res"],
-    db: makeMockDb(),
+    db: makeMockDb() as any,
     ...overrides,
   };
 }
@@ -113,6 +118,11 @@ function makeAdminCtx(): TrpcContext {
       name: "Admin User",
       loginMethod: "manus",
       role: "admin",
+      emailVerifiedAt: new Date(),
+      passwordHash: "",
+      tenantId: 1,
+      active: true,
+      stripeCustomerId: "",
       createdAt: new Date(),
       updatedAt: new Date(),
       lastSignedIn: new Date(),

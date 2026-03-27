@@ -33,7 +33,7 @@ export default defineConfig({
         },
       },
     },
-    setupFiles: ['./client/src/test-setup.ts'],
+    setupFiles: ['./client/src/setupTests.ts'],
     testTimeout: 10000,
     hookTimeout: 10000,
   },

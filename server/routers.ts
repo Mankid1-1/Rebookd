@@ -1,12 +1,12 @@
 // server/routers.ts
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { createLeadSchema, updateLeadSchema, updateLeadStatusSchema, sendMessageSchema, loginSchema, paginationSchema } from "@shared/schemas";
-import { phoneSchema } from "@shared/schemas/leads";
+import { createLeadSchema, updateLeadSchema, updateLeadStatusSchema, sendMessageSchema, loginSchema, paginationSchema } from "../shared/schemas/leads";
+import { phoneSchema } from "../shared/schemas/leads";
 import Stripe from "stripe";
 import { desc, eq, and, gte, sql } from "drizzle-orm";
-import { subscriptions, messages, authRateLimits } from "../drizzle/schema";
-import { COOKIE_NAME } from "@shared/const";
+import { subscriptions, messages, authRateLimits, tenants, leads } from "../drizzle/schema";
+import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { invokeLLM } from "./_core/llm";
 import { sendEmail } from "./_core/email";
@@ -32,6 +32,12 @@ import { isAppError } from "./_core/appErrors";
 import { ENV } from "./_core/env";
 import { verifyInboundWebhookSignature } from "./_core/webhookSignature";
 import * as WebhookDedupService from "./services/webhookDedup.service";
+import * as RecoveryAttribution from "./services/recovery-attribution.service";
+import * as RoiGuarantee from "./services/roi-guarantee.service";
+import { stripeCheckoutRouter } from "./api/stripe-checkout";
+import { referralRouter } from "./api/referral";
+import { stripeConnectRouter } from "./api/stripe-connect";
+import { featureConfigRouter } from "./api/feature-config-router";
 
 function clampAdminPagination(input?: { page?: number; limit?: number }) {
   const page = Math.max(1, input?.page ?? 1);
@@ -318,14 +324,20 @@ export const appRouter = router({
       }),
 
     markBooked: tenantProcedure
-      .input(z.object({ leadId: z.number(), appointmentTime: z.date() }))
+      .input(z.object({ leadId: z.number(), appointmentTime: z.date(), trackingToken: z.string().optional(), estimatedRevenue: z.number().optional() }))
       .mutation(async ({ ctx, input }) => {
         const lead = await LeadService.getLeadById(ctx.db, ctx.tenantId, input.leadId);
         if (!lead) throw new TRPCError({ code: "NOT_FOUND" });
         await LeadService.updateLead(ctx.db, ctx.tenantId, input.leadId, { status: "booked", appointmentAt: input.appointmentTime });
         await LeadService.addLeadTags(ctx.db, ctx.tenantId, input.leadId, ["booked_client"]);
-        await emitEvent({ type: "appointment.booked", tenantId: ctx.tenantId, data: { leadId: input.leadId, appointmentTime: input.appointmentTime, phone: lead.phone, name: lead.name }, userId: ctx.user.id, timestamp: new Date() });
-        return { success: true };
+        // Attribute this conversion to the recovery automation that triggered it
+        const attribution = await RecoveryAttribution.markRecoveryConverted(ctx.db, ctx.tenantId, input.leadId, {
+          recoveredAppointmentId: `apt_${input.leadId}_${Date.now()}`,
+          estimatedRevenue: input.estimatedRevenue,
+          trackingToken: input.trackingToken,
+        });
+        await emitEvent({ type: "appointment.booked", tenantId: ctx.tenantId, data: { leadId: input.leadId, appointmentTime: input.appointmentTime, phone: lead.phone, name: lead.name, recoveryEventId: attribution.primaryEventId }, userId: ctx.user.id, timestamp: new Date() });
+        return { success: true, primaryRecoveryEventId: attribution.primaryEventId };
       }),
 
     markCancelled: tenantProcedure
@@ -619,16 +631,17 @@ export const appRouter = router({
   // ─── ANALYTICS ─────────────────────────────────────────────────────────────
   analytics: router({
     dashboard: tenantProcedure.input(z.object({ days: z.number().int().min(1).max(90).default(30) }).optional()).query(async ({ ctx, input }) => {
-      const [metrics, statusBreakdown, messageVolume, recentMessages, revenueMetrics, revenueTrends] = await Promise.all([
+      const [metrics, statusBreakdown, messageVolume, recentMessages, revenueMetrics, revenueTrends, attributedRevenue] = await Promise.all([
         AnalyticsService.getDashboardMetrics(ctx.db, ctx.tenantId),
         AnalyticsService.getLeadStatusBreakdown(ctx.db, ctx.tenantId),
         AnalyticsService.getMessageVolume(ctx.db, ctx.tenantId, input?.days ?? 30),
         LeadService.getRecentMessages(ctx.db, ctx.tenantId, 10),
         AnalyticsService.getRevenueRecoveryMetrics(ctx.db, ctx.tenantId),
         AnalyticsService.getRevenueTrends(ctx.db, ctx.tenantId, 90),
+        RecoveryAttribution.getAttributedRevenueMetrics(ctx.db, ctx.tenantId).catch(() => null),
       ]);
       const leakage = await AnalyticsService.getLeakageMetrics(ctx.db, ctx.tenantId);
-      return { metrics, statusBreakdown, messageVolume, recentMessages, leakage, revenueMetrics, revenueTrends };
+      return { metrics, statusBreakdown, messageVolume, recentMessages, leakage, revenueMetrics, revenueTrends, attributedRevenue };
     }),
 
     revenueLeakage: tenantProcedure.input(z.object({ days: z.number().int().min(1).max(365).default(90) })).query(async ({ ctx, input }) => {
@@ -676,6 +689,84 @@ export const appRouter = router({
         const analysis = await RecoveryService.analyzeRecoveryEffectiveness(ctx.db, ctx.tenantId, input.days);
         return analysis;
       }),
+
+    // ─── ATTRIBUTION-ACCURATE REVENUE METRICS ──────────────────────────────
+    attributedRevenue: tenantProcedure.query(async ({ ctx }) => {
+      return RecoveryAttribution.getAttributedRevenueMetrics(ctx.db, ctx.tenantId);
+    }),
+
+    automationAttribution: tenantProcedure.query(async ({ ctx }) => {
+      return RecoveryAttribution.getAutomationAttribution(ctx.db, ctx.tenantId);
+    }),
+
+    // ─── RECOVERY LEDGER (bank-statement-reconcilable export) ──────────────
+    recoveryLedger: tenantProcedure
+      .input(z.object({
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+        statusFilter: z.array(z.string()).optional(),
+        limit: z.number().int().min(1).max(1000).default(500),
+        offset: z.number().int().min(0).default(0),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        return RecoveryAttribution.getRecoveryLedger(ctx.db, ctx.tenantId, {
+          startDate: input?.startDate,
+          endDate: input?.endDate,
+          statusFilter: input?.statusFilter,
+          limit: input?.limit,
+          offset: input?.offset,
+        });
+      }),
+
+    exportRecoveryLedgerCSV: tenantProcedure
+      .input(z.object({
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        const { entries } = await RecoveryAttribution.getRecoveryLedger(ctx.db, ctx.tenantId, {
+          startDate: input?.startDate,
+          endDate: input?.endDate,
+          limit: 10000,
+        });
+        return { csv: RecoveryAttribution.ledgerToCSV(entries), count: entries.length };
+      }),
+
+    // ─── MANUAL RECOVERY MARKING (off-platform payments) ───────────────────
+    markManualRecovery: tenantProcedure
+      .input(z.object({
+        leadId: z.number(),
+        realizedRevenue: z.number().int().min(1), // in cents
+        notes: z.string().optional(),
+        recoveryEventId: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await RecoveryAttribution.markManualRecovery(ctx.db, ctx.tenantId, input.leadId, {
+          realizedRevenue: input.realizedRevenue,
+          notes: input.notes,
+          recoveryEventId: input.recoveryEventId,
+        });
+        return { success: true };
+      }),
+
+    // ─── MARK STRIPE PAYMENT AS REALIZED ───────────────────────────────────
+    markPaymentRealized: tenantProcedure
+      .input(z.object({
+        leadId: z.number(),
+        stripePaymentIntentId: z.string(),
+        stripeInvoiceId: z.string().optional(),
+        realizedRevenue: z.number().int().min(1), // in cents
+        recoveryEventId: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await RecoveryAttribution.markRecoveryRealized(ctx.db, ctx.tenantId, input.leadId, {
+          stripePaymentIntentId: input.stripePaymentIntentId,
+          stripeInvoiceId: input.stripeInvoiceId,
+          realizedRevenue: input.realizedRevenue,
+          recoveryEventId: input.recoveryEventId,
+        });
+        return { success: true };
+      }),
   }),
 
   // ─── PLANS ─────────────────────────────────────────────────────────────────
@@ -683,6 +774,22 @@ export const appRouter = router({
     list: publicProcedure.query(async ({ ctx }) => {
       if (!ctx.db) return [];
       return TenantService.getAllPlans(ctx.db);
+    }),
+  }),
+
+  // ─── PUBLIC PLATFORM STATS (landing page) ─────────────────────────────────
+  platformStats: router({
+    get: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.db) return { businesses: 0, messagesSent: 0, appointmentsRecovered: 0, revenueRecovered: 0 };
+      const [bizCount] = await ctx.db.select({ count: sql<number>`count(*)` }).from(tenants);
+      const [msgCount] = await ctx.db.select({ count: sql<number>`count(*)` }).from(messages).where(eq(messages.direction, "outbound"));
+      const [bookedCount] = await ctx.db.select({ count: sql<number>`count(*)` }).from(leads).where(eq(leads.status, "booked"));
+      return {
+        businesses: Number(bizCount?.count ?? 0),
+        messagesSent: Number(msgCount?.count ?? 0),
+        appointmentsRecovered: Number(bookedCount?.count ?? 0),
+        revenueRecovered: 0,
+      };
     }),
   }),
 
@@ -835,12 +942,12 @@ export const appRouter = router({
         await auditAdminRead(ctx, "admin.email.status");
         return EmailService.getConfigurationStatus();
       }),
-      
+
       test: adminProcedure.mutation(async ({ ctx }) => {
         await auditAdminRead(ctx, "admin.email.test");
         return EmailService.testEmailConfiguration();
       }),
-      
+
       send: adminProcedure
         .input(z.object({
           to: z.string().email(),
@@ -853,7 +960,67 @@ export const appRouter = router({
           return EmailService.sendEmail(input);
         }),
     }),
+    guarantee: router({
+      overview: adminProcedure.query(async ({ ctx }) => {
+        return RoiGuarantee.getGuaranteeOverview(ctx.db);
+      }),
+      evaluateAll: adminProcedure.mutation(async ({ ctx }) => {
+        return RoiGuarantee.evaluateAllGuarantees(ctx.db);
+      }),
+      evaluateTenant: adminProcedure
+        .input(z.object({ tenantId: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          return RoiGuarantee.evaluateGuarantee(ctx.db, input.tenantId);
+        }),
+      enroll: adminProcedure
+        .input(z.object({
+          subscriptionId: z.number(),
+          cohort: z.enum(["risk_free_20", "flex_10"]),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          return RoiGuarantee.enrollInGuarantee(ctx.db, input.subscriptionId, input.cohort);
+        }),
+      cohortAvailability: adminProcedure.query(async ({ ctx }) => {
+        const [riskFree, flex] = await Promise.all([
+          RoiGuarantee.isCohortAvailable(ctx.db, "risk_free_20"),
+          RoiGuarantee.isCohortAvailable(ctx.db, "flex_10"),
+        ]);
+        return { riskFree20: riskFree, flex10: flex };
+      }),
+    }),
   }),
+
+  // ─── GUARANTEE (tenant-facing) ─────────────────────────────────────────────
+  guarantee: router({
+    status: tenantProcedure.query(async ({ ctx }) => {
+      return RoiGuarantee.getGuaranteeStatus(ctx.db, ctx.tenantId);
+    }),
+    roi: tenantProcedure
+      .input(z.object({
+        periodStart: z.date().optional(),
+        periodEnd: z.date().optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        return RoiGuarantee.calculateTenantROI(
+          ctx.db,
+          ctx.tenantId,
+          input?.periodStart,
+          input?.periodEnd
+        );
+      }),
+  }),
+
+  // ─── STRIPE CHECKOUT ──────────────────────────────────────────────────────
+  stripeCheckout: router(stripeCheckoutRouter),
+
+  // ─── REFERRAL ─────────────────────────────────────────────────────────────
+  referral: router(referralRouter),
+
+  // ─── STRIPE CONNECT ───────────────────────────────────────────────────────
+  stripeConnect: stripeConnectRouter,
+
+  // ─── FEATURE CONFIG ────────────────────────────────────────────────────────
+  featureConfig: router(featureConfigRouter),
 });
 
 export type AppRouter = typeof appRouter;

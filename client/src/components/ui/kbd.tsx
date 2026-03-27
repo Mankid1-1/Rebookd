@@ -1,3 +1,4 @@
+import * as React from "react";
 import { cn } from "@/lib/utils";
 
 function Kbd({ className, ...props }: React.ComponentProps<"kbd">) {
@@ -15,9 +16,9 @@ function Kbd({ className, ...props }: React.ComponentProps<"kbd">) {
   );
 }
 
-function KbdGroup({ className, ...props }: React.ComponentProps<"div">) {
+function KbdGroup({ className, ...props }: React.ComponentProps<"span">) {
   return (
-    <kbd
+    <span
       data-slot="kbd-group"
       className={cn("inline-flex items-center gap-1", className)}
       {...props}

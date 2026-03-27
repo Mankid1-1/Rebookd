@@ -132,7 +132,11 @@ export async function sendSMS(to: string, body: string, from?: string, tenantId?
     }
   }
 
-  logger.warn("No SMS provider configured", { to });
+  if (process.env.NODE_ENV === "production") {
+    logger.error("No SMS provider configured in production — message not sent", { to });
+    return { success: false, error: "No SMS provider configured", provider: "none" };
+  }
+  logger.warn("No SMS provider configured (dev mode — faking success)", { to });
   return { success: true, sid: `dev_${Date.now()}`, provider: "dev" };
 }
 

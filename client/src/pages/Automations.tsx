@@ -1,3 +1,4 @@
+import React, { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,10 +13,9 @@ import { trpc } from "@/lib/trpc";
 import {
   Bot, Zap, Settings2, ChevronDown, ChevronUp, Clock, MessageSquare,
   CalendarCheck, UserX, XCircle, RotateCcw, Bell, Star, AlertTriangle,
-  ThumbsUp, Gift, RefreshCw, Info
+  ThumbsUp, Gift, RefreshCw, Search, Activity, ToggleRight, Send,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useState } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,7 +53,7 @@ interface AutomationTemplate {
   recommended?: boolean;
 }
 
-// ─── Catalogue ────────────────────────────────────────────────────────────────
+// ─── Catalogue (all 19 automations) ───────────────────────────────────────────
 
 const CATALOGUE: AutomationTemplate[] = [
   {
@@ -233,75 +233,6 @@ const CATALOGUE: AutomationTemplate[] = [
     planRequired: "growth",
   },
   {
-    key: "next_visit_prompt",
-    name: "Next Visit Prompt",
-    category: "follow_up",
-    icon: CalendarCheck,
-    description: "Prompts recent clients to lock in their next appointment before they go cold.",
-    defaultMessage: "Thanks again for visiting {{business}}. Want to get your next appointment on the calendar now?",
-    configFields: [
-      { key: "delayDays", label: "Send after visit", type: "number", unit: "days", placeholder: "3", defaultValue: 3 },
-      { key: "message", label: "Message", type: "textarea", defaultValue: "Thanks again for visiting {{business}}. Want to get your next appointment on the calendar now?" },
-    ],
-    planRequired: "growth",
-    recommended: true,
-  },
-  {
-    key: "win_back_30d",
-    name: "30-Day Win-Back",
-    category: "reactivation",
-    icon: RotateCcw,
-    description: "Re-engages clients who haven't visited in 30 days with a gentle check-in.",
-    defaultMessage: "Hey {{name}}, it's been a little while since we've seen you at {{business}}! We'd love to have you back. Great availability this week — reply to book.",
-    configFields: [
-      { key: "delayDays", label: "Days since last visit", type: "number", unit: "days", placeholder: "30", defaultValue: 30 },
-      { key: "message", label: "Message", type: "textarea", defaultValue: "Hey {{name}}, it's been a little while! We'd love to have you back. Reply to book or call us." },
-    ],
-    planRequired: "growth",
-  },
-  {
-    key: "win_back_90d",
-    name: "90-Day Re-engagement",
-    category: "reactivation",
-    icon: Gift,
-    description: "Wins back lapsed clients who haven't visited in 90 days with a special offer.",
-    defaultMessage: "Hi {{name}}, we miss you! It's been a while since your last visit to {{business}}. We'd love to welcome you back with a special offer — reply YES to claim it!",
-    configFields: [
-      { key: "delayDays", label: "Days since last visit", type: "number", unit: "days", placeholder: "90", defaultValue: 90 },
-      { key: "offerText", label: "Comeback offer", type: "text", placeholder: "e.g. 15% off", defaultValue: "15% off your next visit" },
-      { key: "message", label: "Message", type: "textarea", defaultValue: "Hi {{name}}, we miss you! It's been a while. Reply YES to claim a special comeback offer." },
-    ],
-    planRequired: "scale",
-    recommended: true,
-  },
-  {
-    key: "vip_winback_45d",
-    name: "VIP Win-Back (45 Days)",
-    category: "reactivation",
-    icon: Star,
-    description: "Reactivates your highest-value clients before they fully lapse.",
-    defaultMessage: "Hi {{name}}, we've missed you at {{business}}. Want priority booking for your next visit? Reply VIP.",
-    configFields: [
-      { key: "delayDays", label: "Days since last visit", type: "number", unit: "days", placeholder: "45", defaultValue: 45 },
-      { key: "message", label: "Message", type: "textarea", defaultValue: "Hi {{name}}, we've missed you at {{business}}. Want priority booking for your next visit? Reply VIP." },
-    ],
-    planRequired: "scale",
-  },
-  {
-    key: "vip_winback_90d",
-    name: "VIP Win-Back (90 Days)",
-    category: "reactivation",
-    icon: Gift,
-    description: "A stronger comeback ask for VIP clients who have stayed away longer.",
-    defaultMessage: "We've saved a special comeback offer for you at {{business}}. Reply YES if you want first pick of availability.",
-    configFields: [
-      { key: "delayDays", label: "Days since last visit", type: "number", unit: "days", placeholder: "90", defaultValue: 90 },
-      { key: "message", label: "Message", type: "textarea", defaultValue: "We've saved a special comeback offer for you at {{business}}. Reply YES if you want first pick of availability." },
-    ],
-    planRequired: "scale",
-    recommended: true,
-  },
-  {
     key: "new_lead_welcome",
     name: "New Lead Welcome",
     category: "welcome",
@@ -341,57 +272,32 @@ const CATALOGUE: AutomationTemplate[] = [
     planRequired: "starter",
   },
   {
-    key: "qualified_followup_1d",
-    name: "Qualified Follow-Up (1 Day)",
-    category: "follow_up",
-    icon: MessageSquare,
-    description: "Checks back with qualified leads who still have not booked.",
-    defaultMessage: "Hi {{name}}, just checking in from {{business}}. Want me to help you grab a time?",
+    key: "win_back_30d",
+    name: "30-Day Win-Back",
+    category: "reactivation",
+    icon: RotateCcw,
+    description: "Re-engages clients who haven't visited in 30 days with a gentle check-in.",
+    defaultMessage: "Hey {{name}}, it's been a little while since we've seen you at {{business}}! We'd love to have you back. Great availability this week — reply to book.",
     configFields: [
-      { key: "delayDays", label: "Days after qualification", type: "number", unit: "days", placeholder: "1", defaultValue: 1 },
-      { key: "message", label: "Message", type: "textarea", defaultValue: "Hi {{name}}, just checking in from {{business}}. Want me to help you grab a time?" },
+      { key: "delayDays", label: "Days since last visit", type: "number", unit: "days", placeholder: "30", defaultValue: 30 },
+      { key: "message", label: "Message", type: "textarea", defaultValue: "Hey {{name}}, it's been a little while! We'd love to have you back. Reply to book or call us." },
     ],
-    planRequired: "starter",
+    planRequired: "growth",
   },
   {
-    key: "qualified_followup_3d",
-    name: "Qualified Follow-Up (3 Days)",
-    category: "follow_up",
-    icon: RefreshCw,
-    description: "Second touch for qualified leads still sitting without an appointment.",
-    defaultMessage: "Still interested in booking with {{business}}? Reply YES and we'll help you lock in a spot.",
+    key: "win_back_90d",
+    name: "90-Day Re-engagement",
+    category: "reactivation",
+    icon: Gift,
+    description: "Wins back lapsed clients who haven't visited in 90 days with a special offer.",
+    defaultMessage: "Hi {{name}}, we miss you! It's been a while since your last visit to {{business}}. We'd love to welcome you back with a special offer — reply YES to claim it!",
     configFields: [
-      { key: "delayDays", label: "Days after qualification", type: "number", unit: "days", placeholder: "3", defaultValue: 3 },
-      { key: "message", label: "Message", type: "textarea", defaultValue: "Still interested in booking with {{business}}? Reply YES and we'll help you lock in a spot." },
+      { key: "delayDays", label: "Days since last visit", type: "number", unit: "days", placeholder: "90", defaultValue: 90 },
+      { key: "offerText", label: "Comeback offer", type: "text", placeholder: "e.g. 15% off", defaultValue: "15% off your next visit" },
+      { key: "message", label: "Message", type: "textarea", defaultValue: "Hi {{name}}, we miss you! It's been a while. Reply YES to claim a special comeback offer." },
     ],
-    planRequired: "starter",
-  },
-  {
-    key: "inbound_response_sla",
-    name: "Inbound Auto-Reply",
-    category: "follow_up",
-    icon: Bell,
-    description: "Automatically acknowledges inbound messages if staff have not replied fast enough.",
-    defaultMessage: "Thanks for reaching out to {{business}}. We got your message and will text you back shortly.",
-    configFields: [
-      { key: "delayMinutes", label: "Reply after", type: "number", unit: "minutes", placeholder: "10", defaultValue: 10 },
-      { key: "message", label: "Message", type: "textarea", defaultValue: "Thanks for reaching out to {{business}}. We got your message and will text you back shortly." },
-    ],
-    planRequired: "starter",
+    planRequired: "scale",
     recommended: true,
-  },
-  {
-    key: "delivery_failure_retry",
-    name: "Delivery Failure Recovery",
-    category: "follow_up",
-    icon: AlertTriangle,
-    description: "Retries or recovers conversations when an outbound SMS fails.",
-    defaultMessage: "We had trouble reaching you earlier. If you still want to book with {{business}}, reply here and we'll help.",
-    configFields: [
-      { key: "delayMinutes", label: "Retry after", type: "number", unit: "minutes", placeholder: "15", defaultValue: 15 },
-      { key: "message", label: "Message", type: "textarea", defaultValue: "We had trouble reaching you earlier. If you still want to book with {{business}}, reply here and we'll help." },
-    ],
-    planRequired: "starter",
   },
   {
     key: "birthday_promo",
@@ -425,19 +331,19 @@ const CATALOGUE: AutomationTemplate[] = [
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const CATEGORY_CONFIG: Record<AutomationCategory, { label: string; bg: string }> = {
-  appointment: { label: "Appointment", bg: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
-  no_show: { label: "No-Show", bg: "bg-red-500/15 text-red-300 border-red-500/30" },
-  cancellation: { label: "Cancellation", bg: "bg-orange-500/15 text-orange-300 border-orange-500/30" },
-  follow_up: { label: "Follow-Up", bg: "bg-blue-500/15 text-blue-300 border-blue-500/30" },
-  reactivation: { label: "Re-Engagement", bg: "bg-purple-500/15 text-purple-300 border-purple-500/30" },
-  welcome: { label: "Welcome", bg: "bg-yellow-500/15 text-yellow-300 border-yellow-500/30" },
-  loyalty: { label: "Loyalty", bg: "bg-pink-500/15 text-pink-300 border-pink-500/30" },
+  appointment: { label: "Appointment", bg: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
+  no_show: { label: "No-Show", bg: "bg-red-500/10 text-red-400 border-red-500/30" },
+  cancellation: { label: "Cancellation", bg: "bg-orange-500/10 text-orange-400 border-orange-500/30" },
+  follow_up: { label: "Follow-Up", bg: "bg-blue-500/10 text-blue-400 border-blue-500/30" },
+  reactivation: { label: "Re-Engagement", bg: "bg-purple-500/10 text-purple-400 border-purple-500/30" },
+  welcome: { label: "Welcome", bg: "bg-yellow-500/10 text-yellow-400 border-yellow-500/30" },
+  loyalty: { label: "Loyalty", bg: "bg-pink-500/10 text-pink-400 border-pink-500/30" },
 };
 
 const PLAN_BADGE: Record<string, string> = {
-  starter: "bg-slate-500/20 text-slate-300 border-slate-500/30",
-  growth: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  scale: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+  starter: "bg-slate-500/10 text-slate-400 border-slate-500/30",
+  growth: "bg-blue-500/10 text-blue-400 border-blue-500/30",
+  scale: "bg-purple-500/10 text-purple-400 border-purple-500/30",
 };
 
 const CATEGORIES: Array<{ key: AutomationCategory | "all"; label: string }> = [
@@ -450,6 +356,25 @@ const CATEGORIES: Array<{ key: AutomationCategory | "all"; label: string }> = [
   { key: "welcome", label: "Welcome" },
   { key: "loyalty", label: "Loyalty" },
 ];
+
+// ─── Skeleton Card ────────────────────────────────────────────────────────────
+
+function SkeletonCard() {
+  return (
+    <Card className="border-border bg-card/60 animate-pulse">
+      <CardContent className="p-0">
+        <div className="flex items-center gap-4 p-4">
+          <div className="w-10 h-10 rounded-xl bg-muted/50 shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-4 w-40 bg-muted/50 rounded" />
+            <div className="h-3 w-64 bg-muted/30 rounded" />
+          </div>
+          <div className="h-6 w-11 bg-muted/50 rounded-full" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 // ─── Configure Dialog ─────────────────────────────────────────────────────────
 
@@ -506,14 +431,14 @@ function ConfigureDialog({
                   <p className="text-[11px] text-muted-foreground mt-1">
                     Variables: {"{{name}}"}, {"{{business}}"}, {"{{time}}"}, {"{{date}}"}, {"{{phone}}"}
                   </p>
-                    {config[field.key] && String(config[field.key]).length > 10 && (
-                      <div className="mt-2 p-2.5 bg-muted/40 rounded-lg border border-border">
-                        <p className="text-[10px] text-muted-foreground font-medium mb-1">Preview</p>
-                        <p className="text-xs text-foreground/80 leading-relaxed">
-                          {String(config[field.key]).replace(/\{\{name\}\}/g, "Jane").replace(/\{\{business\}\}/g, "Your Business").replace(/\{\{time\}\}/g, "2:00 PM").replace(/\{\{date\}\}/g, "Mon Mar 24").replace(/\{\{phone\}\}/g, "+1 555 0000000")}
-                        </p>
-                      </div>
-                    )}
+                  {config[field.key] && String(config[field.key]).length > 10 && (
+                    <div className="mt-2 p-2.5 bg-muted/40 rounded-lg border border-border">
+                      <p className="text-[10px] text-muted-foreground font-medium mb-1">Preview</p>
+                      <p className="text-xs text-foreground/80 leading-relaxed">
+                        {String(config[field.key]).replace(/\{\{name\}\}/g, "Jane").replace(/\{\{business\}\}/g, "Your Business").replace(/\{\{time\}\}/g, "2:00 PM").replace(/\{\{date\}\}/g, "Mon Mar 24").replace(/\{\{phone\}\}/g, "+1 555 0000000")}
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : field.type === "select" ? (
                 <Select
@@ -558,7 +483,7 @@ function AutomationRow({
   isToggling,
 }: {
   template: AutomationTemplate;
-  saved?: { id?: number; enabled: boolean; runCount: number; errorCount?: number; config?: Record<string, string | number> };
+  saved?: { id?: number; enabled: boolean; runCount: number; errorCount?: number; lastRunAt?: string | Date | null; config?: Record<string, string | number> };
   onToggle: (enabled: boolean) => void;
   onConfigure: () => void;
   isToggling?: boolean;
@@ -570,37 +495,51 @@ function AutomationRow({
       setTestPhone("");
       toast.success("Test automation sent");
     },
-    onError: (err) => {
-      toast.error(err.message);
-    },
+    onError: (err) => toast.error(err.message),
   });
 
   const Icon = template.icon;
   const isEnabled = saved?.enabled ?? false;
   const cat = CATEGORY_CONFIG[template.category];
 
+  const lastTriggered = saved?.lastRunAt
+    ? new Date(saved.lastRunAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+    : null;
+
   return (
     <Card className={`border transition-all ${isEnabled ? "border-primary/20 bg-card" : "border-border bg-card/60"}`}>
       <CardContent className="p-0">
         <div className="flex items-center gap-4 p-4">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isEnabled ? "bg-primary/10" : "bg-muted"}`}>
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isEnabled ? "bg-primary/10" : "bg-muted/30"}`}>
             <Icon className={`w-4 h-4 ${isEnabled ? "text-primary" : "text-muted-foreground"}`} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-medium text-sm">{template.name}</span>
               {template.recommended && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-yellow-500/10 text-yellow-400 border-yellow-500/30">★ Recommended</Badge>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-yellow-500/10 text-yellow-400 border-yellow-500/30">Recommended</Badge>
               )}
               <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${cat.bg}`}>{cat.label}</Badge>
               <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${PLAN_BADGE[template.planRequired]}`}>{template.planRequired}</Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{template.description}</p>
-            {saved && (
-              <p className="text-[11px] text-muted-foreground/60 mt-0.5">
-                Ran {saved.runCount} times{saved.errorCount ? ` · ${saved.errorCount} errors` : ""}
-              </p>
-            )}
+            <div className="flex items-center gap-3 mt-1">
+              <span className="text-[11px] text-muted-foreground/70">
+                Triggered {saved?.runCount ?? 0} times
+              </span>
+              <span className="text-[11px] text-muted-foreground/50">|</span>
+              <span className="text-[11px] text-muted-foreground/70">
+                Last: {lastTriggered ?? "Never"}
+              </span>
+              {(saved?.errorCount ?? 0) > 0 && (
+                <>
+                  <span className="text-[11px] text-muted-foreground/50">|</span>
+                  <span className="text-[11px] text-red-400/70">
+                    {saved!.errorCount} errors
+                  </span>
+                </>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Button
@@ -623,21 +562,20 @@ function AutomationRow({
         </div>
         {expanded && (
           <div className="px-4 pb-4 border-t border-border/50 pt-3">
-            <div className="bg-muted/30 rounded-lg p-3">
+            <div className="bg-muted/20 rounded-lg p-3">
               <p className="text-xs font-medium text-muted-foreground mb-1.5">Default message preview</p>
               <p className="text-xs text-foreground/80 leading-relaxed">{template.defaultMessage}</p>
             </div>
             {saved?.config && Object.keys(saved.config).filter(k => k !== "message").length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {Object.entries(saved.config).filter(([k]) => k !== "message").map(([k, v]) => (
-                  <div key={k} className="flex items-center gap-1 bg-muted/50 rounded px-2 py-1 text-xs">
+                  <div key={k} className="flex items-center gap-1 bg-muted/30 rounded px-2 py-1 text-xs">
                     <span className="text-muted-foreground capitalize">{k.replace(/([A-Z])/g, " $1").toLowerCase()}:</span>
                     <span className="font-medium">{String(v)}</span>
                   </div>
                 ))}
               </div>
             )}
-
             <div className="mt-4 border-t border-border pt-3">
               <p className="text-xs font-medium text-muted-foreground mb-2">Test this automation</p>
               <div className="flex gap-2">
@@ -671,21 +609,19 @@ function AutomationRow({
 export default function Automations() {
   const utils = trpc.useUtils();
   const [activeCategory, setActiveCategory] = useState<AutomationCategory | "all">("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [configTarget, setConfigTarget] = useState<AutomationKey | null>(null);
-  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
-  const templatesQuery = trpc.automations.catalog.useQuery();
-  const activateTemplate = trpc.automations.activateTemplate.useMutation({
-    onSuccess: () => {
-      toast.success("Template automation created");
-      setShowTemplatePicker(false);
-      utils.automations.list.invalidate();
-    },
-    onError: (err) => {
-      toast.error(err.message);
-    },
-  });
 
-  const { data: savedList = [] } = trpc.automations.list.useQuery(undefined, { retry: false });
+  const { data: savedList, isLoading } = trpc.automations.list.useQuery(undefined, { retry: false });
+  const savedArray = (savedList ?? []) as Array<{
+    id?: number;
+    key: string;
+    enabled: boolean;
+    runCount: number;
+    errorCount?: number;
+    lastRunAt?: Date | string | null;
+    triggerConfig?: Record<string, unknown>;
+  }>;
 
   const [togglingKey, setTogglingKey] = useState<string | null>(null);
 
@@ -708,128 +644,163 @@ export default function Automations() {
     onError: (err) => toast.error(err.message),
   });
 
-  type SavedItem = { id?: number; key: string; enabled: boolean; runCount: number; errorCount?: number; lastRunAt?: Date | string; triggerConfig?: Record<string, unknown> };
-  const savedMap: Record<string, SavedItem> = {};
-  for (const s of savedList as SavedItem[]) {
-    if (s.key) savedMap[s.key] = s;
-  }
+  const savedMap = useMemo(() => {
+    const map: Record<string, (typeof savedArray)[number]> = {};
+    for (const s of savedArray) {
+      if (s.key) map[s.key] = s;
+    }
+    return map;
+  }, [savedArray]);
 
-  const filtered = CATALOGUE.filter((t) => activeCategory === "all" || t.category === activeCategory);
+  // Stats
   const enabledCount = CATALOGUE.filter((t) => savedMap[t.key]?.enabled).length;
-  const configTemplate = configTarget ? CATALOGUE.find((t) => t.key === configTarget) : null;
+  const totalTriggeredThisMonth = savedArray.reduce((sum, s) => sum + (s.runCount ?? 0), 0);
+  const totalErrors = savedArray.reduce((sum, s) => sum + (s.errorCount ?? 0), 0);
 
-  const configuredCount = CATALOGUE.filter((t) => savedMap[t.key]?.triggerConfig).length;
+  // Filter & search
+  const filtered = useMemo(() => {
+    let list = CATALOGUE;
+    if (activeCategory !== "all") {
+      list = list.filter((t) => t.category === activeCategory);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (t) =>
+          t.name.toLowerCase().includes(q) ||
+          t.description.toLowerCase().includes(q) ||
+          t.category.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [activeCategory, searchQuery]);
+
+  const configTemplate = configTarget ? CATALOGUE.find((t) => t.key === configTarget) : null;
 
   return (
     <DashboardLayout>
       <div className="p-6 space-y-5 max-w-4xl mx-auto">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Automations</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              {enabledCount} active · {configuredCount} configured · {CATALOGUE.length} total
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button size="sm" onClick={() => setShowTemplatePicker(true)}>Create automation</Button>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
-              <Info className="w-3.5 h-3.5 shrink-0" />
-              <span>When this happens → Then do this</span>
-            </div>
-          </div>
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+            Automations
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Manage your SMS automations. {CATALOGUE.length} templates available.
+          </p>
         </div>
 
-        {/* Getting started banner — only shown when nothing is enabled */}
-        {enabledCount === 0 && (
-          <div className="border border-primary/20 bg-primary/5 rounded-xl p-4">
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                <Zap className="w-4 h-4 text-primary" />
+        {/* Stats summary */}
+        <div className="grid grid-cols-3 gap-3">
+          <Card className="border-border bg-card">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                <ToggleRight className="w-4 h-4 text-emerald-400" />
               </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium mb-1">No automations active yet</p>
-                <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                  Start with 3 quick wins: enable the <strong className="text-foreground">24-Hour Reminder</strong>, <strong className="text-foreground">No-Show Check-In</strong>, and <strong className="text-foreground">New Lead Welcome</strong>. Each takes under a minute to configure.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {["appointment_reminder_24h", "no_show_follow_up", "new_lead_welcome"].map((key) => {
-                    const t = CATALOGUE.find((x) => x.key === key);
-                    if (!t) return null;
-                    return (
-                      <button
-                        key={key}
-                        onClick={() => setConfigTarget(key as AutomationKey)}
-                        className="text-xs px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all font-medium"
-                      >
-                        {t.name} →
-                      </button>
-                    );
-                  })}
-                </div>
+              <div>
+                <p className="text-xl font-bold">{isLoading ? "-" : enabledCount}</p>
+                <p className="text-xs text-muted-foreground">Active</p>
               </div>
-            </div>
-          </div>
-        )}
-
-        <div className="flex gap-2 flex-wrap">
-          {CATEGORIES.map(({ key, label }) => {
-            const count = key === "all" ? CATALOGUE.length : CATALOGUE.filter((t) => t.category === key).length;
-            return (
-              <button
-                key={key}
-                onClick={() => setActiveCategory(key)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
-                  activeCategory === key
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-transparent text-muted-foreground border-border hover:border-primary/30 hover:text-foreground"
-                }`}
-              >
-                {label} <span className="opacity-60 ml-1">{count}</span>
-              </button>
-            );
-          })}
+            </CardContent>
+          </Card>
+          <Card className="border-border bg-card">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                <Activity className="w-4 h-4 text-blue-400" />
+              </div>
+              <div>
+                <p className="text-xl font-bold">{isLoading ? "-" : totalTriggeredThisMonth}</p>
+                <p className="text-xs text-muted-foreground">Triggered</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-border bg-card">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                <Send className="w-4 h-4 text-violet-400" />
+              </div>
+              <div>
+                <p className="text-xl font-bold">{isLoading ? "-" : (totalTriggeredThisMonth - totalErrors)}</p>
+                <p className="text-xs text-muted-foreground">Delivered</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {showTemplatePicker && (
-          <div className="border border-primary/20 bg-primary/5 rounded-xl p-4 mb-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="font-medium">Choose a template</p>
-              <Button variant="ghost" size="sm" onClick={() => setShowTemplatePicker(false)}>Close</Button>
-            </div>
-            <div className="grid grid-cols-1 gap-2">
-              {templatesQuery.isLoading && <p className="text-sm text-muted-foreground">Loading templates...</p>}
-              {templatesQuery.data?.map((tpl) => (
+        {/* Search + filter */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search automations..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 text-sm"
+            />
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {CATEGORIES.map(({ key, label }) => {
+              const count = key === "all" ? CATALOGUE.length : CATALOGUE.filter((t) => t.category === key).length;
+              return (
                 <button
-                  key={tpl.key}
-                  className="text-left p-2 bg-white/80 rounded border border-border hover:border-primary"
-                  onClick={() => activateTemplate.mutate({ templateKey: tpl.key })}
+                  key={key}
+                  onClick={() => setActiveCategory(key)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                    activeCategory === key
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-transparent text-muted-foreground border-border hover:border-primary/30 hover:text-foreground"
+                  }`}
                 >
-                  <p className="font-medium">{tpl.name}</p>
-                  <p className="text-[11px] text-muted-foreground">Trigger {tpl.trigger}</p>
+                  {label} <span className="opacity-60 ml-0.5">{count}</span>
                 </button>
-              ))}
-            </div>
+              );
+            })}
           </div>
-        )}
+        </div>
 
+        {/* Automation list */}
         <div className="space-y-3">
-          {filtered.map((template) => {
-            const saved = savedMap[template.key];
-            return (
-              <AutomationRow
-                key={template.key}
-                template={template}
-                saved={saved ? {
-                  enabled: saved.enabled,
-                  runCount: saved.runCount,
-                  config: saved.triggerConfig as Record<string, string | number> | undefined,
-                } : undefined}
-                onToggle={(enabled) => toggleMutation.mutate({ key: template.key, enabled })}
-                onConfigure={() => setConfigTarget(template.key)}
-                isToggling={togglingKey === template.key}
-              />
-            );
-          })}
+          {isLoading ? (
+            <>
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+            </>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-12">
+              <Bot className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">No automations match your search.</p>
+              <Button variant="ghost" size="sm" className="mt-2" onClick={() => { setSearchQuery(""); setActiveCategory("all"); }}>
+                Clear filters
+              </Button>
+            </div>
+          ) : (
+            filtered.map((template) => {
+              const saved = savedMap[template.key];
+              return (
+                <AutomationRow
+                  key={template.key}
+                  template={template}
+                  saved={saved ? {
+                    id: saved.id,
+                    enabled: saved.enabled,
+                    runCount: saved.runCount,
+                    errorCount: saved.errorCount,
+                    lastRunAt: saved.lastRunAt,
+                    config: saved.triggerConfig as Record<string, string | number> | undefined,
+                  } : undefined}
+                  onToggle={(enabled) => {
+                    setTogglingKey(template.key);
+                    toggleMutation.mutate({ key: template.key, enabled });
+                  }}
+                  onConfigure={() => setConfigTarget(template.key)}
+                  isToggling={togglingKey === template.key}
+                />
+              );
+            })
+          )}
         </div>
       </div>
 

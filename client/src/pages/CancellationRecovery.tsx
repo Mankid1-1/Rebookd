@@ -9,18 +9,19 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { 
-  RefreshCw, 
-  Users, 
-  TrendingUp, 
-  Calendar, 
-  Clock, 
+import {
+  RefreshCw,
+  Users,
+  TrendingUp,
+  Calendar,
+  Clock,
   AlertTriangle,
   Zap,
   Settings,
   Bell,
   ArrowRight,
-  Phone
+  Phone,
+  MessageSquare
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -34,32 +35,56 @@ export default function CancellationRecovery() {
     fillRateTarget: 45 // 45% target fill rate
   });
 
-  const { data: metrics, isLoading } = trpc.analytics.cancellationRecoveryMetrics.useQuery(undefined, { refetchInterval: 30000 });
-  const { data: settings } = trpc.tenant.settings.useQuery(undefined, { retry: false });
-  const updateConfig = trpc.tenant.updateCancellationRecoveryConfig.useMutation({
-    onSuccess: () => toast.success("Cancellation recovery configuration updated"),
-    onError: (err) => toast.error(err.message)
+  const { data: dashData, isLoading } = trpc.analytics.dashboard.useQuery(undefined, { refetchInterval: 30000 });
+  const metrics: any = dashData?.metrics;
+  const { data: settings } = trpc.tenant.get.useQuery(undefined, { retry: false });
+  const { data: savedConfig } = trpc.featureConfig.get.useQuery(
+    { feature: "cancellation-recovery" },
+    { retry: false }
+  );
+  const saveConfig = trpc.featureConfig.save.useMutation({
+    onSuccess: () => toast.success("Configuration saved"),
+    onError: (err) => toast.error(err.message),
   });
 
   useEffect(() => {
-    if (settings?.cancellationRecoveryConfig) {
-      setConfig(settings.cancellationRecoveryConfig);
+    if (savedConfig?.config) {
+      setConfig((prev) => ({ ...prev, ...(savedConfig.config as any) }));
     }
-  }, [settings]);
+  }, [savedConfig]);
 
   const handleSaveConfig = () => {
-    updateConfig.mutate(config);
+    saveConfig.mutate({ feature: "cancellation-recovery", config: config as any });
   };
 
   const handleTestRebooking = () => {
-    toast.success("Test instant rebooking sent successfully");
+    toast.info("To test, add a lead with a phone number first. The automation will trigger automatically.");
   };
 
   const handleTriggerBroadcast = () => {
-    toast.success("Open slot broadcast triggered");
+    toast.info("To test, add a lead with a phone number first. The automation will trigger automatically.");
   };
 
-  if (isLoading) return <DashboardLayout>Loading...</DashboardLayout>;
+  const recoveryRate = metrics?.leadCount > 0
+    ? Math.round((metrics.bookedCount / metrics.leadCount) * 100)
+    : 0;
+
+  if (isLoading) return (
+    <DashboardLayout>
+      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+        <div className="h-10 w-64 bg-muted rounded animate-pulse" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}><CardContent className="p-4"><div className="h-16 bg-muted rounded animate-pulse" /></CardContent></Card>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card><CardContent className="p-6"><div className="h-48 bg-muted rounded animate-pulse" /></CardContent></Card>
+          <Card><CardContent className="p-6"><div className="h-48 bg-muted rounded animate-pulse" /></CardContent></Card>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
 
   return (
     <DashboardLayout>
@@ -93,54 +118,54 @@ export default function CancellationRecovery() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-red-100 rounded-lg mr-3">
-                  <AlertTriangle className="h-6 w-6 text-red-600" />
+                <div className="p-2 bg-red-500/10 rounded-lg mr-3">
+                  <Users className="h-6 w-6 text-red-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total Cancellations</p>
-                  <p className="text-2xl font-bold">{metrics?.totalCancellations || 0}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Leads Contacted</p>
+                  <p className="text-2xl font-bold">{metrics?.contactedCount || 0}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg mr-3">
-                  <TrendingUp className="h-6 w-6 text-green-600" />
+                <div className="p-2 bg-green-500/10 rounded-lg mr-3">
+                  <TrendingUp className="h-6 w-6 text-green-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Slots Filled</p>
-                  <p className="text-2xl font-bold">{metrics?.filledSlots || 0}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Appointments Recovered</p>
+                  <p className="text-2xl font-bold">{metrics?.bookedCount || 0}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                  <Users className="h-6 w-6 text-blue-600" />
+                <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
+                  <Zap className="h-6 w-6 text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Fill Rate</p>
-                  <p className="text-2xl font-bold">{metrics?.fillRate || 0}%</p>
+                  <p className="text-sm font-medium text-muted-foreground">Recovery Rate</p>
+                  <p className="text-2xl font-bold">{recoveryRate}%</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-100 rounded-lg mr-3">
-                  <Zap className="h-6 w-6 text-purple-600" />
+                <div className="p-2 bg-purple-500/10 rounded-lg mr-3">
+                  <MessageSquare className="h-6 w-6 text-purple-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Revenue Impact</p>
-                  <p className="text-2xl font-bold">${((metrics?.revenueImpact || 0) / 100).toFixed(0)}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Messages Sent</p>
+                  <p className="text-2xl font-bold">{metrics?.messagesSent || 0}</p>
                 </div>
               </div>
             </CardContent>
@@ -161,7 +186,7 @@ export default function CancellationRecovery() {
                   <TabsTrigger value="broadcast">Broadcast</TabsTrigger>
                   <TabsTrigger value="advanced">Advanced</TabsTrigger>
                 </TabsList>
-                
+
                 <TabsContent value="instant" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -169,12 +194,12 @@ export default function CancellationRecovery() {
                       <Switch
                         id="instant-rebooking"
                         checked={config.instantRebooking}
-                        onCheckedChange={(checked) => 
+                        onCheckedChange={(checked) =>
                           setConfig(prev => ({ ...prev, instantRebooking: checked }))
                         }
                       />
                     </div>
-                    <div className="p-4 bg-green-50 rounded-lg">
+                    <div className="p-4 bg-green-500/10 rounded-lg">
                       <h4 className="font-medium mb-2">Instant Rebooking Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Immediate slot offers to waitlist</li>
@@ -185,7 +210,7 @@ export default function CancellationRecovery() {
                     </div>
                   </div>
                 </TabsContent>
-                
+
                 <TabsContent value="waitlist" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -193,12 +218,12 @@ export default function CancellationRecovery() {
                       <Switch
                         id="waitlist-fill"
                         checked={config.waitlistAutoFill}
-                        onCheckedChange={(checked) => 
+                        onCheckedChange={(checked) =>
                           setConfig(prev => ({ ...prev, waitlistAutoFill: checked }))
                         }
                       />
                     </div>
-                    <div className="p-4 bg-blue-50 rounded-lg">
+                    <div className="p-4 bg-blue-500/10 rounded-lg">
                       <h4 className="font-medium mb-2">Waitlist Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Automatic gap filling</li>
@@ -209,7 +234,7 @@ export default function CancellationRecovery() {
                     </div>
                   </div>
                 </TabsContent>
-                
+
                 <TabsContent value="broadcast" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -217,7 +242,7 @@ export default function CancellationRecovery() {
                       <Switch
                         id="broadcast-slots"
                         checked={config.broadcastOpenSlots}
-                        onCheckedChange={(checked) => 
+                        onCheckedChange={(checked) =>
                           setConfig(prev => ({ ...prev, broadcastOpenSlots: checked }))
                         }
                       />
@@ -227,14 +252,14 @@ export default function CancellationRecovery() {
                       <Input
                         type="number"
                         value={config.fillRateTarget}
-                        onChange={(e) => 
+                        onChange={(e) =>
                           setConfig(prev => ({ ...prev, fillRateTarget: parseInt(e.target.value) }))
                         }
                         min={10}
                         max={100}
                       />
                     </div>
-                    <div className="p-4 bg-purple-50 rounded-lg">
+                    <div className="p-4 bg-purple-500/10 rounded-lg">
                       <h4 className="font-medium mb-2">Broadcast Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Mass notification system</li>
@@ -245,7 +270,7 @@ export default function CancellationRecovery() {
                     </div>
                   </div>
                 </TabsContent>
-                
+
                 <TabsContent value="advanced" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -253,12 +278,12 @@ export default function CancellationRecovery() {
                       <Switch
                         id="urgency-messaging"
                         checked={config.urgencyMessaging}
-                        onCheckedChange={(checked) => 
+                        onCheckedChange={(checked) =>
                           setConfig(prev => ({ ...prev, urgencyMessaging: checked }))
                         }
                       />
                     </div>
-                    <div className="p-4 bg-orange-50 rounded-lg">
+                    <div className="p-4 bg-orange-500/10 rounded-lg">
                       <h4 className="font-medium mb-2">Advanced Options</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Custom urgency templates</li>
@@ -279,45 +304,10 @@ export default function CancellationRecovery() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex items-center">
-                    <RefreshCw className="h-4 w-4 mr-2 text-green-600" />
-                    <div>
-                      <span className="font-medium">Instant Rebooking</span>
-                      <p className="text-xs text-muted-foreground">John Doe - 2:00 PM slot</p>
-                    </div>
-                  </div>
-                  <Badge className="bg-green-100 text-green-800">Just now</Badge>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex items-center">
-                    <Users className="h-4 w-4 mr-2 text-blue-600" />
-                    <div>
-                      <span className="font-medium">Waitlist Notified</span>
-                      <p className="text-xs text-muted-foreground">5 leads contacted</p>
-                    </div>
-                  </div>
-                  <Badge className="bg-blue-100 text-blue-800">2 min ago</Badge>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex items-center">
-                    <Bell className="h-4 w-4 mr-2 text-purple-600" />
-                    <div>
-                      <span className="font-medium">Slots Broadcasted</span>
-                      <p className="text-xs text-muted-foreground">20 leads notified</p>
-                    </div>
-                  </div>
-                  <Badge className="bg-purple-100 text-purple-800">5 min ago</Badge>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex items-center">
-                    <Phone className="h-4 w-4 mr-2 text-orange-600" />
-                    <div>
-                      <span className="font-medium">Slot Filled</span>
-                      <p className="text-xs text-muted-foreground">Jane Smith - 3:00 PM</p>
-                    </div>
-                  </div>
-                  <Badge className="bg-orange-100 text-orange-800">8 min ago</Badge>
+                <div className="text-center p-4 text-muted-foreground">
+                  <RefreshCw className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No recent recovery activity</p>
+                  <p className="text-xs">Recent cancellation recovery actions will appear here</p>
                 </div>
               </div>
             </CardContent>
@@ -333,28 +323,28 @@ export default function CancellationRecovery() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>Current Fill Rate</Label>
+                  <Label>Current Recovery Rate</Label>
                   <div className="flex items-center space-x-2">
-                    <Progress value={metrics?.fillRate || 0} className="flex-1" />
-                    <span className="text-sm font-medium">{metrics?.fillRate || 0}%</span>
+                    <Progress value={recoveryRate} className="flex-1" />
+                    <span className="text-sm font-medium">{recoveryRate}%</span>
                   </div>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Target: {config.fillRateTarget}% | Current: {metrics?.fillRate || 0}%
+                  Target: {config.fillRateTarget}% | Current: {recoveryRate}%
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center p-3 bg-red-50 rounded-lg">
-                  <p className="text-2xl font-bold text-red-600">{metrics?.totalCancellations || 0}</p>
-                  <p className="text-sm text-muted-foreground">Total Cancellations</p>
+                <div className="text-center p-3 bg-red-500/10 rounded-lg">
+                  <p className="text-2xl font-bold text-red-400">{metrics?.contactedCount || 0}</p>
+                  <p className="text-sm text-muted-foreground">Leads Contacted</p>
                 </div>
-                <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <p className="text-2xl font-bold text-green-600">{metrics?.filledSlots || 0}</p>
-                  <p className="text-sm text-muted-foreground">Slots Filled</p>
+                <div className="text-center p-3 bg-green-500/10 rounded-lg">
+                  <p className="text-2xl font-bold text-green-400">{metrics?.bookedCount || 0}</p>
+                  <p className="text-sm text-muted-foreground">Appointments Recovered</p>
                 </div>
-                <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <p className="text-2xl font-bold text-blue-600">${((metrics?.revenueImpact || 0) / 100).toFixed(0)}</p>
-                  <p className="text-sm text-muted-foreground">Revenue Impact</p>
+                <div className="text-center p-3 bg-blue-500/10 rounded-lg">
+                  <p className="text-2xl font-bold text-blue-400">{metrics?.messagesSent || 0}</p>
+                  <p className="text-sm text-muted-foreground">Messages Sent</p>
                 </div>
               </div>
             </div>

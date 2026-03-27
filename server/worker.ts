@@ -19,6 +19,7 @@ import { logger } from "./_core/logger";
 import { captureException } from "./_core/sentry";
 import { initSentry } from "./_core/sentry";
 import * as LeadService from "./services/lead.service";
+import * as TcpaCompliance from "./services/tcpaCompliance.service";
 import * as UserService from "./services/user.service";
 import type { Db } from "./_core/context";
 import type { SMSResult } from "./_core/sms";
@@ -123,6 +124,13 @@ async function fireAutomation(
   messageBody: string,
   fromNumber: string | undefined,
 ) {
+  // TCPA compliance: verify consent before sending automated SMS
+  const tcpaCheck = await TcpaCompliance.canSendSms(db, tenantId, leadId);
+  if (!tcpaCheck.allowed) {
+    logger.info("TCPA block: skipping automated SMS", { leadId, tenantId, automationId, reason: tcpaCheck.reason });
+    return;
+  }
+
   const decryptedPhone = decrypt(leadPhone);
   const decryptedName = leadName ? decrypt(leadName) : null;
   const vars: Record<string, string> = { name: decryptedName || "there" };

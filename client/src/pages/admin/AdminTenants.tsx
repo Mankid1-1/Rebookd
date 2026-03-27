@@ -13,11 +13,30 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
-const PLAN_STYLES: Record<string, string> = {
-  free: "bg-slate-500/20 text-slate-300 border-slate-500/30",
-  starter: "bg-green-500/20 text-green-300 border-green-500/30",
-  growth: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  scale: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+// Dynamic plan styles based on user theme
+const getDynamicPlanStyles = () => {
+  const isDarkMode = document.documentElement.classList.contains('dark');
+  return {
+    free: isDarkMode ? "bg-slate-500/25 text-slate-300 border-slate-500/40" : "bg-slate-500/15 text-slate-400 border-slate-500/30",
+    starter: isDarkMode ? "bg-green-500/25 text-green-300 border-green-500/40" : "bg-green-500/15 text-green-400 border-green-500/30",
+    growth: isDarkMode ? "bg-blue-500/25 text-blue-300 border-blue-500/40" : "bg-blue-500/15 text-blue-400 border-blue-500/30",
+    scale: isDarkMode ? "bg-purple-500/25 text-purple-300 border-purple-500/40" : "bg-purple-500/15 text-purple-400 border-purple-500/30",
+  };
+};
+
+// Dynamic plan prices from real API data
+const getDynamicPlanPrices = (plans?: any[]) => {
+  if (!plans || plans.length === 0) {
+    // Fallback prices if no plans data available
+    return { starter: 49, growth: 99, scale: 199 };
+  }
+  
+  const prices: Record<string, number> = {};
+  plans.forEach(plan => {
+    prices[plan.slug] = plan.price;
+  });
+  
+  return prices;
 };
 
 export default function AdminTenants() {
@@ -28,19 +47,25 @@ export default function AdminTenants() {
   const [planFilter, setPlanFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  // Dynamic configurations
+  const planStyles = getDynamicPlanStyles();
+
   useEffect(() => {
     if (user && user.role !== "admin") setLocation("/dashboard");
   }, [user, setLocation]);
 
   const { data, isLoading, refetch } = trpc.admin.tenants.list.useQuery({ page, limit: 20 }, { retry: false });
+  const { data: plansData } = trpc.plans.list.useQuery();
 
   const tenants = data?.tenants ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / 20);
   const activeCount = tenants.filter((t: any) => t.active).length;
+  
+  // Dynamic pricing from real data
+  const planPrices = getDynamicPlanPrices(plansData);
   const mrrEstimate = tenants.reduce((sum: number, t: any) => {
-    const prices: Record<string, number> = { starter: 49, growth: 99, scale: 199 };
-    return sum + (prices[t.planSlug] ?? 0);
+    return sum + (planPrices[t.planSlug] ?? 0);
   }, 0);
 
   const filtered = tenants.filter((t: any) => {
@@ -157,7 +182,7 @@ export default function AdminTenants() {
                       </TableCell>
                       <TableCell><span className="text-xs text-muted-foreground capitalize">{tenant.industry || "—"}</span></TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={`text-[10px] ${PLAN_STYLES[tenant.planSlug] ?? PLAN_STYLES.free}`}>
+                        <Badge variant="outline" className={`text-[10px] ${planStyles[tenant.planSlug] ?? planStyles.free}`}>
                           {(tenant.planSlug || "free").charAt(0).toUpperCase() + (tenant.planSlug || "free").slice(1)}
                         </Badge>
                       </TableCell>

@@ -34,94 +34,78 @@ interface StatusConfig {
   nextAction?: string;
 }
 
-const statusConfigs: Record<string, StatusConfig> = {
-  new: {
-    label: "New",
-    color: "bg-blue-100 text-blue-800",
-    icon: <Users className="h-3 w-3" />,
-    description: "New lead that needs attention",
-    nextAction: "Send welcome message"
-  },
-  contacted: {
-    label: "Contacted", 
-    color: "bg-yellow-100 text-yellow-800",
-    icon: <MessageSquare className="h-3 w-3" />,
-    description: "Lead has been contacted",
-    nextAction: "Follow up if needed"
-  },
-  qualified: {
-    label: "Qualified",
-    color: "bg-purple-100 text-purple-800", 
-    icon: <CheckCircle2 className="h-3 w-3" />,
-    description: "Lead is qualified for sales",
-    nextAction: "Schedule appointment"
-  },
-  booked: {
-    label: "Booked",
-    color: "bg-green-100 text-green-800",
-    icon: <CheckCircle2 className="h-3 w-3" />,
-    description: "Lead has been booked",
-    nextAction: "Send confirmation"
-  },
-  lost: {
-    label: "Lost",
-    color: "bg-red-100 text-red-800",
-    icon: <XCircle className="h-3 w-3" />,
-    description: "Lead could not be converted",
-    nextAction: "Analyze reasons"
-  },
-  recovered: {
-    label: "Recovered",
-    color: "bg-gray-100 text-gray-800",
-    icon: <RefreshCw className="h-3 w-3" />,
-    description: "Lead has been recovered",
-    nextAction: "Re-engage"
-  },
-  unknown: {
-    label: "Unknown",
-    color: "bg-gray-100 text-gray-800",
-    icon: <AlertCircle className="h-3 w-3" />,
-    description: "Status is unknown",
-    nextAction: "Check status"
-  },
-  unsubscribed: {
-    label: "Unsubscribed",
-    color: "bg-gray-100 text-gray-800",
-    icon: <AlertCircle className="h-3 w-3" />,
-    description: "Lead opted out of communications",
-    nextAction: "Respect their preference"
-  },
-  pending: {
-    label: "Pending",
-    color: "bg-orange-500",
-    icon: <Clock className="h-3 w-3" />,
-    description: "Waiting for response",
-    nextAction: "Send follow-up reminder"
-  }
-};
-
-const sizeClasses = {
-  sm: "text-xs px-2 py-1",
-  default: "text-xs px-2.5 py-1.5", 
-  lg: "text-base px-4 py-2"
+// Dynamic status configurations based on user preferences and theme
+const getDynamicStatusConfigs = () => {
+  const isDarkMode = document.documentElement.classList.contains('dark');
+  
+  return {
+    new: {
+      label: "New",
+      color: isDarkMode ? "bg-blue-900 text-blue-200" : "bg-blue-100 text-blue-800",
+      icon: <Users className="h-3 w-3" />,
+      description: "New lead that needs attention",
+      nextAction: "Send welcome message"
+    },
+    contacted: {
+      label: "Contacted", 
+      color: isDarkMode ? "bg-yellow-900 text-yellow-200" : "bg-yellow-100 text-yellow-800",
+      icon: <MessageSquare className="h-3 w-3" />,
+      description: "Lead has been contacted",
+      nextAction: "Follow up if needed"
+    },
+    qualified: {
+      label: "Qualified",
+      color: isDarkMode ? "bg-purple-900 text-purple-200" : "bg-purple-100 text-purple-800",
+      icon: <Calendar className="h-3 w-3" />,
+      description: "Lead is qualified for booking",
+      nextAction: "Schedule appointment"
+    },
+    booked: {
+      label: "Booked",
+      color: isDarkMode ? "bg-green-900 text-green-200" : "bg-green-100 text-green-800",
+      icon: <CheckCircle2 className="h-3 w-3" />,
+      description: "Appointment has been booked",
+      nextAction: "Send confirmation"
+    },
+    lost: {
+      label: "Lost",
+      color: isDarkMode ? "bg-red-900 text-red-200" : "bg-red-100 text-red-800",
+      icon: <XCircle className="h-3 w-3" />,
+      description: "Lead was lost",
+      nextAction: "Analyze reasons for loss"
+    },
+    unsubscribed: {
+      label: "Unsubscribed",
+      color: isDarkMode ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-800",
+      icon: <Mail className="h-3 w-3" />,
+      description: "Lead has unsubscribed",
+      nextAction: "Remove from lists"
+    }
+  };
 };
 
 export function StatusBadge({ 
   status, 
-  variant = "default",
-  showIcon = true,
-  showTooltip = true,
-  size = "default",
-  className = "",
+  variant = "default", 
+  showIcon = true, 
+  showTooltip = false, 
+  size = "default", 
+  className = "", 
   onClick,
-  tabIndex
+  tabIndex = 0 
 }: StatusBadgeProps) {
-  const config = statusConfigs[status.toLowerCase()] || statusConfigs.new;
-  const sizeClass = sizeClasses[size];
+  const statusConfigs = getDynamicStatusConfigs();
+  const config = statusConfigs[status] || statusConfigs.new;
+
+  const sizeClasses = {
+    sm: "text-xs px-2 py-1",
+    default: "text-sm px-2.5 py-1.5", 
+    lg: "text-base px-3 py-2"
+  };
 
   const badgeContent = (
     <div 
-      className={`border-0 flex items-center gap-1 inline-flex items-center justify-center rounded-md border px-2 py-0.5 font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden ${className}`}
+      className={`border-0 flex items-center gap-1 inline-flex items-center justify-center rounded-md border px-2 py-0.5 font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden ${sizeClasses[size]} ${config.color} ${className}`}
       onClick={onClick}
       tabIndex={tabIndex || (onClick ? 0 : undefined)}
       onKeyDown={(e) => {
@@ -130,16 +114,11 @@ export function StatusBadge({
           onClick();
         }
       }}
+      role="button"
+      aria-label={`Status: ${config.label}${config.nextAction ? `. Next action: ${config.nextAction}` : ''}`}
     >
-      {showIcon && <span className={config.color}>{config.icon}</span>}
-      <span className="status-badge" tabIndex={tabIndex || (onClick ? 0 : undefined)}>
-        <span className={
-          className === "test-badge" ? "test-badge" :
-          className ? className + (sizeClass && size !== "default" ? ` ${sizeClass}` : '') :
-          sizeClass && size !== "default" ? `${sizeClass}` :
-          config.color + ' status-badge'
-        } tabIndex={tabIndex !== undefined ? tabIndex : (onClick ? 0 : undefined)}>{config.label}</span>
-      </span>
+      {showIcon && config.icon}
+      {config.label}
     </div>
   );
 

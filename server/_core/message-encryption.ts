@@ -44,13 +44,13 @@ class MessageEncryption {
       const iv = crypto.randomBytes(this.ivLength);
       
       // Create cipher
-      const cipher = crypto.createCipher(this.algorithm, this.key);
+      const cipher = crypto.createCipheriv(this.algorithm, this.key, iv);
       cipher.setAAD(Buffer.from('message-body', 'utf8'));
-      
+
       // Encrypt the message
       let encrypted = cipher.update(message, 'utf8', 'hex');
       encrypted += cipher.final('hex');
-      
+
       // Get authentication tag
       const tag = cipher.getAuthTag();
       
@@ -72,12 +72,11 @@ class MessageEncryption {
   decrypt(encryptedData: EncryptionResult): DecryptionResult {
     try {
       // Create decipher
-      const decipher = crypto.createDecipher(this.algorithm, this.key);
-      
-      // Set IV and authentication tag
+      const decipher = crypto.createDecipheriv(this.algorithm, this.key, Buffer.from(encryptedData.iv, 'hex'));
+
+      // Set authentication tag
       decipher.setAAD(Buffer.from('message-body', 'utf8'));
       decipher.setAuthTag(Buffer.from(encryptedData.tag, 'hex'));
-      decipher.setIV(Buffer.from(encryptedData.iv, 'hex'));
       
       // Decrypt the message
       let decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
@@ -105,7 +104,7 @@ class MessageEncryption {
       const normalizedPhone = this.normalizePhone(phone);
       const iv = crypto.randomBytes(this.ivLength);
       
-      const cipher = crypto.createCipher('aes-256-cbc', this.key);
+      const cipher = crypto.createCipheriv('aes-256-cbc', this.key, iv);
       let encrypted = cipher.update(normalizedPhone, 'utf8', 'hex');
       encrypted += cipher.final('hex');
       
@@ -130,8 +129,7 @@ class MessageEncryption {
       const iv = Buffer.from(parts[0], 'hex');
       const encrypted = parts[1];
       
-      const decipher = crypto.createDecipher('aes-256-cbc', this.key);
-      decipher.setIV(iv);
+      const decipher = crypto.createDecipheriv('aes-256-cbc', this.key, iv);
       
       let decrypted = decipher.update(encrypted, 'hex', 'utf8');
       decrypted += decipher.final('utf8');
@@ -215,3 +213,4 @@ export const encryptMessage = (message: string) => messageEncryption.encrypt(mes
 export const decryptMessage = (data: any) => messageEncryption.decrypt(data);
 export const encryptPhone = (phone: string) => messageEncryption.encryptPhoneNumber(phone);
 export const decryptPhone = (encryptedPhone: string) => messageEncryption.decryptPhoneNumber(encryptedPhone);
+export const generateSecureToken = (length?: number) => messageEncryption.generateSecureToken(length);

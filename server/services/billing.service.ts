@@ -115,7 +115,6 @@ export async function changeSubscriptionPlan(
 
   return stripe.subscriptions.update(subscription.stripeId, {
     items: [{ id: itemId, price: input.priceId }],
-    billing_cycle_anchor: "unchanged",
     cancel_at_period_end: false,
     proration_behavior: input.prorateImmediately ? "always_invoice" : "create_prorations",
   });

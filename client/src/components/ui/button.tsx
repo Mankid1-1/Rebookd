@@ -49,20 +49,11 @@ function Button({
   }) {
   const Comp = asChild ? Slot : "button";
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onClick?.(e as any);
-    }
-    props.onKeyDown?.(e);
-  };
-
   return (
     <Comp
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
       onClick={onClick}
-      onKeyDown={handleKeyDown}
       {...props}
     />
   );

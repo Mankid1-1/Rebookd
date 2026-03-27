@@ -14,6 +14,7 @@ import {
   Filter,
   Download
 } from "lucide-react";
+import { useProgressiveDisclosureContext } from "./ProgressiveDisclosure";
 
 interface QuickAction {
   id: string;
@@ -78,109 +79,198 @@ export function QuickActions({
   );
 }
 
-// Predefined quick action sets
-export const getLeadsQuickActions = (onAction: (action: string) => void): QuickAction[] => [
-  {
-    id: "add-lead",
-    title: "Add New Lead",
-    description: "Manually add a new potential customer",
-    icon: <Plus className="h-5 w-5" />,
-    action: () => onAction("add-lead"),
-    badge: "Quick",
-    shortcut: "N"
-  },
-  {
-    id: "send-message",
-    title: "Send Message",
-    description: "Send SMS or email to selected leads",
-    icon: <MessageSquare className="h-5 w-5" />,
-    action: () => onAction("send-message"),
-    shortcut: "M"
-  },
-  {
-    id: "make-call",
-    title: "Make Call",
-    description: "Initiate phone call to lead",
-    icon: <Phone className="h-5 w-5" />,
-    action: () => onAction("make-call"),
-    shortcut: "C"
-  },
-  {
-    id: "schedule-appointment",
-    title: "Schedule Appointment",
-    description: "Book appointment with lead",
-    icon: <Calendar className="h-5 w-5" />,
-    action: () => onAction("schedule-appointment"),
-    shortcut: "A"
-  },
-  {
-    id: "import-leads",
-    title: "Import Leads",
-    description: "Bulk import leads from CSV file",
-    icon: <Download className="h-5 w-5" />,
-    action: () => onAction("import-leads"),
-    badge: "Bulk"
-  },
-  {
-    id: "search-leads",
-    title: "Advanced Search",
-    description: "Find leads with advanced filters",
-    icon: <Search className="h-5 w-5" />,
-    action: () => onAction("search-leads"),
-    shortcut: "S"
-  }
-];
+// Dynamic quick actions based on user skill and business type
+export const getLeadsQuickActions = (
+  onAction: (action: string) => void,
+  userSkill?: any,
+  businessType?: string
+): QuickAction[] => {
+  const baseActions = [
+    {
+      id: "add-lead",
+      title: "Add New Lead",
+      description: "Manually add a new potential customer",
+      icon: <Plus className="h-5 w-5" />,
+      action: () => onAction("add-lead"),
+      badge: "Quick",
+      shortcut: "N"
+    },
+    {
+      id: "send-message",
+      title: "Send Message",
+      description: "Send SMS or email to selected leads",
+      icon: <MessageSquare className="h-5 w-5" />,
+      action: () => onAction("send-message"),
+      shortcut: "M"
+    },
+    {
+      id: "search-leads",
+      title: "Advanced Search",
+      description: "Find leads with advanced filters",
+      icon: <Search className="h-5 w-5" />,
+      action: () => onAction("search-leads"),
+      shortcut: "S"
+    }
+  ];
 
-export const getDashboardQuickActions = (onAction: (action: string) => void): QuickAction[] => [
-  {
-    id: "view-leads",
-    title: "View All Leads",
-    description: "See and manage your complete lead list",
-    icon: <Users className="h-5 w-5" />,
-    action: () => onAction("view-leads"),
-    badge: "Popular"
-  },
-  {
-    id: "new-messages",
-    title: "New Messages",
-    description: "Check unread messages from leads",
-    icon: <MessageSquare className="h-5 w-5" />,
-    action: () => onAction("new-messages"),
-    badge: "3 New"
-  },
-  {
-    id: "today-tasks",
-    title: "Today's Tasks",
-    description: "View and complete today's follow-ups",
-    icon: <Zap className="h-5 w-5" />,
-    action: () => onAction("today-tasks"),
-    badge: "5 Tasks"
-  },
-  {
-    id: "send-campaign",
-    title: "Send Campaign",
-    description: "Launch SMS/email marketing campaign",
-    icon: <Mail className="h-5 w-5" />,
-    action: () => onAction("send-campaign"),
-    shortcut: "E"
-  },
-  {
-    id: "run-automation",
-    title: "Run Automation",
-    description: "Trigger automated follow-up sequence",
-    icon: <Zap className="h-5 w-5" />,
-    action: () => onAction("run-automation"),
-    badge: "Smart"
-  },
-  {
-    id: "view-analytics",
-    title: "View Analytics",
-    description: "Check performance metrics and reports",
-    icon: <Filter className="h-5 w-5" />,
-    action: () => onAction("view-analytics"),
-    shortcut: "R"
+  // Add advanced actions for intermediate+ users
+  if (userSkill?.level !== 'beginner') {
+    baseActions.push({
+      id: "schedule-appointment",
+      title: "Schedule Appointment",
+      description: "Book appointment with lead",
+      icon: <Calendar className="h-5 w-5" />,
+      action: () => onAction("schedule-appointment"),
+      shortcut: "A"
+    });
   }
-];
+
+  // Add expert actions for advanced users
+  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
+    baseActions.push(
+      {
+        id: "make-call",
+        title: "Make Call",
+        description: "Initiate phone call to lead",
+        icon: <Phone className="h-5 w-5" />,
+        action: () => onAction("make-call"),
+        shortcut: "C"
+      },
+      {
+        id: "import-leads",
+        title: "Import Leads",
+        description: "Bulk import leads from CSV file",
+        icon: <Download className="h-5 w-5" />,
+        action: () => onAction("import-leads"),
+        badge: "Bulk",
+        shortcut: "I"
+      }
+    );
+  }
+
+  // Business-specific actions
+  if (businessType?.includes('medical') || businessType?.includes('clinic')) {
+    baseActions.push({
+      id: "send-reminders",
+      title: "Send Reminders",
+      description: "Send appointment reminders to patients",
+      icon: <Mail className="h-5 w-5" />,
+      action: () => onAction("send-reminders"),
+      badge: "Medical",
+      shortcut: "R"
+    });
+  }
+
+  return baseActions;
+};
+
+export const getDashboardQuickActions = (
+  onAction: (action: string) => void,
+  counts?: { messages?: number; tasks?: number },
+  userPreferences?: { mostUsedActions?: string[] },
+  userSkill?: any,
+  businessType?: string
+): QuickAction[] => {
+  const mostUsed = userPreferences?.mostUsedActions || [];
+  const isDarkMode = document.documentElement.classList.contains('dark');
+  
+  const baseActions: QuickAction[] = [
+    {
+      id: "view-leads",
+      title: "View All Leads",
+      description: "See and manage your complete lead list",
+      icon: <Users className="h-5 w-5" />,
+      action: () => onAction("view-leads"),
+      badge: mostUsed.includes("view-leads") ? "Most Used" : undefined
+    },
+    {
+      id: "new-messages",
+      title: "New Messages",
+      description: "Check unread messages from leads",
+      icon: <MessageSquare className="h-5 w-5" />,
+      action: () => onAction("new-messages"),
+      badge: counts?.messages && counts.messages > 0 ? `${counts.messages} New` : undefined
+    }
+  ];
+
+  // Add task management for intermediate+ users
+  if (userSkill?.level !== 'beginner') {
+    baseActions.push({
+      id: "today-tasks",
+      title: "Today's Tasks",
+      description: "View and complete today's follow-ups",
+      icon: <Zap className="h-5 w-5" />,
+      action: () => onAction("today-tasks"),
+      badge: counts?.tasks && counts.tasks > 0 ? `${counts.tasks} Tasks` : undefined
+    });
+  }
+
+  // Add advanced actions for expert users
+  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
+    baseActions.push({
+      id: "add-lead",
+      title: "Add Lead",
+      description: "Add a new lead to your system",
+      icon: <Plus className="h-5 w-5" />,
+      action: () => onAction("add-lead"),
+      badge: mostUsed.includes("add-lead") ? "Frequent" : undefined
+    });
+  }
+
+  // Business-specific actions
+  if (businessType?.includes('medical') || businessType?.includes('clinic')) {
+    baseActions.push({
+      id: "patient-reminders",
+      title: "Patient Reminders",
+      description: "Send appointment reminders to patients",
+      icon: <Mail className="h-5 w-5" />,
+      action: () => onAction("patient-reminders"),
+      badge: "Medical",
+      shortcut: "P"
+    });
+  }
+
+  // Add expert actions for advanced users
+  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
+    baseActions.push({
+      id: "search-leads",
+      title: "Advanced Search",
+      description: "Find leads with advanced filters",
+      icon: <Search className="h-5 w-5" />,
+      action: () => onAction("search-leads"),
+      shortcut: "S"
+    });
+    
+    baseActions.push({
+      id: "send-campaign",
+      title: "Send Campaign",
+      description: "Launch SMS/email marketing campaign",
+      icon: <Mail className="h-5 w-5" />,
+      action: () => onAction("send-campaign"),
+      shortcut: "E"
+    });
+    
+    baseActions.push({
+      id: "run-automation",
+      title: "Run Automation",
+      description: "Trigger automated follow-up sequence",
+      icon: <Zap className="h-5 w-5" />,
+      action: () => onAction("run-automation"),
+      badge: mostUsed.includes("run-automation") ? "Smart" : undefined
+    });
+    
+    baseActions.push({
+      id: "view-analytics",
+      title: "View Analytics",
+      description: "Check performance metrics and reports",
+      icon: <Filter className="h-5 w-5" />,
+      action: () => onAction("view-analytics"),
+      shortcut: "R"
+    });
+  }
+
+  return baseActions;
+};
 
 // Floating action button for mobile
 export function FloatingActionButton({ actions }: { actions: QuickAction[] }) {
@@ -191,7 +281,7 @@ export function FloatingActionButton({ actions }: { actions: QuickAction[] }) {
     <div className="fixed bottom-6 right-6 z-50 lg:hidden">
       {isOpen && (
         <div className="absolute bottom-16 right-0 space-y-2">
-          {actions.slice(1).map((action, index) => (
+          {actions.slice(1).map((action) => (
             <Button
               key={action.id}
               variant="outline"
@@ -221,11 +311,15 @@ export function FloatingActionButton({ actions }: { actions: QuickAction[] }) {
 export function useKeyboardShortcuts(shortcuts: Record<string, () => void>) {
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Ignore when typing in inputs
+      // Ignore when typing in inputs or contenteditable elements
+      const target = event.target as HTMLElement;
       if (
-        event.target instanceof HTMLInputElement ||
-        event.target instanceof HTMLTextAreaElement ||
-        event.target instanceof HTMLSelectElement
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        target.isContentEditable ||
+        target.closest('[contenteditable="true"]') ||
+        target.closest('input, textarea, select')
       ) {
         return;
       }
@@ -233,17 +327,10 @@ export function useKeyboardShortcuts(shortcuts: Record<string, () => void>) {
       const key = event.key.toLowerCase();
       const modifier = event.ctrlKey || event.metaKey;
 
-      // Handle single key shortcuts
-      if (shortcuts[key] && !modifier) {
+      // Only handle shortcuts with modifier keys to prevent accidental triggers
+      if (shortcuts[key] && modifier) {
         event.preventDefault();
         shortcuts[key]();
-        return;
-      }
-
-      // Handle modifier shortcuts
-      if (modifier && shortcuts[`ctrl+${key}`]) {
-        event.preventDefault();
-        shortcuts[`ctrl+${key}`]();
         return;
       }
     };
@@ -252,3 +339,5 @@ export function useKeyboardShortcuts(shortcuts: Record<string, () => void>) {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [shortcuts]);
 }
+
+export default QuickActions;

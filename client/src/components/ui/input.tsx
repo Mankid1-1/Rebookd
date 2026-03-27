@@ -1,7 +1,7 @@
-import { useDialogComposition } from "@/components/ui/dialog";
-import { useComposition } from "@/hooks/useComposition";
-import { cn } from "@/lib/utils";
 import * as React from "react";
+import { cn } from "@/lib/utils";
+import { useComposition } from "@/hooks/useComposition";
+import { useDialogComposition } from "./dialog";
 
 function Input({
   className,
@@ -13,6 +13,9 @@ function Input({
 }: React.ComponentProps<"input">) {
   // Get dialog composition context if available (will be no-op if not inside Dialog)
   const dialogComposition = useDialogComposition();
+  
+  // Store timeout reference to prevent memory leaks
+  const timeoutRef = React.useRef<NodeJS.Timeout>(undefined);
 
   // Add composition event handlers to support input method editor (IME) for CJK languages.
   const {
@@ -42,12 +45,21 @@ function Input({
       dialogComposition.markCompositionEnd();
       // Delay setting composing to false to handle Safari's event order
       // In Safari, compositionEnd fires before the ESC keydown event
-      setTimeout(() => {
+      timeoutRef.current = setTimeout(() => {
         dialogComposition.setComposing(false);
       }, 100);
       onCompositionEnd?.(e);
     },
   });
+
+  // Clean up timeout on unmount to prevent memory leaks
+  React.useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <input

@@ -26,7 +26,7 @@ export async function getAllTenants(db: Db, page = 1, limit = 50) {
   return { rows, total: Number(countRows[0]?.count ?? 0) };
 }
 
-export async function updateTenant(db: Db, id: number, data: Partial<{ name: string; timezone: string }>) {
+export async function updateTenant(db: Db, id: number, data: Partial<{ name: string; timezone: string; industry: string }>) {
   await db.update(tenants).set({ ...data, updatedAt: new Date() }).where(eq(tenants.id, id));
 }
 
