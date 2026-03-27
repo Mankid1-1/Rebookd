@@ -78,6 +78,11 @@ coverage/
 # Temp
 tmp/
 temp/
+.tmp.driveupload/
+
+# Large files / archives
+*.zip
+dist-build/
 
 # Database
 *.db
