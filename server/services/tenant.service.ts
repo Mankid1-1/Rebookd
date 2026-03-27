@@ -26,8 +26,14 @@ export async function getAllTenants(db: Db, page = 1, limit = 50) {
   return { rows, total: Number(countRows[0]?.count ?? 0) };
 }
 
-export async function updateTenant(db: Db, id: number, data: Partial<{ name: string; timezone: string }>) {
-  await db.update(tenants).set({ ...data, updatedAt: new Date() }).where(eq(tenants.id, id));
+export async function updateTenant(db: Db, id: number, data: Partial<{ name: string; timezone: string; industry: string; settings: Record<string, any> }>) {
+  const { settings: newSettings, ...rest } = data;
+  const updateData: Record<string, any> = { ...rest, updatedAt: new Date() };
+  if (newSettings) {
+    const existing = await db.select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, id)).limit(1);
+    updateData.settings = { ...(existing[0]?.settings ?? {}), ...newSettings };
+  }
+  await db.update(tenants).set(updateData).where(eq(tenants.id, id));
 }
 
 export async function getSubscriptionByTenantId(db: Db, tenantId: number) {
