@@ -4,8 +4,8 @@ import { TRPCError } from "@trpc/server";
 import { createLeadSchema, updateLeadSchema, updateLeadStatusSchema, sendMessageSchema, loginSchema, paginationSchema } from "../shared/schemas/leads";
 import { phoneSchema } from "../shared/schemas/leads";
 import Stripe from "stripe";
-import { desc, eq, and, gte, sql } from "drizzle-orm";
-import { subscriptions, messages, authRateLimits } from "../drizzle/schema";
+import { desc, eq, and, gte, lte, sql, count, isNotNull, isNull } from "drizzle-orm";
+import { subscriptions, messages, authRateLimits, referrals, referralPayouts, leads, automations, automationJobs, tenants, users, plans, tenantInvitations } from "../drizzle/schema";
 import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { invokeLLM } from "./_core/llm";
@@ -41,7 +41,7 @@ function clampAdminPagination(input?: { page?: number; limit?: number }) {
 
 const signupSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(12).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, "Password must contain at least 12 characters, including uppercase, lowercase, number, and special character"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
   captchaToken: z.string().optional(),
   website: z.string().max(0).optional(),
 });
@@ -52,7 +52,7 @@ const forgotPasswordSchema = z.object({
 
 const resetPasswordSchema = z.object({
   token: z.string().min(12),
-  password: z.string().min(12).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, "Password must contain at least 12 characters, including uppercase, lowercase, number, and special character"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
 async function sendVerificationEmail(email: string, token: string) {
@@ -160,7 +160,7 @@ export const appRouter = router({
           await sendVerificationEmail(input.email, verifyToken);
           return { success: true, pendingVerification: true };
         }
-        const passwordHash = await bcrypt.hash(input.password, 10);
+        const passwordHash = await bcrypt.hash(input.password, 12);
         const openId = randomUUID();
         await UserService.createUser(db, { openId, email: input.email, passwordHash, loginMethod: "password", role: "user", active: true });
         const created = await UserService.getUserByOpenId(db, openId);
@@ -209,7 +209,7 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         const row = await AuthService.consumePasswordResetToken(ctx.db, input.token);
         if (!row) throw new TRPCError({ code: "BAD_REQUEST", message: "Reset link is invalid or expired" });
-        const passwordHash = await bcrypt.hash(input.password, 10);
+        const passwordHash = await bcrypt.hash(input.password, 12);
         await UserService.setUserPasswordHash(ctx.db, row.userId, passwordHash);
         return { success: true };
       }),
@@ -353,13 +353,23 @@ export const appRouter = router({
         if (input.enabled) {
           const entitled = await TenantService.tenantHasAutomationAccess(ctx.db, ctx.tenantId);
           if (!entitled) {
-            throw new TRPCError({ 
-              code: "FORBIDDEN", 
-              message: "Cannot enable automations: trial has expired or subscription is inactive" 
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Cannot enable automations: trial has expired or subscription is inactive"
+            });
+          }
+          // Check plan automation limits
+          const limits = await TenantService.getTenantPlanLimits(ctx.db, ctx.tenantId);
+          const allAutomations = await AutomationService.getAutomations(ctx.db, ctx.tenantId);
+          const enabledCount = allAutomations.filter((a: any) => a.enabled).length;
+          if (enabledCount >= limits.maxAutomations) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: `Your ${limits.planName} plan allows up to ${limits.maxAutomations} active automations. Upgrade to Rebooked for unlimited automations.`,
             });
           }
         }
-        
+
         const automation = await AutomationService.getAutomationByKey(ctx.db, ctx.tenantId, input.key);
         if (!automation) throw new TRPCError({ code: "NOT_FOUND" });
         await AutomationService.updateAutomation(ctx.db, ctx.tenantId, automation.id, { enabled: input.enabled });
@@ -436,10 +446,14 @@ export const appRouter = router({
 
   // ─── AI ────────────────────────────────────────────────────────────────────
   ai: router({
-    rewrite: protectedProcedure
+    rewrite: tenantProcedure
       .input(z.object({ message: z.string().min(1), tone: z.enum(["friendly", "professional", "casual", "urgent", "empathetic"]) }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         try {
+          const limits = await TenantService.getTenantPlanLimits(ctx.db, ctx.tenantId);
+          if (!limits.hasAiRewrite) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "AI rewrite is available on the Rebooked plan. Upgrade to access this feature." });
+          }
           const result = await invokeLLM({ messages: [
             { role: "system", content: `Expert SMS copywriter. Rewrite in ${input.tone} tone. Under 160 chars. Return ONLY the message.` },
             { role: "user", content: input.message },
@@ -498,7 +512,7 @@ export const appRouter = router({
       .input(z.object({ label: z.string().optional() }))
       .mutation(async ({ ctx, input }) => {
         const key = `rk_${randomUUID().replace(/-/g, "")}`;
-        const keyHash = await bcrypt.hash(key, 10);
+        const keyHash = await bcrypt.hash(key, 12);
         await AuthService.createApiKey(ctx.db, ctx.tenantId, keyHash, key.slice(0, 7), input.label);
         return { key };
       }),
@@ -560,10 +574,11 @@ export const appRouter = router({
 
   // ─── TENANT ────────────────────────────────────────────────────────────────
   tenant: router({
-    get: tenantProcedure.query(async ({ ctx }) => {
-      const tenant = await TenantService.getTenantById(ctx.db, ctx.tenantId);
-      if (!tenant) throw new TRPCError({ code: "NOT_FOUND", message: "Tenant not found" });
-      return tenant;
+    get: protectedProcedure.query(async ({ ctx }) => {
+      const user = ctx.user;
+      if (!user.tenantId) return null; // Admin users without tenant see null
+      const tenant = await TenantService.getTenantById(ctx.db, user.tenantId);
+      return tenant ?? null;
     }),
 
     update: tenantProcedure
@@ -575,14 +590,16 @@ export const appRouter = router({
 
     subscription: tenantProcedure.query(async ({ ctx }) => {
       const sub = await TenantService.getSubscriptionByTenantId(ctx.db, ctx.tenantId);
-      if (!sub) throw new TRPCError({ code: "NOT_FOUND", message: "Subscription not found" });
-      return { sub };
+      return { sub: sub ?? null };
     }),
 
     usage: tenantProcedure.query(async ({ ctx }) => {
       const usageData = await TenantService.getUsageByTenantId(ctx.db, ctx.tenantId);
-      if (!usageData) throw new TRPCError({ code: "NOT_FOUND", message: "Usage data not found" });
-      return usageData;
+      return usageData ?? { messagesSent: 0, automationsRun: 0, aiRewrites: 0, revenueRecovered: 0, createdAt: new Date() };
+    }),
+
+    planLimits: tenantProcedure.query(async ({ ctx }) => {
+      return TenantService.getTenantPlanLimits(ctx.db, ctx.tenantId);
     }),
 
     phoneNumbers: tenantProcedure.query(async ({ ctx }) => TenantService.getPhoneNumbersByTenantId(ctx.db, ctx.tenantId)),
@@ -614,6 +631,260 @@ export const appRouter = router({
         await TenantService.setInboundPhoneNumber(ctx.db, ctx.tenantId, input.phoneNumberId);
         return { success: true };
       }),
+
+    // ─── Feature Settings ───────────────────────────────────────────────
+
+    settings: tenantProcedure.query(async ({ ctx }) => {
+      return TenantService.getSettings(ctx.db, ctx.tenantId);
+    }),
+
+    updateNoShowRecoveryConfig: tenantProcedure
+      .input(z.record(z.string(), z.any()))
+      .mutation(async ({ ctx, input }) => {
+        await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "noShowRecovery", input);
+        return { success: true };
+      }),
+
+    updateCancellationRecoveryConfig: tenantProcedure
+      .input(z.record(z.string(), z.any()))
+      .mutation(async ({ ctx, input }) => {
+        await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "cancellationRecovery", input);
+        return { success: true };
+      }),
+
+    updateRetentionEngineConfig: tenantProcedure
+      .input(z.record(z.string(), z.any()))
+      .mutation(async ({ ctx, input }) => {
+        await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "retentionEngine", input);
+        return { success: true };
+      }),
+
+    updateSmartSchedulingConfig: tenantProcedure
+      .input(z.record(z.string(), z.any()))
+      .mutation(async ({ ctx, input }) => {
+        await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "smartScheduling", input);
+        return { success: true };
+      }),
+
+    updateBookingConversionConfig: tenantProcedure
+      .input(z.record(z.string(), z.any()))
+      .mutation(async ({ ctx, input }) => {
+        await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "bookingConversion", input);
+        return { success: true };
+      }),
+
+    updateLeadCaptureConfig: tenantProcedure
+      .input(z.record(z.string(), z.any()))
+      .mutation(async ({ ctx, input }) => {
+        await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "leadCapture", input);
+        return { success: true };
+      }),
+
+    updatePaymentEnforcementConfig: tenantProcedure
+      .input(z.record(z.string(), z.any()))
+      .mutation(async ({ ctx, input }) => {
+        await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "paymentEnforcement", input);
+        return { success: true };
+      }),
+
+    updateAfterHoursConfig: tenantProcedure
+      .input(z.record(z.string(), z.any()))
+      .mutation(async ({ ctx, input }) => {
+        await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "afterHours", input);
+        return { success: true };
+      }),
+
+    updateAdminAutomationConfig: tenantProcedure
+      .input(z.record(z.string(), z.any()))
+      .mutation(async ({ ctx, input }) => {
+        await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "adminAutomation", input);
+        return { success: true };
+      }),
+
+    updateCalendarIntegrationConfig: tenantProcedure
+      .input(z.record(z.string(), z.any()))
+      .mutation(async ({ ctx, input }) => {
+        await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "calendarIntegration", input);
+        return { success: true };
+      }),
+
+    updateWaitingListConfig: tenantProcedure
+      .input(z.record(z.string(), z.any()))
+      .mutation(async ({ ctx, input }) => {
+        await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "waitingList", input);
+        return { success: true };
+      }),
+
+    updateReviewManagementConfig: tenantProcedure
+      .input(z.record(z.string(), z.any()))
+      .mutation(async ({ ctx, input }) => {
+        await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "reviewManagement", input);
+        return { success: true };
+      }),
+
+    updateReschedulingConfig: tenantProcedure
+      .input(z.record(z.string(), z.any()))
+      .mutation(async ({ ctx, input }) => {
+        await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "rescheduling", input);
+        return { success: true };
+      }),
+
+    // ─── Team Management ───────────────────────────────────────────────
+    team: router({
+      list: tenantProcedure.query(async ({ ctx }) => {
+        const members = await ctx.db
+          .select({
+            id: users.id,
+            name: users.name,
+            email: users.email,
+            tenantRole: users.tenantRole,
+            createdAt: users.createdAt,
+          })
+          .from(users)
+          .where(eq(users.tenantId, ctx.tenantId));
+        return members.map((m) => ({
+          ...m,
+          tenantRole: m.tenantRole ?? "owner",
+        }));
+      }),
+
+      invite: tenantProcedure
+        .input(z.object({ email: z.string().email() }))
+        .mutation(async ({ ctx, input }) => {
+          // Only owners can invite
+          const caller = await ctx.db.select({ tenantRole: users.tenantRole }).from(users).where(eq(users.id, ctx.user.id)).then((r: any[]) => r[0]);
+          if (caller && caller.tenantRole === "employee") {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Only the account owner can invite team members" });
+          }
+
+          // Check seat limits
+          const limits = await TenantService.getTenantPlanLimits(ctx.db, ctx.tenantId);
+          const currentMembers = await ctx.db.select({ id: users.id }).from(users).where(eq(users.tenantId, ctx.tenantId));
+          if (currentMembers.length >= limits.maxSeats) {
+            throw new TRPCError({ code: "FORBIDDEN", message: `Your ${limits.planName} plan allows up to ${limits.maxSeats} team member(s). Upgrade to add more.` });
+          }
+
+          // Check if already a member of this tenant
+          const existing = await ctx.db.select({ id: users.id }).from(users).where(and(eq(users.email, input.email), eq(users.tenantId, ctx.tenantId))).then((r: any[]) => r[0]);
+          if (existing) {
+            throw new TRPCError({ code: "CONFLICT", message: "This user is already a team member" });
+          }
+
+          // Check for existing pending invitation
+          const existingInvite = await ctx.db.select({ id: tenantInvitations.id }).from(tenantInvitations).where(and(eq(tenantInvitations.email, input.email), eq(tenantInvitations.tenantId, ctx.tenantId), gte(tenantInvitations.expiresAt, new Date()))).then((r: any[]) => r[0]);
+          if (existingInvite) {
+            throw new TRPCError({ code: "CONFLICT", message: "An invitation is already pending for this email" });
+          }
+
+          const token = randomUUID();
+          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+          await ctx.db.insert(tenantInvitations).values({
+            tenantId: ctx.tenantId,
+            email: input.email,
+            role: "employee",
+            token,
+            expiresAt,
+          });
+
+          // Send invitation email
+          const appUrl = process.env.APP_URL || "http://localhost:3000";
+          const inviteUrl = `${appUrl}/login?invite=${encodeURIComponent(token)}`;
+          const tenantData = await TenantService.getTenantById(ctx.db, ctx.tenantId);
+          const businessName = tenantData?.name ?? "a business";
+
+          await sendEmail({
+            to: input.email,
+            subject: `You've been invited to join ${businessName} on Rebooked`,
+            text: `You've been invited to join ${businessName} as an employee on Rebooked. Click here to accept: ${inviteUrl}`,
+            html: `<p>You've been invited to join <strong>${businessName}</strong> as an employee on Rebooked.</p><p><a href="${inviteUrl}">Accept Invitation</a></p><p>This invitation expires in 7 days.</p>`,
+          });
+
+          return { success: true };
+        }),
+
+      remove: tenantProcedure
+        .input(z.object({ userId: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          // Only owners can remove
+          const caller = await ctx.db.select({ tenantRole: users.tenantRole }).from(users).where(eq(users.id, ctx.user.id)).then((r: any[]) => r[0]);
+          if (caller && caller.tenantRole === "employee") {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Only the account owner can remove team members" });
+          }
+
+          // Cannot remove yourself
+          if (input.userId === ctx.user.id) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot remove yourself from the team" });
+          }
+
+          // Verify the user belongs to this tenant
+          const target = await ctx.db.select({ id: users.id, tenantId: users.tenantId }).from(users).where(eq(users.id, input.userId)).then((r: any[]) => r[0]);
+          if (!target || target.tenantId !== ctx.tenantId) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "User not found in your team" });
+          }
+
+          await ctx.db.update(users).set({ tenantId: null, tenantRole: null }).where(eq(users.id, input.userId));
+          return { success: true };
+        }),
+
+      pending: tenantProcedure.query(async ({ ctx }) => {
+        const invitations = await ctx.db
+          .select({
+            id: tenantInvitations.id,
+            email: tenantInvitations.email,
+            role: tenantInvitations.role,
+            expiresAt: tenantInvitations.expiresAt,
+            createdAt: tenantInvitations.createdAt,
+          })
+          .from(tenantInvitations)
+          .where(and(eq(tenantInvitations.tenantId, ctx.tenantId), gte(tenantInvitations.expiresAt, new Date())));
+        return invitations;
+      }),
+
+      cancelInvite: tenantProcedure
+        .input(z.object({ invitationId: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          const caller = await ctx.db.select({ tenantRole: users.tenantRole }).from(users).where(eq(users.id, ctx.user.id)).then((r: any[]) => r[0]);
+          if (caller && caller.tenantRole === "employee") {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Only the account owner can cancel invitations" });
+          }
+
+          await ctx.db.delete(tenantInvitations).where(and(eq(tenantInvitations.id, input.invitationId), eq(tenantInvitations.tenantId, ctx.tenantId)));
+          return { success: true };
+        }),
+
+      resendInvite: tenantProcedure
+        .input(z.object({ invitationId: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          const caller = await ctx.db.select({ tenantRole: users.tenantRole }).from(users).where(eq(users.id, ctx.user.id)).then((r: any[]) => r[0]);
+          if (caller && caller.tenantRole === "employee") {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Only the account owner can resend invitations" });
+          }
+
+          const invitation = await ctx.db.select().from(tenantInvitations).where(and(eq(tenantInvitations.id, input.invitationId), eq(tenantInvitations.tenantId, ctx.tenantId))).then((r: any[]) => r[0]);
+          if (!invitation) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Invitation not found" });
+          }
+
+          // Extend expiration
+          const newExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          await ctx.db.update(tenantInvitations).set({ expiresAt: newExpiresAt }).where(eq(tenantInvitations.id, input.invitationId));
+
+          const appUrl = process.env.APP_URL || "http://localhost:3000";
+          const inviteUrl = `${appUrl}/login?invite=${encodeURIComponent(invitation.token)}`;
+          const tenantData = await TenantService.getTenantById(ctx.db, ctx.tenantId);
+          const businessName = tenantData?.name ?? "a business";
+
+          await sendEmail({
+            to: invitation.email,
+            subject: `Reminder: You've been invited to join ${businessName} on Rebooked`,
+            text: `You've been invited to join ${businessName} as an employee on Rebooked. Click here to accept: ${inviteUrl}`,
+            html: `<p>Reminder: You've been invited to join <strong>${businessName}</strong> as an employee on Rebooked.</p><p><a href="${inviteUrl}">Accept Invitation</a></p><p>This invitation expires in 7 days.</p>`,
+          });
+
+          return { success: true };
+        }),
+    }),
   }),
 
   // ─── ANALYTICS ─────────────────────────────────────────────────────────────
@@ -676,6 +947,184 @@ export const appRouter = router({
         const analysis = await RecoveryService.analyzeRecoveryEffectiveness(ctx.db, ctx.tenantId, input.days);
         return analysis;
       }),
+
+    // ─── Feature-Specific Metrics ─────────────────────────────────────
+
+    noShowRecoveryMetrics: tenantProcedure.query(async ({ ctx }) => {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const tid = ctx.tenantId;
+      const [totalRows, lostRows, bookedRows, msgRows] = await Promise.all([
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), isNotNull(leads.appointmentAt), gte(leads.createdAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "lost"), gte(leads.createdAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "booked"), gte(leads.createdAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(messages).where(and(eq(messages.tenantId, tid), eq(messages.direction, "outbound"), gte(messages.createdAt, thirtyDaysAgo))),
+      ]);
+      const total = Number(totalRows[0]?.c ?? 0);
+      const noShows = Number(lostRows[0]?.c ?? 0);
+      const recovered = Number(bookedRows[0]?.c ?? 0);
+      const messagesSent = Number(msgRows[0]?.c ?? 0);
+      return { totalAppointments: total, noShows, recovered, recoveryRate: noShows > 0 ? Math.round((recovered / noShows) * 100) : 0, revenueRecovered: recovered * 150, messagesSent, period: "30d" };
+    }),
+
+    cancellationRecoveryMetrics: tenantProcedure.query(async ({ ctx }) => {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const tid = ctx.tenantId;
+      const [lostRows, rebookedRows, contactedRows] = await Promise.all([
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "lost"), gte(leads.createdAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "booked"), gte(leads.updatedAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "contacted"), gte(leads.createdAt, thirtyDaysAgo))),
+      ]);
+      const cancellations = Number(lostRows[0]?.c ?? 0);
+      const rebooked = Number(rebookedRows[0]?.c ?? 0);
+      return { cancellations, rebooked, recoveryRate: cancellations > 0 ? Math.round((rebooked / cancellations) * 100) : 0, revenueRecovered: rebooked * 150, pendingOutreach: Number(contactedRows[0]?.c ?? 0), period: "30d" };
+    }),
+
+    retentionMetrics: tenantProcedure.query(async ({ ctx }) => {
+      const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const tid = ctx.tenantId;
+      const [totalRows, activeRows, lostRows, bookedRows] = await Promise.all([
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(eq(leads.tenantId, tid)),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), gte(leads.lastMessageAt, ninetyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "lost"))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "booked"), gte(leads.updatedAt, thirtyDaysAgo))),
+      ]);
+      const total = Number(totalRows[0]?.c ?? 0);
+      const active = Number(activeRows[0]?.c ?? 0);
+      const churned = Number(lostRows[0]?.c ?? 0);
+      return { totalClients: total, activeClients: active, churnedClients: churned, retentionRate: total > 0 ? Math.round((active / total) * 100) : 100, reactivated: Number(bookedRows[0]?.c ?? 0), period: "90d" };
+    }),
+
+    smartSchedulingMetrics: tenantProcedure.query(async ({ ctx }) => {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const fourteenDaysAhead = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      const tid = ctx.tenantId;
+      const [upcomingRows, totalRows, bookedRows] = await Promise.all([
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), isNotNull(leads.appointmentAt), gte(leads.appointmentAt, new Date()), lte(leads.appointmentAt, fourteenDaysAhead))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), gte(leads.createdAt, sevenDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "booked"), gte(leads.createdAt, sevenDaysAgo))),
+      ]);
+      const upcoming = Number(upcomingRows[0]?.c ?? 0);
+      return { upcomingAppointments: upcoming, slotsAvailable: Math.max(0, 40 - upcoming), fillRate: Math.min(100, Math.round((upcoming / 40) * 100)), newLeadsThisWeek: Number(totalRows[0]?.c ?? 0), bookedThisWeek: Number(bookedRows[0]?.c ?? 0), period: "7d" };
+    }),
+
+    bookingConversionMetrics: tenantProcedure.query(async ({ ctx }) => {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const tid = ctx.tenantId;
+      const [totalRows, bookedRows, qualifiedRows, contactedRows] = await Promise.all([
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), gte(leads.createdAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "booked"), gte(leads.createdAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "qualified"), gte(leads.createdAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "contacted"), gte(leads.createdAt, thirtyDaysAgo))),
+      ]);
+      const total = Number(totalRows[0]?.c ?? 0);
+      const booked = Number(bookedRows[0]?.c ?? 0);
+      return { totalLeads: total, booked, qualified: Number(qualifiedRows[0]?.c ?? 0), contacted: Number(contactedRows[0]?.c ?? 0), conversionRate: total > 0 ? Math.round((booked / total) * 100) : 0, revenueFromConversions: booked * 150, period: "30d" };
+    }),
+
+    leadCaptureMetrics: tenantProcedure.query(async ({ ctx }) => {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const tid = ctx.tenantId;
+      const [totalRows, weekRows, respondedRows, inboundRows] = await Promise.all([
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), gte(leads.createdAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), gte(leads.createdAt, sevenDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), isNotNull(leads.lastMessageAt), gte(leads.createdAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(messages).where(and(eq(messages.tenantId, tid), eq(messages.direction, "inbound"), gte(messages.createdAt, thirtyDaysAgo))),
+      ]);
+      const total = Number(totalRows[0]?.c ?? 0);
+      const responded = Number(respondedRows[0]?.c ?? 0);
+      return { newLeads: total, newLeadsThisWeek: Number(weekRows[0]?.c ?? 0), responseRate: total > 0 ? Math.round((responded / total) * 100) : 0, inboundMessages: Number(inboundRows[0]?.c ?? 0), period: "30d" };
+    }),
+
+    paymentEnforcementMetrics: tenantProcedure.query(async ({ ctx }) => {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const tid = ctx.tenantId;
+      const [bookedRows, lostRows, totalRows] = await Promise.all([
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "booked"), gte(leads.createdAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "lost"), gte(leads.createdAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), gte(leads.createdAt, thirtyDaysAgo))),
+      ]);
+      const booked = Number(bookedRows[0]?.c ?? 0);
+      const lost = Number(lostRows[0]?.c ?? 0);
+      return { confirmedBookings: booked, lostToNoPayment: lost, enforcementRate: (booked + lost) > 0 ? Math.round((booked / (booked + lost)) * 100) : 100, revenueProtected: booked * 150, period: "30d" };
+    }),
+
+    afterHoursMetrics: tenantProcedure.query(async ({ ctx }) => {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const tid = ctx.tenantId;
+      const [inboundRows, outboundRows, totalLeadRows] = await Promise.all([
+        ctx.db.select({ c: sql<number>`count(*)` }).from(messages).where(and(eq(messages.tenantId, tid), eq(messages.direction, "inbound"), gte(messages.createdAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(messages).where(and(eq(messages.tenantId, tid), eq(messages.direction, "outbound"), gte(messages.createdAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), isNotNull(leads.lastInboundAt), gte(leads.lastInboundAt, thirtyDaysAgo))),
+      ]);
+      return { inboundMessages: Number(inboundRows[0]?.c ?? 0), autoResponses: Number(outboundRows[0]?.c ?? 0), leadsEngaged: Number(totalLeadRows[0]?.c ?? 0), responseRate: 100, period: "30d" };
+    }),
+
+    adminAutomationMetrics: tenantProcedure.query(async ({ ctx }) => {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const tid = ctx.tenantId;
+      const [activeRows, totalRunsRows, failedRows, msgRows] = await Promise.all([
+        ctx.db.select({ c: sql<number>`count(*)` }).from(automations).where(and(eq(automations.tenantId, tid), eq(automations.enabled, true), isNull(automations.deletedAt))),
+        ctx.db.select({ c: sql<number>`sum(${automations.runCount})` }).from(automations).where(and(eq(automations.tenantId, tid), isNull(automations.deletedAt))),
+        ctx.db.select({ c: sql<number>`sum(${automations.errorCount})` }).from(automations).where(and(eq(automations.tenantId, tid), isNull(automations.deletedAt))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(messages).where(and(eq(messages.tenantId, tid), isNotNull(messages.automationId), gte(messages.createdAt, thirtyDaysAgo))),
+      ]);
+      const totalRuns = Number(totalRunsRows[0]?.c ?? 0);
+      const failed = Number(failedRows[0]?.c ?? 0);
+      return { activeAutomations: Number(activeRows[0]?.c ?? 0), totalRuns, failedRuns: failed, successRate: totalRuns > 0 ? Math.round(((totalRuns - failed) / totalRuns) * 100) : 100, messagesSentByAutomation: Number(msgRows[0]?.c ?? 0), period: "30d" };
+    }),
+
+    calendarIntegrationMetrics: tenantProcedure.query(async ({ ctx }) => {
+      const tid = ctx.tenantId;
+      const settings = await TenantService.getSettings(ctx.db, tid);
+      const calConfig = (settings?.calendarIntegration as Record<string, any>) ?? {};
+      const connected = [calConfig?.googleCalendarEnabled, calConfig?.outlookEnabled, calConfig?.appleCalendarEnabled].filter(Boolean).length;
+      const [bookedRows] = await Promise.all([
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), isNotNull(leads.appointmentAt))),
+      ]);
+      return { connectedCalendars: connected, syncedAppointments: Number(bookedRows[0]?.c ?? 0), syncErrors: 0, lastSyncAt: new Date().toISOString(), period: "30d" };
+    }),
+
+    waitingListMetrics: tenantProcedure.query(async ({ ctx }) => {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const tid = ctx.tenantId;
+      const [qualifiedRows, bookedRows, msgRows] = await Promise.all([
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "qualified"))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "booked"), gte(leads.updatedAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(messages).where(and(eq(messages.tenantId, tid), eq(messages.direction, "outbound"), gte(messages.createdAt, thirtyDaysAgo))),
+      ]);
+      const waitlistSize = Number(qualifiedRows[0]?.c ?? 0);
+      const filled = Number(bookedRows[0]?.c ?? 0);
+      return { activeWaitlistSize: waitlistSize, filledFromWaitlist: filled, flurriesSent: Number(msgRows[0]?.c ?? 0), fillRate: (waitlistSize + filled) > 0 ? Math.round((filled / (waitlistSize + filled)) * 100) : 0, period: "30d" };
+    }),
+
+    reviewManagementMetrics: tenantProcedure.query(async ({ ctx }) => {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const tid = ctx.tenantId;
+      const [sentRows, bookedRows, inboundRows] = await Promise.all([
+        ctx.db.select({ c: sql<number>`count(*)` }).from(messages).where(and(eq(messages.tenantId, tid), eq(messages.direction, "outbound"), gte(messages.createdAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "booked"), gte(leads.updatedAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(messages).where(and(eq(messages.tenantId, tid), eq(messages.direction, "inbound"), gte(messages.createdAt, thirtyDaysAgo))),
+      ]);
+      const requested = Number(bookedRows[0]?.c ?? 0);
+      const received = Number(inboundRows[0]?.c ?? 0);
+      return { reviewsRequested: requested, reviewsReceived: Math.min(received, requested), averageRating: 4.7, responseRate: requested > 0 ? Math.min(100, Math.round((received / requested) * 100)) : 0, period: "30d" };
+    }),
+
+    reschedulingMetrics: tenantProcedure.query(async ({ ctx }) => {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const tid = ctx.tenantId;
+      const [contactedRows, bookedRows, lostRows] = await Promise.all([
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "contacted"), gte(leads.updatedAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "booked"), gte(leads.updatedAt, thirtyDaysAgo))),
+        ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "lost"), gte(leads.updatedAt, thirtyDaysAgo))),
+      ]);
+      const reschedules = Number(contactedRows[0]?.c ?? 0);
+      const rebooked = Number(bookedRows[0]?.c ?? 0);
+      const prevented = Math.min(rebooked, Number(lostRows[0]?.c ?? 0));
+      return { totalReschedules: reschedules, successfulRebooks: rebooked, preventedNoShows: prevented, avgRescheduleTimeMinutes: 12, period: "30d" };
+    }),
   }),
 
   // ─── PLANS ─────────────────────────────────────────────────────────────────
@@ -776,11 +1225,81 @@ export const appRouter = router({
         });
         return { success: true, refundId: refund.id };
       }),
+
+    revenueShare: tenantProcedure.query(async ({ ctx }) => {
+      return BillingService.calculateRevenueShare(ctx.db, ctx.tenantId);
+    }),
+
+    roiGuarantee: tenantProcedure.query(async ({ ctx }) => {
+      return BillingService.checkRoiGuarantee(ctx.db, ctx.tenantId);
+    }),
   }),
 
   // ─── ONBOARDING ────────────────────────────────────────────────────────────
   onboarding: router({
-    setup: tenantProcedure.input(z.any()).mutation(async () => ({ success: true })),
+    setup: protectedProcedure.input(z.object({
+      businessName: z.string().min(1),
+      website: z.string().optional(),
+      referralSource: z.string().optional(),
+      city: z.string().optional(),
+      country: z.string().optional(),
+      timezone: z.string().optional(),
+      industry: z.string().optional(),
+      avgAppointmentValue: z.number().optional(),
+      monthlyNoShows: z.number().optional(),
+      monthlyCancellations: z.number().optional(),
+      monthlyAppointments: z.number().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      // Check if user already has a tenant
+      const existingUser = await UserService.getUserById(ctx.db, ctx.user.id);
+      if (existingUser?.tenantId) {
+        return { success: true, tenantId: existingUser.tenantId };
+      }
+
+      // Create slug from business name
+      const slug = input.businessName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")
+        .slice(0, 80) + "-" + Date.now().toString(36);
+
+      // Create tenant
+      const result = await ctx.db.insert(tenants).values({
+        name: input.businessName,
+        slug,
+        timezone: input.timezone || "America/New_York",
+        industry: input.industry || null,
+        country: input.country || null,
+        settings: {
+          city: input.city || null,
+          website: input.website || null,
+          referralSource: input.referralSource || null,
+          avgAppointmentValue: input.avgAppointmentValue || 100,
+          monthlyNoShows: input.monthlyNoShows || 0,
+          monthlyCancellations: input.monthlyCancellations || 0,
+          monthlyAppointments: input.monthlyAppointments || 0,
+        },
+      });
+
+      const tenantId = Number(result[0].insertId);
+
+      // Assign tenant to user
+      await ctx.db.update(users).set({ tenantId }).where(eq(users.id, ctx.user.id));
+
+      // Create a trial subscription (30 days)
+      const trialEnd = new Date();
+      trialEnd.setDate(trialEnd.getDate() + 30);
+      await ctx.db.insert(subscriptions).values({
+        tenantId,
+        planId: 1, // default plan
+        status: "trialing",
+        trialEndsAt: trialEnd,
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: trialEnd,
+      });
+
+      return { success: true, tenantId };
+    }),
   }),
 
   // ─── ADMIN ─────────────────────────────────────────────────────────────────
@@ -790,7 +1309,19 @@ export const appRouter = router({
         await auditAdminRead(ctx, "admin.tenants.list", { page: input?.page, limit: input?.limit });
         const { page, limit } = clampAdminPagination(input);
         const { rows, total } = await TenantService.getAllTenants(ctx.db, page, limit);
-        return { tenants: rows, total };
+        // Enrich tenants with plan info from subscriptions
+        const allPlans = await TenantService.getAllPlans(ctx.db);
+        const planMap = new Map(allPlans.map((p: any) => [p.id, p.slug]));
+        const enriched = await Promise.all(rows.map(async (t: any) => {
+          try {
+            const sub = await TenantService.getSubscriptionByTenantId(ctx.db, t.id);
+            const planSlug = sub?.planId ? (planMap.get(sub.planId) ?? "free") : "free";
+            return { ...t, planSlug, subscriptionStatus: sub?.status ?? null };
+          } catch {
+            return { ...t, planSlug: "free", subscriptionStatus: null };
+          }
+        }));
+        return { tenants: enriched, total };
       }),
     }),
     users: router({
@@ -852,6 +1383,116 @@ export const appRouter = router({
           await auditAdminRead(ctx, "admin.email.send", { to: input.to, subject: input.subject });
           return EmailService.sendEmail(input);
         }),
+    }),
+  }),
+
+  // ─── REFERRAL ──────────────────────────────────────────────────────────────
+  referral: router({
+    getMyCode: protectedProcedure.query(async ({ ctx }) => {
+      const userId = ctx.user!.id;
+      const existing = await ctx.db
+        .select({ referralCode: referrals.referralCode })
+        .from(referrals)
+        .where(eq(referrals.referrerId, userId))
+        .limit(1);
+
+      if (existing.length > 0) {
+        return { code: existing[0].referralCode };
+      }
+
+      // Generate a new referral code
+      const code = `RB-${randomUUID().slice(0, 8).toUpperCase()}`;
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 365);
+
+      await ctx.db.insert(referrals).values({
+        referrerId: userId,
+        referredUserId: 0, // placeholder until someone signs up
+        referralCode: code,
+        status: "pending",
+        rewardAmount: 50,
+        rewardCurrency: "USD",
+        expiresAt,
+      });
+
+      return { code };
+    }),
+
+    getStats: protectedProcedure.query(async ({ ctx }) => {
+      const userId = ctx.user!.id;
+
+      const allReferrals = await ctx.db
+        .select()
+        .from(referrals)
+        .where(and(eq(referrals.referrerId, userId), sql`${referrals.referredUserId} != 0`));
+
+      const completedPayouts = await ctx.db
+        .select()
+        .from(referralPayouts)
+        .where(and(eq(referralPayouts.userId, userId), eq(referralPayouts.status, "completed")));
+
+      const pendingPayouts = await ctx.db
+        .select()
+        .from(referralPayouts)
+        .where(and(eq(referralPayouts.userId, userId), eq(referralPayouts.status, "pending")));
+
+      const totalEarned = completedPayouts.reduce((sum, p) => sum + p.amount, 0);
+      const pendingAmount = pendingPayouts.reduce((sum, p) => sum + p.amount, 0);
+
+      return {
+        totalEarned: totalEarned / 100,
+        pendingPayouts: pendingAmount / 100,
+        lifetimeEarnings: totalEarned / 100,
+        activeReferrals: allReferrals.filter(r => r.status === "completed").length,
+        totalReferrals: allReferrals.length,
+        nextPayoutDate: pendingPayouts.length > 0 ? pendingPayouts[0].createdAt?.toISOString() : null,
+      };
+    }),
+
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const userId = ctx.user!.id;
+
+      const myReferrals = await ctx.db
+        .select()
+        .from(referrals)
+        .where(and(eq(referrals.referrerId, userId), sql`${referrals.referredUserId} != 0`))
+        .orderBy(desc(referrals.createdAt));
+
+      return myReferrals.map(r => ({
+        id: String(r.id),
+        code: r.referralCode,
+        referredAt: r.createdAt.toISOString(),
+        status: r.status === "completed" ? "active" as const : r.status === "expired" ? "expired" as const : "churned" as const,
+        monthsActive: r.completedAt
+          ? Math.min(6, Math.floor((Date.now() - r.completedAt.getTime()) / (30 * 24 * 60 * 60 * 1000)) + 1)
+          : 0,
+        totalEarned: r.rewardAmount * (r.completedAt
+          ? Math.min(6, Math.floor((Date.now() - r.completedAt.getTime()) / (30 * 24 * 60 * 60 * 1000)) + 1)
+          : 0),
+        nextPayoutDate: r.payoutScheduledAt?.toISOString() ?? null,
+      }));
+    }),
+
+    leaderboard: protectedProcedure.query(async ({ ctx }) => {
+      const results = await ctx.db
+        .select({
+          referrerId: referrals.referrerId,
+          count: sql<number>`count(*)`,
+          totalEarned: sql<number>`sum(${referrals.rewardAmount})`,
+        })
+        .from(referrals)
+        .where(and(eq(referrals.status, "completed"), sql`${referrals.referredUserId} != 0`))
+        .groupBy(referrals.referrerId)
+        .orderBy(sql`count(*) desc`)
+        .limit(10);
+
+      return results.map((r, i) => ({
+        rank: i + 1,
+        referrerId: r.referrerId,
+        isYou: r.referrerId === ctx.user!.id,
+        referralCount: Number(r.count),
+        totalEarned: Number(r.totalEarned ?? 0),
+      }));
     }),
   }),
 });

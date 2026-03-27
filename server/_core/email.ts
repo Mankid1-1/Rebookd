@@ -11,18 +11,24 @@ function smtpConfigured(): boolean {
 }
 
 export async function sendEmail(options: { to: string; subject: string; text: string; html?: string }): Promise<EmailResult> {
-  const fromAddress = ENV.emailFromAddress || "hello@rebooked.com";
+  const fromAddress = ENV.emailFromAddress || "noreply@rebooked.org";
 
   if (smtpConfigured()) {
     try {
+      const smtpHost = process.env.SMTP_HOST!;
+      const smtpPort = parseInt(process.env.SMTP_PORT || "587", 10);
+      const isLocalhost = smtpHost === "localhost" || smtpHost === "127.0.0.1";
       const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || "587", 10),
+        host: smtpHost,
+        port: smtpPort,
         secure: process.env.SMTP_SECURE === "true",
+        // For localhost mail servers, skip TLS negotiation entirely
+        ...(isLocalhost ? { ignoreTLS: true } : {}),
         auth: {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS || "",
         },
+        tls: { rejectUnauthorized: false },
       });
       await transporter.sendMail({
         from: `"Rebooked" <${fromAddress}>`,

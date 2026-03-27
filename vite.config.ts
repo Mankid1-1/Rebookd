@@ -11,6 +11,7 @@ export default defineConfig({
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
     },
+    dedupe: ["react", "react-dom"],
   },
   envDir: path.resolve(import.meta.dirname),
   root: path.resolve(import.meta.dirname, "client"),
@@ -25,6 +26,23 @@ export default defineConfig({
     fs: {
       strict: true,
       deny: ["**/.*"],
+    },
+  },
+  test: {
+    globals: true,
+    environment: "jsdom",
+    setupFiles: ["./client/src/test-setup.ts"],
+    include: [
+      "../shared/**/*.test.ts",
+      "../server/**/*.test.ts",
+      "./src/**/*.test.{ts,tsx}",
+    ],
+    alias: {
+      "@": path.resolve(import.meta.dirname, "client", "src"),
+      "@shared": path.resolve(import.meta.dirname, "shared"),
+    },
+    env: {
+      ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     },
   },
 });

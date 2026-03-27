@@ -23,7 +23,9 @@ export const users = mysqlTable("users", {
   loginMethod: varchar("loginMethod", { length: 64 }),
   passwordHash: varchar("passwordHash", { length: 255 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  accountType: mysqlEnum("accountType", ["business", "referral"]).default("business").notNull(),
   tenantId: int("tenantId"),
+  tenantRole: mysqlEnum("tenantRole", ["owner", "employee"]),
   active: boolean("active").default(true).notNull(),
   stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -66,12 +68,34 @@ export const tenants = mysqlTable("tenants", {
   timezone: varchar("timezone", { length: 64 }).default("America/New_York").notNull(),
   industry: varchar("industry", { length: 100 }),
   active: boolean("active").default(true).notNull(),
+  settings: json("settings").$type<Record<string, any>>(),
+  locale: varchar("locale", { length: 10 }).default("en").notNull(),
+  currency: varchar("currency", { length: 3 }).default("USD").notNull(),
+  country: varchar("country", { length: 100 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type Tenant = typeof tenants.$inferSelect;
 export type InsertTenant = typeof tenants.$inferInsert;
+
+// ─── Tenant Invitations ─────────────────────────────────────────────────────
+
+export const tenantInvitations = mysqlTable("tenant_invitations", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  email: varchar("email", { length: 255 }).notNull(),
+  role: mysqlEnum("role", ["employee"]).default("employee"),
+  token: varchar("token", { length: 255 }).notNull().unique(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => ({
+  tenantIdIdx: index("tenant_invitations_tenant_id_idx").on(t.tenantId),
+  emailIdx: index("tenant_invitations_email_idx").on(t.email),
+}));
+
+export type TenantInvitation = typeof tenantInvitations.$inferSelect;
+export type InsertTenantInvitation = typeof tenantInvitations.$inferInsert;
 
 // ─── Plans & Subscriptions ────────────────────────────────────────────────────
 
@@ -105,6 +129,7 @@ export const subscriptions = mysqlTable("subscriptions", {
   currentPeriodStart: timestamp("currentPeriodStart"),
   currentPeriodEnd: timestamp("currentPeriodEnd"),
   isPromotional: boolean("isPromotional").default(false).notNull(),
+  customMonthlyPrice: int("customMonthlyPrice"), // Flex plan: custom price in cents, null = use plan default
   promotionalExpiresAt: timestamp("promotionalExpiresAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

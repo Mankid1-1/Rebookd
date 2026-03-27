@@ -17,7 +17,7 @@ function legacyHashPassword(password: string): string {
 }
 
 async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 10);
+  return bcrypt.hash(password, 12);
 }
 
 async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
@@ -57,7 +57,8 @@ async function sendResetEmail(email: string, token: string, req: Request) {
 
 async function verifyTurnstile(token: string | undefined, req: Request): Promise<boolean> {
   const secret = process.env.TURNSTILE_SECRET_KEY;
-  if (!secret) return process.env.NODE_ENV !== "production";
+  // No Turnstile keys configured — fall back to honeypot-only spam protection
+  if (!secret) return true;
   if (!token) return false;
   const body = new URLSearchParams({ secret, response: token });
   if (req.ip) body.set("remoteip", req.ip);
@@ -75,7 +76,9 @@ function getLoginPageState(req: Request) {
   const mode = req.query.mode === "reset" ? "reset" : "signin";
   const token = typeof req.query.token === "string" ? req.query.token : "";
   const status = typeof req.query.status === "string" ? req.query.status : "";
-  return { mode, token, status };
+  const type = typeof req.query.type === "string" ? req.query.type : "";
+  const error = typeof req.query.error === "string" ? req.query.error : "";
+  return { mode, token, status, type, error };
 }
 
 export function registerOAuthRoutes(app: Express) {
@@ -145,7 +148,7 @@ export function registerOAuthRoutes(app: Express) {
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
       await UserService.updateLastSignedIn(database, user.id);
-      res.json({ ok: true });
+      res.json({ ok: true, accountType: user.role === 'admin' ? 'admin' : ((user as any).accountType || 'business') });
     } catch (error) {
       console.error("[Auth] Sign in failed", error);
       res.status(500).json({ error: "Sign in failed" });
@@ -153,12 +156,13 @@ export function registerOAuthRoutes(app: Express) {
   });
 
   app.post("/api/auth/signup", async (req: Request, res: Response) => {
-    const { email, password, name, website, captchaToken } = req.body as {
+    const { email, password, name, website, captchaToken, accountType } = req.body as {
       email?: string;
       password?: string;
       name?: string;
       website?: string;
       captchaToken?: string;
+      accountType?: 'business' | 'referral';
     };
 
     if (!email || !password) {
@@ -206,6 +210,7 @@ export function registerOAuthRoutes(app: Express) {
         email: normalizedEmail,
         loginMethod: "local",
         passwordHash,
+        accountType: accountType === 'referral' ? 'referral' : 'business',
         lastSignedIn: new Date(),
       });
       const user = await UserService.getUserByOpenId(database, openId);
@@ -304,112 +309,555 @@ export function registerOAuthRoutes(app: Express) {
   });
 }
 
-function loginPageHtml(state: { mode: string; token: string; status: string }): string {
+function loginPageHtml(state: { mode: string; token: string; status: string; type: string; error: string }): string {
   const turnstileSiteKey = process.env.TURNSTILE_SITE_KEY || "";
+  const initialTab = state.type === "referral" ? "signup" : state.mode;
+  const initialAccountType = state.type === "referral" ? "referral" : "business";
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Rebooked Sign In</title>
+  <title>Sign In - Rebooked</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   ${turnstileSiteKey ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>' : ""}
   <style>
-    body { font-family: Inter, Arial, sans-serif; background: #0b1020; color: #e5ecf5; min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 24px; }
-    .card { width: 100%; max-width: 460px; background: #121a2e; border: 1px solid #233150; border-radius: 20px; padding: 28px; box-shadow: 0 18px 60px rgba(0,0,0,.35); }
-    h1 { margin: 0 0 8px; font-size: 28px; }
-    p { color: #9db0cd; line-height: 1.5; }
-    .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 20px 0; }
-    .tab { border: 1px solid #233150; background: #0d1425; color: #9db0cd; border-radius: 12px; padding: 10px; cursor: pointer; }
-    .tab.active { background: #1b2a49; color: #fff; border-color: #4d73c9; }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #060a13;
+      color: #e2e8f0;
+      min-height: 100vh;
+      min-height: 100dvh;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      -webkit-font-smoothing: antialiased;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% -10%, rgba(56, 96, 207, 0.12) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 50% at 80% 100%, rgba(99, 60, 200, 0.08) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .brand {
+      text-align: center;
+      margin-bottom: 32px;
+      position: relative;
+      z-index: 1;
+    }
+    .brand h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 32px;
+      font-weight: 700;
+      margin: 0;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .brand p {
+      color: #64748b;
+      font-size: 14px;
+      margin: 6px 0 0;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 420px;
+      background: rgba(15, 20, 35, 0.85);
+      border: 1px solid rgba(99, 115, 155, 0.15);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+      backdrop-filter: blur(20px);
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 24px;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 10px;
+      padding: 4px;
+      border: 1px solid rgba(99, 115, 155, 0.1);
+    }
+    .tab-btn {
+      flex: 1;
+      border: none;
+      background: transparent;
+      color: #64748b;
+      border-radius: 8px;
+      padding: 10px 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+    .tab-btn:hover { color: #94a3b8; }
+    .tab-btn.active {
+      background: rgba(56, 96, 207, 0.15);
+      color: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Panels */
     .panel { display: none; }
-    .panel.active { display: block; }
-    label { display: block; margin: 0 0 6px; font-size: 13px; color: #b7c7df; }
-    input { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid #233150; background: #0d1425; color: #fff; margin-bottom: 14px; }
-    button.primary { width: 100%; border: 0; border-radius: 12px; padding: 12px 14px; background: #4d73c9; color: white; font-weight: 700; cursor: pointer; }
-    button.secondary { width: 100%; border: 1px solid #35518d; border-radius: 12px; padding: 12px 14px; background: transparent; color: #d4e0f2; cursor: pointer; margin-top: 10px; }
-    .notice, .error { border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; display: none; }
-    .notice { background: rgba(41, 177, 107, .14); border: 1px solid rgba(41, 177, 107, .35); color: #baf3d0; }
-    .error { background: rgba(213, 84, 84, .14); border: 1px solid rgba(213, 84, 84, .35); color: #ffd1d1; }
-    .linkish { color: #88a9ff; cursor: pointer; text-decoration: underline; }
-    .footer { margin-top: 14px; font-size: 13px; }
-    .hidden { display: none; }
+    .panel.active { display: block; animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Form fields */
+    .field { margin-bottom: 16px; }
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+    .input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .input-wrap input {
+      width: 100%;
+      padding: 11px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(99, 115, 155, 0.2);
+      background: rgba(15, 23, 42, 0.5);
+      color: #e2e8f0;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+    }
+    .input-wrap input::placeholder { color: #475569; }
+    .input-wrap input:focus {
+      border-color: rgba(56, 96, 207, 0.5);
+      box-shadow: 0 0 0 3px rgba(56, 96, 207, 0.1);
+    }
+    .input-wrap .toggle-pw {
+      position: absolute;
+      right: 10px;
+      background: none;
+      border: none;
+      color: #475569;
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      transition: color 0.15s;
+    }
+    .input-wrap .toggle-pw:hover { color: #94a3b8; }
+
+    /* Password requirements */
+    .pw-reqs {
+      display: flex;
+      gap: 12px;
+      margin: -8px 0 16px;
+      font-size: 11px;
+      color: #475569;
+    }
+    .pw-reqs span { display: flex; align-items: center; gap: 4px; }
+    .pw-reqs .met { color: #34d399; }
+
+    /* Account type toggle */
+    .type-toggle {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .type-btn {
+      position: relative;
+      border: 1px solid rgba(99, 115, 155, 0.15);
+      background: rgba(15, 23, 42, 0.4);
+      color: #64748b;
+      border-radius: 10px;
+      padding: 12px 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+      text-align: left;
+    }
+    .type-btn:hover { border-color: rgba(99, 115, 155, 0.3); color: #94a3b8; }
+    .type-btn.active {
+      border-color: rgba(56, 96, 207, 0.4);
+      background: rgba(56, 96, 207, 0.08);
+      color: #e2e8f0;
+    }
+    .type-btn .type-label {
+      font-size: 13px;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 2px;
+    }
+    .type-btn .type-desc {
+      font-size: 11px;
+      opacity: 0.7;
+      line-height: 1.3;
+    }
+    .type-btn .type-check {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid rgba(99, 115, 155, 0.25);
+      transition: all 0.2s;
+    }
+    .type-btn.active .type-check {
+      border-color: #3b6de0;
+      background: #3b6de0;
+      box-shadow: inset 0 0 0 3px rgba(15, 23, 42, 0.8);
+    }
+
+    /* Buttons */
+    .btn-primary {
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #3b6de0 0%, #2f5cc5 100%);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .btn-primary:hover { background: linear-gradient(135deg, #4a7af0 0%, #3b6de0 100%); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(59, 109, 224, 0.25); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+    .btn-primary .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: none;
+    }
+    .btn-primary.loading .spinner { display: block; }
+    .btn-primary.loading .btn-text { display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .btn-link {
+      background: none;
+      border: none;
+      color: #6b8acd;
+      font-size: 13px;
+      cursor: pointer;
+      padding: 0;
+      font-family: inherit;
+      transition: color 0.15s;
+    }
+    .btn-link:hover { color: #93b4f5; text-decoration: underline; }
+
+    /* Alerts */
+    .alert {
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      line-height: 1.5;
+      display: none;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .alert.visible { display: flex; animation: fadeIn 0.25s ease; }
+    .alert-icon { flex-shrink: 0; margin-top: 1px; }
+    .alert-success {
+      background: rgba(34, 197, 94, 0.08);
+      border: 1px solid rgba(34, 197, 94, 0.2);
+      color: #86efac;
+    }
+    .alert-error {
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+    }
+
+    /* Footer */
+    .card-footer {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(99, 115, 155, 0.1);
+      text-align: center;
+    }
+    .card-footer p {
+      color: #475569;
+      font-size: 12px;
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    /* Divider with text */
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 16px 0;
+      font-size: 12px;
+      color: #475569;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: rgba(99, 115, 155, 0.15);
+    }
+
+    /* Honeypot */
+    .hp { position: absolute; left: -9999px; opacity: 0; height: 0; width: 0; }
+
+    /* Responsive */
+    @media (max-width: 480px) {
+      body { padding: 16px; }
+      .card { padding: 24px 20px; border-radius: 14px; }
+      .brand h1 { font-size: 28px; }
+      .type-btn .type-desc { display: none; }
+    }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>Rebooked</h1>
-    <p>Sign in, create an account, or recover access without leaving this page.</p>
-    <div id="notice" class="notice"></div>
-    <div id="error" class="error"></div>
-    <div class="tabs">
-      <button class="tab" data-tab="signin" onclick="switchTab('signin')">Sign in</button>
-      <button class="tab" data-tab="signup" onclick="switchTab('signup')">Sign up</button>
-      <button class="tab" data-tab="forgot" onclick="switchTab('forgot')">Forgot</button>
-      <button class="tab" data-tab="reset" onclick="switchTab('reset')">Reset</button>
-    </div>
-
-    <div id="signin" class="panel">
-      <label>Email</label>
-      <input id="signin-email" type="email" placeholder="you@example.com" />
-      <label>Password</label>
-      <input id="signin-password" type="password" placeholder="Your password" />
-      <button id="signin-btn" class="primary" onclick="signIn()">Sign in</button>
-      <button class="secondary" onclick="switchTab('forgot')">Forgot password</button>
-    </div>
-
-    <div id="signup" class="panel">
-      <label>Name</label>
-      <input id="signup-name" type="text" placeholder="Jane Smith" />
-      <label>Email</label>
-      <input id="signup-email" type="email" placeholder="you@example.com" />
-      <label>Password</label>
-      <input id="signup-password" type="password" placeholder="At least 8 characters" />
-      <input id="signup-website" class="hidden" type="text" tabindex="-1" autocomplete="off" />
-      ${turnstileSiteKey ? `<div class="cf-turnstile" data-sitekey="${turnstileSiteKey}"></div>` : `<p style="margin:-4px 0 14px;font-size:13px;">Signup protection is using server-side honeypot mode because Turnstile keys are not configured.</p>`}
-      <button id="signup-btn" class="primary" onclick="signUp()">Create account</button>
-      <button class="secondary" onclick="resendVerification()">Resend verification email</button>
-    </div>
-
-    <div id="forgot" class="panel">
-      <label>Email</label>
-      <input id="forgot-email" type="email" placeholder="you@example.com" />
-      <button id="forgot-btn" class="primary" onclick="forgotPassword()">Send reset link</button>
-    </div>
-
-    <div id="reset" class="panel">
-      <label>Reset token</label>
-      <input id="reset-token" type="text" placeholder="Paste the reset token from your email link" value="${state.token}" />
-      <label>New password</label>
-      <input id="reset-password" type="password" placeholder="At least 8 characters" />
-      <button id="reset-btn" class="primary" onclick="resetPassword()">Save new password</button>
-    </div>
-
-    <p class="footer">Verification is required before first sign in. Billing invoices and automations stay tied to the verified account.</p>
+  <div class="brand">
+    <a href="/" style="text-decoration:none;color:inherit"><h1>Rebooked</h1></a>
+    <p>Revenue recovery for appointment-based businesses</p>
+    <a href="/" style="font-size:13px;color:#94a3b8;text-decoration:none;display:inline-flex;align-items:center;gap:4px;margin-top:6px">&larr; Back to Home</a>
   </div>
+
+  <div class="card">
+    <div id="alert-success" class="alert alert-success">
+      <span class="alert-icon"><svg width="16" height="16" fill="none" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" stroke="#22c55e" stroke-width="1.5"/><path d="M5.5 8.5L7 10l3.5-4" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <span id="alert-success-text"></span>
+    </div>
+    <div id="alert-error" class="alert alert-error">
+      <span class="alert-icon"><svg width="16" height="16" fill="none" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" stroke="#ef4444" stroke-width="1.5"/><path d="M8 5v3.5M8 10.5h.005" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+      <span id="alert-error-text"></span>
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button class="tab-btn" data-tab="signin" onclick="switchTab('signin')" role="tab">Sign In</button>
+      <button class="tab-btn" data-tab="signup" onclick="switchTab('signup')" role="tab">Sign Up</button>
+      <button class="tab-btn" data-tab="forgot" onclick="switchTab('forgot')" role="tab">Forgot</button>
+      <button class="tab-btn" data-tab="reset" onclick="switchTab('reset')" role="tab" style="${state.token ? '' : 'display:none'}">Reset</button>
+    </div>
+
+    <!-- Sign In Panel -->
+    <div id="signin" class="panel" role="tabpanel">
+      <form onsubmit="signIn(event)" novalidate>
+        <div class="field">
+          <label for="signin-email">Email address</label>
+          <div class="input-wrap">
+            <input id="signin-email" type="email" placeholder="you@example.com" autocomplete="email" required />
+          </div>
+        </div>
+        <div class="field">
+          <label for="signin-password">Password</label>
+          <div class="input-wrap">
+            <input id="signin-password" type="password" placeholder="Enter your password" autocomplete="current-password" required />
+            <button type="button" class="toggle-pw" onclick="togglePassword('signin-password', this)" aria-label="Show password">
+              <svg class="eye-open" width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/></svg>
+              <svg class="eye-closed" width="18" height="18" fill="none" viewBox="0 0 24 24" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+        <button type="submit" id="signin-btn" class="btn-primary">
+          <span class="spinner"></span>
+          <span class="btn-text">Sign In</span>
+        </button>
+      </form>
+      <div class="divider">or</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <button class="btn-link" onclick="switchTab('forgot')">Forgot your password?</button>
+        <button class="btn-link" onclick="switchTab('signup')">Create account</button>
+      </div>
+    </div>
+
+    <!-- Sign Up Panel -->
+    <div id="signup" class="panel" role="tabpanel">
+      <form onsubmit="signUp(event)" novalidate>
+        <div class="type-toggle">
+          <button type="button" id="type-business" class="type-btn active" onclick="setAccountType('business')">
+            <span class="type-check"></span>
+            <span class="type-label">Business</span>
+            <span class="type-desc">Automations, analytics, revenue recovery</span>
+          </button>
+          <button type="button" id="type-referral" class="type-btn" onclick="setAccountType('referral')">
+            <span class="type-check"></span>
+            <span class="type-label">Referral</span>
+            <span class="type-desc">Earn $300 per referral, track &amp; get paid</span>
+          </button>
+        </div>
+        <input id="signup-account-type" type="hidden" value="${initialAccountType}" />
+        <div class="field">
+          <label for="signup-name">Your name</label>
+          <div class="input-wrap">
+            <input id="signup-name" type="text" placeholder="Jane Smith" autocomplete="name" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="signup-email">Email address</label>
+          <div class="input-wrap">
+            <input id="signup-email" type="email" placeholder="you@example.com" autocomplete="email" required />
+          </div>
+        </div>
+        <div class="field">
+          <label for="signup-password">Password</label>
+          <div class="input-wrap">
+            <input id="signup-password" type="password" placeholder="Create a strong password" autocomplete="new-password" required oninput="checkPasswordStrength(this.value)" />
+            <button type="button" class="toggle-pw" onclick="togglePassword('signup-password', this)" aria-label="Show password">
+              <svg class="eye-open" width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/></svg>
+              <svg class="eye-closed" width="18" height="18" fill="none" viewBox="0 0 24 24" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <div class="pw-reqs">
+            <span id="pw-length">8+ characters</span>
+          </div>
+        </div>
+        <input id="signup-website" type="text" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true" />
+        ${turnstileSiteKey ? `<div class="cf-turnstile" data-sitekey="${turnstileSiteKey}" style="margin-bottom:16px;"></div>` : ""}
+        <button type="submit" id="signup-btn" class="btn-primary">
+          <span class="spinner"></span>
+          <span class="btn-text">Create Account</span>
+        </button>
+      </form>
+      <div class="divider">already have an account?</div>
+      <div style="display:flex;justify-content:center;gap:16px;">
+        <button class="btn-link" onclick="switchTab('signin')">Sign in instead</button>
+        <button class="btn-link" onclick="resendVerification()" title="Re-send if you signed up but didn't verify">Resend verification</button>
+      </div>
+    </div>
+
+    <!-- Forgot Password Panel -->
+    <div id="forgot" class="panel" role="tabpanel">
+      <p style="color:#94a3b8;font-size:13px;margin:0 0 16px;line-height:1.5;">Enter the email you signed up with. We'll send a reset link if the account exists.</p>
+      <form onsubmit="forgotPassword(event)" novalidate>
+        <div class="field">
+          <label for="forgot-email">Email address</label>
+          <div class="input-wrap">
+            <input id="forgot-email" type="email" placeholder="you@example.com" autocomplete="email" required />
+          </div>
+        </div>
+        <button type="submit" id="forgot-btn" class="btn-primary">
+          <span class="spinner"></span>
+          <span class="btn-text">Send Reset Link</span>
+        </button>
+      </form>
+      <div class="divider">or</div>
+      <button class="btn-link" onclick="switchTab('signin')" style="display:block;margin:0 auto;">Back to sign in</button>
+    </div>
+
+    <!-- Reset Password Panel -->
+    <div id="reset" class="panel" role="tabpanel">
+      <p style="color:#94a3b8;font-size:13px;margin:0 0 16px;line-height:1.5;">The reset token was pre-filled from your email link. Choose a new password below.</p>
+      <form onsubmit="resetPassword(event)" novalidate>
+        <div class="field">
+          <label for="reset-token">Reset token</label>
+          <div class="input-wrap">
+            <input id="reset-token" type="text" placeholder="Paste the token from your email" value="${state.token}" readonly style="${state.token ? 'opacity:0.6;' : ''}" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="reset-password">New password</label>
+          <div class="input-wrap">
+            <input id="reset-password" type="password" placeholder="At least 8 characters" autocomplete="new-password" required />
+            <button type="button" class="toggle-pw" onclick="togglePassword('reset-password', this)" aria-label="Show password">
+              <svg class="eye-open" width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/></svg>
+              <svg class="eye-closed" width="18" height="18" fill="none" viewBox="0 0 24 24" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+        <button type="submit" id="reset-btn" class="btn-primary">
+          <span class="spinner"></span>
+          <span class="btn-text">Save New Password</span>
+        </button>
+      </form>
+      <div class="divider">or</div>
+      <button class="btn-link" onclick="switchTab('signin')" style="display:block;margin:0 auto;">Back to sign in</button>
+    </div>
+
+    <div class="card-footer">
+      <p>Email verification is required before your first sign in.</p>
+    </div>
+  </div>
+
   <script>
-    const initialMode = ${JSON.stringify(state.mode)};
+    /* ── State ── */
+    const initialTab = ${JSON.stringify(initialTab)};
     const initialStatus = ${JSON.stringify(state.status)};
+    const initialError = ${JSON.stringify(state.error)};
+    const initialAccountType = ${JSON.stringify(initialAccountType)};
 
-    function notice(message) {
-      const el = document.getElementById('notice');
-      el.textContent = message;
-      el.style.display = 'block';
-      document.getElementById('error').style.display = 'none';
+    /* ── Alerts ── */
+    function showSuccess(msg) {
+      const el = document.getElementById('alert-success');
+      document.getElementById('alert-success-text').textContent = msg;
+      el.classList.add('visible');
+      document.getElementById('alert-error').classList.remove('visible');
+    }
+    function showError(msg) {
+      const el = document.getElementById('alert-error');
+      document.getElementById('alert-error-text').textContent = msg;
+      el.classList.add('visible');
+      document.getElementById('alert-success').classList.remove('visible');
+    }
+    function clearAlerts() {
+      document.getElementById('alert-success').classList.remove('visible');
+      document.getElementById('alert-error').classList.remove('visible');
     }
 
-    function fail(message) {
-      const el = document.getElementById('error');
-      el.textContent = message;
-      el.style.display = 'block';
-      document.getElementById('notice').style.display = 'none';
-    }
-
+    /* ── Tabs ── */
     function switchTab(tab) {
-      document.querySelectorAll('.tab').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tab));
-      document.querySelectorAll('.panel').forEach((panel) => panel.classList.toggle('active', panel.id === tab));
-      document.getElementById('error').style.display = 'none';
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === tab));
+      clearAlerts();
+      // Auto-focus the first input in the active panel
+      requestAnimationFrame(() => {
+        const firstInput = document.querySelector('#' + tab + ' input:not([type=hidden]):not(.hp)');
+        if (firstInput && !firstInput.readOnly) firstInput.focus();
+      });
     }
 
+    /* ── Password visibility ── */
+    function togglePassword(inputId, btn) {
+      const input = document.getElementById(inputId);
+      const isPassword = input.type === 'password';
+      input.type = isPassword ? 'text' : 'password';
+      btn.querySelector('.eye-open').style.display = isPassword ? 'none' : 'block';
+      btn.querySelector('.eye-closed').style.display = isPassword ? 'block' : 'none';
+    }
+
+    /* ── Password strength ── */
+    function checkPasswordStrength(value) {
+      const lenEl = document.getElementById('pw-length');
+      if (value.length >= 8) { lenEl.classList.add('met'); lenEl.textContent = '8+ characters'; }
+      else { lenEl.classList.remove('met'); lenEl.textContent = '8+ characters'; }
+    }
+
+    /* ── Networking ── */
     async function postJson(url, payload) {
       const response = await fetch(url, {
         method: 'POST',
@@ -422,81 +870,146 @@ function loginPageHtml(state: { mode: string; token: string; status: string }): 
       return data;
     }
 
+    function setLoading(btnId, loading) {
+      const btn = document.getElementById(btnId);
+      btn.disabled = loading;
+      btn.classList.toggle('loading', loading);
+    }
+
     function turnstileToken() {
       if (!window.turnstile) return '';
       const input = document.querySelector('[name="cf-turnstile-response"]');
       return input ? input.value : '';
     }
 
-    async function signIn() {
+    /* ── Account type ── */
+    function setAccountType(type) {
+      document.getElementById('signup-account-type').value = type;
+      document.getElementById('type-business').classList.toggle('active', type === 'business');
+      document.getElementById('type-referral').classList.toggle('active', type === 'referral');
+    }
+
+    /* ── Sign In ── */
+    async function signIn(e) {
+      e && e.preventDefault();
+      const email = document.getElementById('signin-email').value.trim();
+      const password = document.getElementById('signin-password').value;
+      if (!email) { showError('Please enter your email address.'); return; }
+      if (!password) { showError('Please enter your password.'); return; }
+      setLoading('signin-btn', true);
       try {
-        await postJson('/api/auth/signin', {
-          email: document.getElementById('signin-email').value.trim(),
-          password: document.getElementById('signin-password').value,
-        });
-        window.location.href = '/dashboard';
+        const data = await postJson('/api/auth/signin', { email, password });
+        showSuccess('Signing you in...');
+        // Check for stored redirect path from AuthGuard
+        const savedPath = sessionStorage.getItem('redirectPath');
+        sessionStorage.removeItem('redirectPath');
+        const defaultPath = data.accountType === 'admin' ? '/admin/tenants' : data.accountType === 'referral' ? '/referral' : '/dashboard';
+        window.location.href = savedPath && savedPath !== '/login' ? savedPath : defaultPath;
       } catch (error) {
-        fail(error.message || String(error));
+        showError(error.message || String(error));
+        setLoading('signin-btn', false);
       }
     }
 
-    async function signUp() {
+    /* ── Sign Up ── */
+    async function signUp(e) {
+      e && e.preventDefault();
+      const name = document.getElementById('signup-name').value.trim();
+      const email = document.getElementById('signup-email').value.trim();
+      const password = document.getElementById('signup-password').value;
+      const accountType = document.getElementById('signup-account-type').value;
+      if (!email) { showError('Please enter your email address.'); return; }
+      if (!password) { showError('Please enter a password.'); return; }
+      if (password.length < 8) { showError('Password must be at least 8 characters long.'); return; }
+      setLoading('signup-btn', true);
       try {
         await postJson('/api/auth/signup', {
-          name: document.getElementById('signup-name').value.trim(),
-          email: document.getElementById('signup-email').value.trim(),
-          password: document.getElementById('signup-password').value,
+          name, email, password,
           website: document.getElementById('signup-website').value,
           captchaToken: turnstileToken(),
+          accountType,
         });
-        notice('Account created. Check your email for the verification link before signing in.');
+        showSuccess('Account created! Check your email for a verification link, then sign in.');
         switchTab('signin');
+        document.getElementById('signin-email').value = email;
       } catch (error) {
-        fail(error.message || String(error));
+        showError(error.message || String(error));
+      } finally {
+        setLoading('signup-btn', false);
       }
     }
 
-    async function forgotPassword() {
+    /* ── Forgot ── */
+    async function forgotPassword(e) {
+      e && e.preventDefault();
+      const email = document.getElementById('forgot-email').value.trim();
+      if (!email) { showError('Please enter your email address.'); return; }
+      setLoading('forgot-btn', true);
       try {
-        await postJson('/api/auth/forgot-password', {
-          email: document.getElementById('forgot-email').value.trim(),
-        });
-        notice('If that email exists, we sent a password reset link.');
+        await postJson('/api/auth/forgot-password', { email });
+        showSuccess('If that email exists, we sent a password reset link. Check your inbox.');
+        // Show the reset tab now
+        const resetTab = document.querySelector('[data-tab="reset"]');
+        if (resetTab) resetTab.style.display = '';
         switchTab('reset');
       } catch (error) {
-        fail(error.message || String(error));
+        showError(error.message || String(error));
+      } finally {
+        setLoading('forgot-btn', false);
       }
     }
 
-    async function resetPassword() {
+    /* ── Reset ── */
+    async function resetPassword(e) {
+      e && e.preventDefault();
+      const token = document.getElementById('reset-token').value.trim();
+      const password = document.getElementById('reset-password').value;
+      if (!token) { showError('Please paste the reset token from your email.'); return; }
+      if (!password || password.length < 8) { showError('New password must be at least 8 characters.'); return; }
+      setLoading('reset-btn', true);
       try {
-        await postJson('/api/auth/reset-password', {
-          token: document.getElementById('reset-token').value.trim(),
-          password: document.getElementById('reset-password').value,
-        });
-        notice('Password reset complete. You can sign in now.');
+        await postJson('/api/auth/reset-password', { token, password });
+        showSuccess('Password reset successfully. You can sign in with your new password.');
         switchTab('signin');
       } catch (error) {
-        fail(error.message || String(error));
+        showError(error.message || String(error));
+      } finally {
+        setLoading('reset-btn', false);
       }
     }
 
+    /* ── Resend verification ── */
     async function resendVerification() {
+      const email = document.getElementById('signup-email').value.trim() || document.getElementById('signin-email').value.trim();
+      if (!email) { showError('Enter an email address first, then click resend.'); return; }
       try {
-        await postJson('/api/auth/resend-verification', {
-          email: document.getElementById('signup-email').value.trim(),
-        });
-        notice('If the account is waiting on verification, we sent a new email.');
+        await postJson('/api/auth/resend-verification', { email });
+        showSuccess('If the account is pending verification, we sent a new email.');
       } catch (error) {
-        fail(error.message || String(error));
+        showError(error.message || String(error));
       }
     }
 
-    if (initialStatus === 'verify-success') notice('Email verified. You can sign in now.');
-    if (initialStatus === 'verify-invalid') fail('That verification link is invalid or expired. Request a new one.');
-    if (initialStatus === 'verify-missing') fail('Verification link is missing a token.');
-    if (initialStatus === 'verify-error') fail('We could not verify your email right now.');
-    switchTab(initialMode);
+    /* ── Allow Enter key to submit forms ── */
+    document.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter') return;
+      const active = document.querySelector('.panel.active');
+      if (!active) return;
+      const form = active.querySelector('form');
+      if (form) form.requestSubmit();
+    });
+
+    /* ── Init ── */
+    if (initialStatus === 'verify-success') showSuccess('Email verified successfully! You can now sign in.');
+    else if (initialStatus === 'verify-invalid') showError('That verification link is invalid or has expired. Please request a new one.');
+    else if (initialStatus === 'verify-missing') showError('Verification link is missing a token. Please check your email again.');
+    else if (initialStatus === 'verify-error') showError('We could not verify your email right now. Please try again later.');
+    if (initialError) showError(decodeURIComponent(initialError));
+
+    // Set initial account type for referral links
+    if (initialAccountType === 'referral') setAccountType('referral');
+
+    switchTab(initialTab);
   </script>
 </body>
 </html>`;

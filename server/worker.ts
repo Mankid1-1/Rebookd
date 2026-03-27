@@ -125,7 +125,53 @@ async function fireAutomation(
 ) {
   const decryptedPhone = decrypt(leadPhone);
   const decryptedName = leadName ? decrypt(leadName) : null;
-  const vars: Record<string, string> = { name: decryptedName || "there" };
+  const firstName = decryptedName ? decryptedName.split(" ")[0] : "there";
+
+  // Fetch the tenant's business name for the {{business}} template variable
+  let businessName = "";
+  try {
+    const tenantRow = await db
+      .select({ name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    businessName = tenantRow[0]?.name || "";
+  } catch (err) {
+    logger.warn("Failed to fetch tenant name for template", { tenantId, error: String(err) });
+  }
+
+  // Fetch lead's appointment data for date/time if available
+  let appointmentDate = "";
+  let appointmentTime = "";
+  try {
+    const lead = await db
+      .select({ appointmentDate: leads.appointmentDate })
+      .from(leads)
+      .where(and(eq(leads.id, leadId), eq(leads.tenantId, tenantId)))
+      .limit(1);
+    if (lead[0]?.appointmentDate) {
+      const apptDate = new Date(lead[0].appointmentDate);
+      appointmentDate = apptDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+      appointmentTime = apptDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    }
+  } catch (err) {
+    logger.warn("Failed to fetch lead appointment data for template", { leadId, error: String(err) });
+  }
+
+  // Use current date/time as fallbacks if no appointment data
+  if (!appointmentDate) {
+    const now = new Date();
+    appointmentDate = now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    appointmentTime = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+
+  const vars: Record<string, string> = {
+    name: decryptedName || "there",
+    first_name: firstName,
+    business: businessName,
+    date: appointmentDate,
+    time: appointmentTime,
+  };
   const resolved = resolveTemplate(messageBody, vars);
 
   const res = await sendWithRetry(decryptedPhone, resolved, fromNumber, tenantId);

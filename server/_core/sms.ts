@@ -67,6 +67,12 @@ async function guardOutboundSend(tenantId?: number): Promise<SMSResult | null> {
 }
 
 async function sendViaTelnyx(to: string, body: string, from: string): Promise<SMSResult> {
+  // Log when sending to international (non-US/Canada) numbers.
+  // Telnyx may require different sender IDs or international messaging to be enabled on the number.
+  if (!to.startsWith("+1")) {
+    logger.info("Sending SMS to international number via Telnyx", { to: to.slice(0, 5) + "***", from });
+  }
+
   const { ok, data, text } = await fetchSmsProvider("https://api.telnyx.com/v2/messages", {
     method: "POST",
     headers: {
@@ -111,6 +117,12 @@ async function sendViaTwilio(to: string, body: string, from: string): Promise<SM
 }
 
 export async function sendSMS(to: string, body: string, from?: string, tenantId?: number): Promise<SMSResult> {
+  // Validate E.164 format before attempting to send
+  if (!/^\+[1-9]\d{1,14}$/.test(to)) {
+    logger.warn("SMS recipient not in E.164 format", { to });
+    return { success: false, error: "Phone number must be in E.164 format (e.g. +1234567890)", provider: "none", errorCode: "INVALID_PHONE" };
+  }
+
   const guardResult = await guardOutboundSend(tenantId);
   if (guardResult) return guardResult;
 
@@ -132,7 +144,12 @@ export async function sendSMS(to: string, body: string, from?: string, tenantId?
     }
   }
 
-  logger.warn("No SMS provider configured", { to });
+  if (process.env.NODE_ENV === "production") {
+    logger.error("No SMS provider configured in production", { to });
+    return { success: false, error: "No SMS provider configured", provider: "none" };
+  }
+
+  logger.warn("No SMS provider configured — using dev fallback", { to });
   return { success: true, sid: `dev_${Date.now()}`, provider: "dev" };
 }
 

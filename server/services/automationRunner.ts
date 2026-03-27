@@ -56,7 +56,17 @@ async function executeStep(db: Db, step: any, event: EventPayload, tenantId: num
       if (!toPhone) throw new Error("No target phone number for sms step");
       const normalized = normalizePhoneE164(String(toPhone));
       if (!normalized) throw new Error("Invalid phone number for SMS automation step");
-      const body = resolveTemplate(String(step.message || step.body || ""), { ...event.data });
+
+      // Enrich template vars with tenant business name if not already in event data
+      const templateVars: Record<string, unknown> = { ...event.data };
+      if (!templateVars.business) {
+        try {
+          const tenant = await TenantService.getTenantById(db, tenantId);
+          if (tenant) templateVars.business = tenant.name;
+        } catch { /* best effort */ }
+      }
+
+      const body = resolveTemplate(String(step.message || step.body || ""), templateVars);
       const res = await sendWithRetry(normalized, body, undefined, tenantId);
       if (leadId) {
         await LeadService.createMessage(db, {
