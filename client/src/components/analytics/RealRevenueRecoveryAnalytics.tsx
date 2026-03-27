@@ -20,11 +20,12 @@ import {
   CheckCircle, AlertTriangle, ArrowUp, ArrowDown, Info
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
-import {
+import { 
   useDynamicRecoveryProbability,
   useDynamicRevenueImpact,
+  useProgressiveDisclosureContext,
+  trackFeatureUsage
 } from '@/hooks/useDynamicRevenueRecovery';
-import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
 
 // Dynamic colors based on user theme
 const getDynamicAnalyticsColors = () => {
@@ -46,16 +47,15 @@ export function RealRevenueRecoveryAnalytics() {
   // Dynamic colors based on user theme
   const colors = getDynamicAnalyticsColors();
   
-  // Data from dashboard endpoint (specific analytics endpoints not yet available)
-  const { data: dashData } = trpc.analytics.dashboard.useQuery();
-  const recoveryAnalytics: any = undefined;
-  const automationPerformance: any = undefined;
-  const revenueMetrics = dashData?.revenueMetrics;
-  const userConversionMetrics: any = undefined;
+  // Real data queries
+  const { data: recoveryAnalytics } = trpc.analytics.recoveryAnalytics.useQuery();
+  const { data: automationPerformance } = trpc.analytics.automationPerformance.useQuery();
+  const { data: revenueMetrics } = trpc.analytics.revenueMetrics.useQuery();
+  const { data: userConversionMetrics } = trpc.analytics.userConversionMetrics.useQuery();
 
-  // Track analytics viewing (placeholder for future analytics tracking)
+  // Track analytics viewing
   useEffect(() => {
-    // Feature usage tracking
+    trackFeatureUsage('revenue_analytics_viewed');
   }, []);
 
   // Calculate real revenue recovery statistics
@@ -98,15 +98,12 @@ export function RealRevenueRecoveryAnalytics() {
     }, {} as Record<string, { attempts: number; successes: number; revenue: number }>);
 
     // Convert success rates to percentages
-    const automationTypeStats = Object.entries(automationSuccessRates).map(([type, stats]) => {
-      const s = stats as { attempts: number; successes: number; revenue: number };
-      return {
-        type,
-        successRate: s.attempts > 0 ? (s.successes / s.attempts) * 100 : 0,
-        totalRevenue: s.revenue,
-        attempts: s.attempts,
-      };
-    });
+    const automationTypeStats = Object.entries(automationSuccessRates).map(([type, stats]) => ({
+      type,
+      successRate: stats.attempts > 0 ? (stats.successes / stats.attempts) * 100 : 0,
+      totalRevenue: stats.revenue,
+      attempts: stats.attempts
+    }));
 
     return {
       realRecoveryRate,

@@ -248,31 +248,31 @@ export function MobileQuickActions({ onAddLead, onSendMessage, onViewAnalytics, 
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={onAddLead}
-            className="flex flex-col items-center justify-center p-4 border rounded-lg hover:bg-muted/30 transition-colors"
+            className="flex flex-col items-center justify-center p-4 border rounded-lg hover:bg-gray-50 transition-colors"
           >
             <Users className="h-6 w-6 text-blue-500 mb-2" />
             <span className="text-sm font-medium">Add Lead</span>
           </button>
-
+          
           <button
             onClick={onSendMessage}
-            className="flex flex-col items-center justify-center p-4 border rounded-lg hover:bg-muted/30 transition-colors"
+            className="flex flex-col items-center justify-center p-4 border rounded-lg hover:bg-gray-50 transition-colors"
           >
             <MessageSquare className="h-6 w-6 text-green-500 mb-2" />
             <span className="text-sm font-medium">Send SMS</span>
           </button>
-
+          
           <button
             onClick={onViewAnalytics}
-            className="flex flex-col items-center justify-center p-4 border rounded-lg hover:bg-muted/30 transition-colors"
+            className="flex flex-col items-center justify-center p-4 border rounded-lg hover:bg-gray-50 transition-colors"
           >
             <TrendingUp className="h-6 w-6 text-purple-500 mb-2" />
             <span className="text-sm font-medium">Analytics</span>
           </button>
-
+          
           <button
             onClick={onSettings}
-            className="flex flex-col items-center justify-center p-4 border rounded-lg hover:bg-muted/30 transition-colors"
+            className="flex flex-col items-center justify-center p-4 border rounded-lg hover:bg-gray-50 transition-colors"
           >
             <Zap className="h-6 w-6 text-orange-500 mb-2" />
             <span className="text-sm font-medium">Settings</span>

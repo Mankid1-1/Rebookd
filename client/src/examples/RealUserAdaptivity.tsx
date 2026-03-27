@@ -7,28 +7,8 @@
  * ALL ADAPTIVITY IS BASED ON REAL USER DATA - NO SIMULATION
  */
 
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useProgressiveDisclosureContext, ProgressiveDisclosureProvider } from '@/components/ui/ProgressiveDisclosure';
-
-// Placeholder functions for example demonstration
-const createLead = () => {};
-const showErrorToast = (_msg: string) => {};
-const navigateToMessaging = () => {};
-const navigateToAnalytics = () => {};
-const openHelpModal = () => {};
-const logErrorToService = (_error: Error) => {};
-
-// Placeholder components for example demonstration
-const EssentialDashboard = (_props: any) => <div>Essential</div>;
-const StandardDashboard = (_props: any) => <div>Standard</div>;
-const AdvancedDashboard = (_props: any) => <div>Advanced</div>;
-const ExpertDashboard = (_props: any) => <div>Expert</div>;
-const AdaptiveHints = () => <div>Hints</div>;
-const ErrorBoundaryComponent = ({ children, onError }: { children: React.ReactNode; onError: (error: Error) => void }) => <>{children}</>;
-const TutorialFlow = (_props: any) => <div>Tutorial</div>;
-const Router = ({ children }: { children: React.ReactNode }) => <>{children}</>;
-const Routes = ({ children }: { children: React.ReactNode }) => <>{children}</>;
-const Route = (_props: any) => <div />;
 
 // Example: Dashboard component with real user tracking
 export function Dashboard() {

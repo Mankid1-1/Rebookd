@@ -99,7 +99,7 @@ export function SmartScheduler({
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
-  const [showAnalyticsPanel, setShowAnalyticsPanel] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   // Mock data for missing variables
   const historicalData = {
@@ -129,11 +129,11 @@ export function SmartScheduler({
   // const { data: staffAvailability } = trpc.staff.availability.useQuery({ date: selectedDate });
   
   // Mock data for now - replace with real tRPC calls when available
-  const appointments: any[] = [];
-  const staffAvailability: { staff: { availableHours: number[] }[] } = { staff: [] };
+  const appointments = [];
+  const staffAvailability = [];
   
-  // Optimization placeholder - endpoint not yet available
-  const optimizeSchedule = { mutateAsync: async (_data: any) => ({ success: true }), isPending: false };
+  // Real optimization - no simulation!
+  const optimizeSchedule = trpc.scheduling.optimize.useMutation();
 
   // Missing functions
   const calculateBusinessHoursScore = (currentTime: Date) => {
@@ -187,7 +187,7 @@ export function SmartScheduler({
       });
 
       if (result.success) {
-        setAvailableSlots((result as any).slots ?? []);
+        setAvailableSlots(result.slots);
         toast.success("Schedule optimized successfully!");
       }
     } catch (error: any) {
@@ -281,9 +281,11 @@ export function SmartScheduler({
     const dayOfWeek = date.getDay();
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
     
-    return isWeekend
-      ? historicalData.conversionRates.weekend
+    const rates = isWeekend 
+      ? historicalData.conversionRates.weekend 
       : historicalData.conversionRates.weekday;
+    
+    return rates[hour as keyof typeof rates] || 50;
   };
 
   const getRealStaffAvailability = (date: Date): number => {
@@ -415,10 +417,10 @@ export function SmartScheduler({
                     key={slot.id}
                     className={`p-3 border rounded-lg cursor-pointer transition-colors ${
                       !slot.available 
-                        ? 'bg-muted/30 border-border opacity-50'
+                        ? 'bg-gray-50 border-gray-200 opacity-50' 
                         : selectedSlot?.id === slot.id
-                        ? 'bg-blue-500/10 border-blue-500'
-                        : 'hover:bg-muted/30'
+                        ? 'bg-blue-50 border-blue-500'
+                        : 'hover:bg-gray-50'
                     }`}
                     onClick={() => handleSlotSelect(slot)}
                   >
@@ -632,12 +634,12 @@ export function SmartScheduler({
             </div>
             
             {/* AI Insights */}
-            <div className="bg-blue-500/10 p-4 rounded-lg">
+            <div className="bg-blue-50 p-4 rounded-lg">
               <div className="flex items-start gap-2">
                 <Info className="h-4 w-4 text-blue-500 mt-0.5" />
                 <div>
                   <h4 className="font-medium text-sm mb-1">AI Insights</h4>
-                  <p className="text-xs text-blue-300">
+                  <p className="text-xs text-blue-800">
                     This time slot has a {getScoreLabel(selectedSlot.score).toLowerCase()} optimization score.
                     {selectedSlot.factors.historicalConversion > 80 && 
                       ' Historically, this time converts well for your services.'}

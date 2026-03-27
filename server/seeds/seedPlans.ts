@@ -9,71 +9,35 @@ async function seed() {
     process.exit(1);
   }
 
-  const starterPriceId = process.env.STRIPE_PRICE_STARTER || null;
-  const growthPriceId = process.env.STRIPE_PRICE_GROWTH || null;
-  const professionalPriceId = process.env.STRIPE_PRICE_PROFESSIONAL || null;
-  const scalePriceId = process.env.STRIPE_PRICE_SCALE || null;
+  const rebookedPriceId = process.env.STRIPE_PRICE_REBOOKED || null;
   const flexPriceId = process.env.STRIPE_PRICE_FLEX || null;
 
   const items = [
     {
-      name: "Starter",
-      slug: "starter",
-      priceMonthly: 4900,
+      name: "Flex",
+      slug: "flex",
+      priceMonthly: 2900, // Starting at $29/mo (slider-based, $29-$149)
       maxAutomations: 3,
       maxMessages: 500,
       maxSeats: 1,
-      revenueSharePercent: 0,
-      features: ["AI rewrite", "Basic automations"],
-      stripePriceId: starterPriceId,
-    },
-    {
-      name: "Growth",
-      slug: "growth",
-      priceMonthly: 9900,
-      maxAutomations: 10,
-      maxMessages: 2500,
-      maxSeats: 3,
-      revenueSharePercent: 10,
-      features: ["Everything in Starter", "Advanced automations", "10% revenue share", "Priority support"],
-      stripePriceId: growthPriceId,
-    },
-    {
-      name: "Professional",
-      slug: "professional",
-      priceMonthly: 19900,
-      maxAutomations: 9999,
-      maxMessages: 999999,
-      maxSeats: 5,
-      revenueSharePercent: 15,
-      promotionalSlots: 20,
+      revenueSharePercent: 20,
       hasPromotion: true,
-      features: ["Everything in Growth", "Unlimited automations", "15% revenue share", "ROI guarantee eligible", "Priority support"],
-      stripePriceId: professionalPriceId,
+      promotionalSlots: 10, // First 10 Flex subscribers are founders with free trial
+      features: ["Basic automations", "SMS messaging", "Lead management"],
+      stripePriceId: flexPriceId,
     },
     {
-      name: "Scale",
-      slug: "scale",
+      name: "Rebooked",
+      slug: "rebooked",
       priceMonthly: 19900,
       maxAutomations: 9999,
       maxMessages: 999999,
       maxSeats: 10,
       revenueSharePercent: 15,
-      features: ["Enterprise support", "Custom integrations", "15% revenue share"],
-      stripePriceId: scalePriceId,
-    },
-    {
-      name: "Flex",
-      slug: "flex",
-      priceMonthly: 9900,
-      maxAutomations: 9999,
-      maxMessages: 999999,
-      maxSeats: 3,
-      revenueSharePercent: 20,
-      promotionalSlots: 10,
       hasPromotion: true,
-      features: ["All Professional features", "Reduced base fee", "20% revenue share", "ROI guarantee eligible", "First 10 customers only"],
-      stripePriceId: flexPriceId,
+      promotionalSlots: 20, // First 20 Rebooked subscribers are founders with free trial
+      features: ["Unlimited automations", "AI rewrite", "Priority support", "Team members", "Advanced analytics"],
+      stripePriceId: rebookedPriceId,
     },
   ];
 

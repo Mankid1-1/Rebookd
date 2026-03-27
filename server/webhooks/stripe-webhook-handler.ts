@@ -470,10 +470,10 @@ async function processReferralCompletion(referralCode: string, userId: string, s
   try {
     const { processReferral, completeReferral } = await import('../services/referral.service');
     
-    const result = await processReferral(referralCode, Number(userId));
-
-    if (result.success && result.referralId) {
-      await completeReferral(result.referralId, subscriptionId, 6);
+    const result = await processReferral(referralCode, userId);
+    
+    if (result.success && result.referral) {
+      await completeReferral(result.referral.id, subscriptionId, 6);
     }
   } catch (error) {
     console.error('Failed to process referral completion:', error);

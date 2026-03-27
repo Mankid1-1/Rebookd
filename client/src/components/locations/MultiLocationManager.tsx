@@ -84,13 +84,11 @@ export function MultiLocationManager({
   const [showInactive, setShowInactive] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
 
-  // Locations endpoint not yet available - using defaults
-  const locationsData: any = undefined;
-  const isLoading = false;
-  const error: any = undefined;
-  const createLocation = { mutateAsync: async (_input: any) => ({ success: true }) };
-  const updateLocation = { mutateAsync: async (_input: any) => ({ success: true }) };
-  const deleteLocation = { mutateAsync: async (_input: any) => ({ success: true }) };
+  // Real data from API - no simulation!
+  const { data: locationsData, isLoading, error } = trpc.locations.list.useQuery();
+  const createLocation = trpc.locations.create.useMutation();
+  const updateLocation = trpc.locations.update.useMutation();
+  const deleteLocation = trpc.locations.delete.useMutation();
 
   useEffect(() => {
     if (locationsData) {
@@ -267,7 +265,7 @@ export function MultiLocationManager({
                   className={`p-3 border rounded-lg cursor-pointer transition-colors ${
                     selectedLocation?.id === location.id
                       ? 'bg-blue-50 border-blue-500'
-                      : 'hover:bg-muted/30'
+                      : 'hover:bg-gray-50'
                   }`}
                   onClick={() => handleLocationSelect(location)}
                 >

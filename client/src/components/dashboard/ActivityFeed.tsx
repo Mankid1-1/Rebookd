@@ -220,7 +220,7 @@ export function ActivityFeed({ activities, loading, onRefresh, onActivityClick }
             {filteredActivities.map((activity, index) => (
               <div
                 key={activity.id || index}
-                className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors cursor-pointer"
+                className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-gray-50 transition-colors cursor-pointer"
                 onClick={() => onActivityClick?.(activity)}
               >
                 <div className={`w-2 h-2 rounded-full mt-2 ${getActivityColor(activity.type, activity.status)}`}></div>

@@ -36,21 +36,21 @@ export default function AdminAutomation() {
     reschedulingWindow: 48 // hours after cancellation
   });
 
-  const { data: dashData, isLoading } = trpc.analytics.dashboard.useQuery(undefined, { refetchInterval: 30000 });
-  const metrics: any = dashData?.metrics;
-  const { data: settings } = trpc.tenant.get.useQuery(undefined, { retry: false });
-  const updateConfig = trpc.tenant.update.useMutation({
+  const { data: metrics, isLoading } = trpc.analytics.adminAutomationMetrics.useQuery(undefined, { refetchInterval: 30000 });
+  const { data: settings } = trpc.tenant.settings.useQuery(undefined, { retry: false });
+  const updateConfig = trpc.tenant.updateAdminAutomationConfig.useMutation({
     onSuccess: () => toast.success("Admin automation configuration updated"),
     onError: (err) => toast.error(err.message)
   });
 
   useEffect(() => {
-    // Config loaded from tenant settings when available
+    if (settings?.adminAutomationConfig) {
+      setConfig(settings.adminAutomationConfig);
+    }
   }, [settings]);
 
   const handleSaveConfig = () => {
-    updateConfig.mutate({});
-    toast.success("Configuration saved");
+    updateConfig.mutate(config);
   };
 
   const handleTestConfirmation = () => {
@@ -64,6 +64,15 @@ export default function AdminAutomation() {
   const handleTestRescheduling = () => {
     toast.success("Self-service rescheduling test initiated");
   };
+
+  // Derive display values from actual API fields
+  const totalRuns = metrics?.totalRuns ?? 0;
+  const failedRuns = metrics?.failedRuns ?? 0;
+  const successRate = metrics?.successRate ?? 100;
+  const activeAutomations = metrics?.activeAutomations ?? 0;
+  const messagesSent = metrics?.messagesSentByAutomation ?? 0;
+  // Estimate time saved: ~2 min per automated message
+  const estimatedTimeSaved = Math.round((messagesSent * 2) / 60);
 
   if (isLoading) return <DashboardLayout>Loading...</DashboardLayout>;
 
@@ -103,54 +112,54 @@ export default function AdminAutomation() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
-                  <Calendar className="h-6 w-6 text-blue-400" />
+                <div className="p-2 bg-blue-100 rounded-lg mr-3">
+                  <Zap className="h-6 w-6 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total Appointments</p>
-                  <p className="text-2xl font-bold">{metrics?.totalAppointments || 0}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Active Automations</p>
+                  <p className="text-2xl font-bold">{activeAutomations}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-green-500/10 rounded-lg mr-3">
-                  <CheckCircle className="h-6 w-6 text-green-400" />
+                <div className="p-2 bg-green-100 rounded-lg mr-3">
+                  <CheckCircle className="h-6 w-6 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Automated Confirmations</p>
-                  <p className="text-2xl font-bold">{metrics?.automatedConfirmations || 0}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Total Runs</p>
+                  <p className="text-2xl font-bold">{totalRuns}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-500/10 rounded-lg mr-3">
-                  <MessageSquare className="h-6 w-6 text-purple-400" />
+                <div className="p-2 bg-purple-100 rounded-lg mr-3">
+                  <MessageSquare className="h-6 w-6 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Self-Service Reschedules</p>
-                  <p className="text-2xl font-bold">{metrics?.selfServiceReschedules || 0}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Messages Sent</p>
+                  <p className="text-2xl font-bold">{messagesSent}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-orange-500/10 rounded-lg mr-3">
-                  <Timer className="h-6 w-6 text-orange-400" />
+                <div className="p-2 bg-orange-100 rounded-lg mr-3">
+                  <Timer className="h-6 w-6 text-orange-600" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Time Saved</p>
-                  <p className="text-2xl font-bold">{metrics?.timeSaved || 0}h</p>
+                  <p className="text-2xl font-bold">{estimatedTimeSaved}h</p>
                 </div>
               </div>
             </CardContent>
@@ -197,7 +206,7 @@ export default function AdminAutomation() {
                         max={168}
                       />
                     </div>
-                    <div className="p-4 bg-blue-500/10 rounded-lg">
+                    <div className="p-4 bg-blue-50 rounded-lg">
                       <h4 className="font-medium mb-2">Confirmation Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• 24-hour confirmation system</li>
@@ -241,7 +250,7 @@ export default function AdminAutomation() {
                         ))}
                       </div>
                     </div>
-                    <div className="p-4 bg-green-500/10 rounded-lg">
+                    <div className="p-4 bg-green-50 rounded-lg">
                       <h4 className="font-medium mb-2">Follow-up Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• 1, 3, 7 day follow-up schedule</li>
@@ -278,7 +287,7 @@ export default function AdminAutomation() {
                         max={168}
                       />
                     </div>
-                    <div className="p-4 bg-purple-500/10 rounded-lg">
+                    <div className="p-4 bg-purple-50 rounded-lg">
                       <h4 className="font-medium mb-2">Rescheduling Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Customer-controlled rescheduling</li>
@@ -292,7 +301,7 @@ export default function AdminAutomation() {
                 
                 <TabsContent value="advanced" className="space-y-6 mt-6">
                   <div className="space-y-4">
-                    <div className="p-4 bg-orange-500/10 rounded-lg">
+                    <div className="p-4 bg-orange-50 rounded-lg">
                       <h4 className="font-medium mb-2">Advanced Options</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Custom automation rules</li>
@@ -314,31 +323,31 @@ export default function AdminAutomation() {
             <CardContent>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="text-center p-4 bg-blue-500/10 rounded-lg">
-                    <Bot className="h-8 w-8 text-blue-400 mx-auto mb-2" />
+                  <div className="text-center p-4 bg-blue-50 rounded-lg">
+                    <Bot className="h-8 w-8 text-blue-600 mx-auto mb-2" />
                     <h3 className="font-medium">Automated Confirmations</h3>
-                    <Badge className={config.automatedConfirmations ? "bg-green-500/10 text-green-300" : "bg-gray-500/20 text-gray-400"}>
+                    <Badge className={config.automatedConfirmations ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
                       {config.automatedConfirmations ? "Active" : "Inactive"}
                     </Badge>
                   </div>
-                  <div className="text-center p-4 bg-green-500/10 rounded-lg">
-                    <MessageSquare className="h-8 w-8 text-green-400 mx-auto mb-2" />
+                  <div className="text-center p-4 bg-green-50 rounded-lg">
+                    <MessageSquare className="h-8 w-8 text-green-600 mx-auto mb-2" />
                     <h3 className="font-medium">Follow-up Campaigns</h3>
-                    <Badge className={config.automatedFollowUps ? "bg-green-500/10 text-green-300" : "bg-gray-500/20 text-gray-400"}>
+                    <Badge className={config.automatedFollowUps ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
                       {config.automatedFollowUps ? "Active" : "Inactive"}
                     </Badge>
                   </div>
-                  <div className="text-center p-4 bg-purple-500/10 rounded-lg">
-                    <RefreshCw className="h-8 w-8 text-purple-400 mx-auto mb-2" />
+                  <div className="text-center p-4 bg-purple-50 rounded-lg">
+                    <RefreshCw className="h-8 w-8 text-purple-600 mx-auto mb-2" />
                     <h3 className="font-medium">Self-Service Rescheduling</h3>
-                    <Badge className={config.selfServiceRescheduling ? "bg-green-500/10 text-green-300" : "bg-gray-500/20 text-gray-400"}>
+                    <Badge className={config.selfServiceRescheduling ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
                       {config.selfServiceRescheduling ? "Active" : "Inactive"}
                     </Badge>
                   </div>
-                  <div className="text-center p-4 bg-orange-500/10 rounded-lg">
-                    <Timer className="h-8 w-8 text-orange-400 mx-auto mb-2" />
+                  <div className="text-center p-4 bg-orange-50 rounded-lg">
+                    <Timer className="h-8 w-8 text-orange-600 mx-auto mb-2" />
                     <h3 className="font-medium">Time Savings</h3>
-                    <p className="text-lg font-bold">{metrics?.timeSaved || 0}h/week</p>
+                    <p className="text-lg font-bold">{estimatedTimeSaved}h/week</p>
                   </div>
                 </div>
                 <div className="p-4 bg-muted rounded-lg">
@@ -363,36 +372,36 @@ export default function AdminAutomation() {
           <CardContent>
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center p-3 bg-blue-500/10 rounded-lg">
-                  <p className="text-2xl font-bold text-blue-400">{metrics?.automatedConfirmations || 0}</p>
-                  <p className="text-sm text-muted-foreground">Confirmations Automated</p>
+                <div className="text-center p-3 bg-blue-50 rounded-lg">
+                  <p className="text-2xl font-bold text-blue-600">{totalRuns}</p>
+                  <p className="text-sm text-muted-foreground">Total Automation Runs</p>
                 </div>
-                <div className="text-center p-3 bg-green-500/10 rounded-lg">
-                  <p className="text-2xl font-bold text-green-400">{metrics?.selfServiceReschedules || 0}</p>
-                  <p className="text-sm text-muted-foreground">Self-Service Reschedules</p>
+                <div className="text-center p-3 bg-green-50 rounded-lg">
+                  <p className="text-2xl font-bold text-green-600">{successRate}%</p>
+                  <p className="text-sm text-muted-foreground">Success Rate</p>
                 </div>
-                <div className="text-center p-3 bg-purple-500/10 rounded-lg">
-                  <p className="text-2xl font-bold text-purple-400">{metrics?.timeSaved || 0}h</p>
+                <div className="text-center p-3 bg-purple-50 rounded-lg">
+                  <p className="text-2xl font-bold text-purple-600">{estimatedTimeSaved}h</p>
                   <p className="text-sm text-muted-foreground">Time Saved/Week</p>
                 </div>
               </div>
-              
+
               <div className="mt-6 p-4 bg-muted rounded-lg">
                 <h4 className="font-medium mb-2">Revenue Impact</h4>
                 <div className="flex items-center space-x-2">
                   <div className="flex-1">
                     <div className="text-sm text-muted-foreground mb-1">Admin Time Converted to Revenue</div>
                     <div className="w-full bg-gray-200 rounded-full h-2 relative">
-                      <div 
-                        className="h-2 bg-green-500/100 rounded-full" 
-                        style={{ width: `${Math.min(100, Math.max(0, metrics?.revenueImpact || 0))}%` }} 
+                      <div
+                        className="h-2 bg-green-500 rounded-full"
+                        style={{ width: `${Math.min(100, successRate)}%` }}
                       />
                     </div>
                   </div>
-                  <span className="text-sm font-medium">${((metrics?.revenueImpact || 0) / 100).toFixed(0)}/week</span>
+                  <span className="text-sm font-medium">${(estimatedTimeSaved * 25).toLocaleString()}/week</span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Based on $25/hour admin time value and {metrics?.timeSaved || 0} hours saved
+                  Based on $25/hour admin time value and {estimatedTimeSaved} hours saved
                 </p>
               </div>
             </div>

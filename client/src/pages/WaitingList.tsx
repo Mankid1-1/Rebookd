@@ -1,330 +1,517 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { trpc } from "@/lib/trpc";
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Users, Clock, Bell, MessageSquare, CheckCircle,
-  Settings2, Zap, TrendingUp, ListChecks
+  Users,
+  Clock,
+  Bell,
+  CheckCircle,
+  AlertTriangle,
+  Zap,
+  Target,
+  ListOrdered,
+  RefreshCw,
 } from "lucide-react";
-import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { useState, useEffect } from "react";
+import "@/styles/components.css";
 
 export default function WaitingList() {
-  const [enabled, setEnabled] = useState(false);
-  const [autoNotify, setAutoNotify] = useState(true);
-  const [maxNotificationsPerSlot, setMaxNotificationsPerSlot] = useState("3");
-  const [notifyWindow, setNotifyWindow] = useState("30");
-  const [priorityOrder, setPriorityOrder] = useState("wait_time");
-  const [notificationTemplate, setNotificationTemplate] = useState(
-    "Great news, {{name}}! A spot just opened up at {{business}} on {{date}} at {{time}}. Reply YES to book it before someone else does!"
-  );
+  const [activeTab, setActiveTab] = useState("overview");
+  const [config, setConfig] = useState({
+    waitingListEnabled: true,
+    maxWaitlistSize: 50,
+    autoNotifyOnCancel: true,
+    cancellationFlurryEnabled: true,
+    flurryMessageLimit: 5,
+    priorityByBookingHistory: true,
+    expirationHours: 48,
+    autoRemoveBooked: true,
+  });
 
-  const { data: savedConfig, isLoading } = trpc.featureConfig.get.useQuery(
-    { feature: "waiting_list" },
-    { retry: false }
-  );
-  const saveConfig = trpc.featureConfig.save.useMutation({
-    onSuccess: () => toast.success("Waiting list settings saved"),
+  const { data: metrics, isLoading } = trpc.analytics.waitingListMetrics.useQuery(undefined, {
+    refetchInterval: 30000,
+  });
+  const { data: settings } = trpc.tenant.settings.useQuery(undefined, { retry: false });
+  const updateConfig = trpc.tenant.updateWaitingListConfig.useMutation({
+    onSuccess: () => toast.success("Waiting list configuration updated"),
     onError: (err) => toast.error(err.message),
   });
 
   useEffect(() => {
-    if (savedConfig?.config) {
-      const saved = savedConfig.config as Record<string, unknown>;
-      if (saved.enabled !== undefined) setEnabled(saved.enabled as boolean);
-      if (saved.autoNotify !== undefined) setAutoNotify(saved.autoNotify as boolean);
-      if (saved.maxNotificationsPerSlot !== undefined) setMaxNotificationsPerSlot(saved.maxNotificationsPerSlot as string);
-      if (saved.notifyWindow !== undefined) setNotifyWindow(saved.notifyWindow as string);
-      if (saved.priorityOrder !== undefined) setPriorityOrder(saved.priorityOrder as string);
-      if (saved.notificationTemplate !== undefined) setNotificationTemplate(saved.notificationTemplate as string);
+    if (settings?.waitingListConfig) {
+      setConfig(settings.waitingListConfig);
     }
-  }, [savedConfig]);
+  }, [settings]);
 
   const handleSaveConfig = () => {
-    saveConfig.mutate({
-      feature: "waiting_list",
-      config: {
-        enabled,
-        autoNotify,
-        maxNotificationsPerSlot,
-        notifyWindow,
-        priorityOrder,
-        notificationTemplate,
-      },
-    });
+    updateConfig.mutate(config);
   };
 
-  if (isLoading) {
-    return (
-      <DashboardLayout>
-        <div className="space-y-6 p-6 max-w-7xl mx-auto">
-          <div>
-            <Skeleton className="h-8 w-48 mb-2" />
-            <Skeleton className="h-4 w-96" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Card key={i}>
-                <CardContent className="p-4">
-                  <Skeleton className="h-16 w-full" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <Card>
-            <CardContent className="p-6">
-              <Skeleton className="h-48 w-full" />
-            </CardContent>
-          </Card>
-        </div>
-      </DashboardLayout>
-    );
-  }
+  if (isLoading) return <DashboardLayout>Loading...</DashboardLayout>;
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 p-6 max-w-7xl mx-auto">
+      <div className="p-6 space-y-6 max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold">Waiting List</h1>
-            <p className="text-muted-foreground mt-1">
-              Automatically fill cancelled slots by notifying interested clients
+            <p className="text-muted-foreground mt-2">
+              Manage your waiting lists and cancellation flurry notifications to fill last-minute openings
             </p>
           </div>
-          <Button
-            onClick={handleSaveConfig}
-            disabled={saveConfig.isPending}
-            className="gap-2"
-          >
-            <Settings2 className="h-4 w-4" />
-            {saveConfig.isPending ? "Saving..." : "Save Settings"}
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={handleSaveConfig}>
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Save Configuration
+            </Button>
+          </div>
         </div>
 
-        {/* Stats Cards - all zeros since no backend data yet */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Metrics Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-yellow-500/10 rounded-lg mr-3">
-                  <Users className="h-6 w-6 text-yellow-400" />
+                <div className="p-2 bg-blue-100 rounded-lg mr-3">
+                  <Users className="h-6 w-6 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">0</p>
-                  <p className="text-sm font-medium text-muted-foreground">Currently Waiting</p>
+                  <p className="text-sm font-medium text-muted-foreground">Active Waitlist Size</p>
+                  <p className="text-2xl font-bold">{metrics?.activeWaitlistSize || 0}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
-                  <Bell className="h-6 w-6 text-blue-400" />
+                <div className="p-2 bg-green-100 rounded-lg mr-3">
+                  <CheckCircle className="h-6 w-6 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">0</p>
-                  <p className="text-sm font-medium text-muted-foreground">Notified Today</p>
+                  <p className="text-sm font-medium text-muted-foreground">Filled from Waitlist</p>
+                  <p className="text-2xl font-bold">{metrics?.filledFromWaitlist || 0}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-green-500/10 rounded-lg mr-3">
-                  <CheckCircle className="h-6 w-6 text-green-400" />
+                <div className="p-2 bg-purple-100 rounded-lg mr-3">
+                  <Zap className="h-6 w-6 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">0</p>
-                  <p className="text-sm font-medium text-muted-foreground">Slots Filled</p>
+                  <p className="text-sm font-medium text-muted-foreground">Cancellation Flurries Sent</p>
+                  <p className="text-2xl font-bold">{metrics?.cancellationFlurriesSent || 0}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-500/10 rounded-lg mr-3">
-                  <TrendingUp className="h-6 w-6 text-purple-400" />
+                <div className="p-2 bg-orange-100 rounded-lg mr-3">
+                  <Target className="h-6 w-6 text-orange-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">0%</p>
                   <p className="text-sm font-medium text-muted-foreground">Fill Rate</p>
+                  <p className="text-2xl font-bold">{metrics?.fillRate || 0}%</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Empty State */}
-        <Card>
-          <CardContent className="p-12">
-            <div className="text-center max-w-lg mx-auto">
-              <div className="p-4 bg-blue-500/10 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                <ListChecks className="h-8 w-8 text-blue-400" />
-              </div>
-              <h3 className="text-lg font-semibold mb-2">No waiting list entries yet</h3>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                When a client cancels, Rebooked automatically notifies people on your waiting list
-                to fill the slot. Clients are added to the waiting list when they express interest
-                in a time that is already booked. Configure the settings below to get started.
-              </p>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="flurry">Cancellation Flurry</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
+          </TabsList>
+
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="space-y-6 mt-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    Active Waiting List Summary
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="waiting-list-enabled">Waiting List Enabled</Label>
+                    <Switch
+                      id="waiting-list-enabled"
+                      checked={config.waitingListEnabled}
+                      onCheckedChange={(checked) =>
+                        setConfig((prev) => ({ ...prev, waitingListEnabled: checked }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between py-2 border-b">
+                      <span className="text-sm text-muted-foreground">Total on waitlist</span>
+                      <Badge variant="secondary">{metrics?.activeWaitlistSize || 0} clients</Badge>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-b">
+                      <span className="text-sm text-muted-foreground">Filled this week</span>
+                      <Badge variant="secondary">{metrics?.filledThisWeek || 0} slots</Badge>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-b">
+                      <span className="text-sm text-muted-foreground">Avg. wait time</span>
+                      <Badge variant="secondary">{metrics?.avgWaitTimeHours || 0}h</Badge>
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-sm text-muted-foreground">Capacity utilization</span>
+                      <Badge variant="outline">
+                        {metrics?.activeWaitlistSize || 0} / {config.maxWaitlistSize}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <h4 className="font-medium mb-2 flex items-center gap-2">
+                      <ListOrdered className="h-4 w-4" />
+                      How It Works
+                    </h4>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      <li>Clients are added when their preferred slot is unavailable</li>
+                      <li>When a cancellation occurs, waitlisted clients are notified</li>
+                      <li>Priority is determined by booking history and signup order</li>
+                      <li>Clients are automatically removed once booked or expired</li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="h-5 w-5" />
+                    Recent Waitlist Activity
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {metrics?.recentActivity && metrics.recentActivity.length > 0 ? (
+                    metrics.recentActivity.map((activity: { id: string; clientName: string; action: string; time: string; status: string }, index: number) => (
+                      <div
+                        key={activity.id || index}
+                        className="flex items-center justify-between py-3 border-b last:border-0"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`p-1.5 rounded-full ${
+                              activity.action === "filled"
+                                ? "bg-green-100"
+                                : activity.action === "added"
+                                  ? "bg-blue-100"
+                                  : activity.action === "expired"
+                                    ? "bg-orange-100"
+                                    : "bg-gray-100"
+                            }`}
+                          >
+                            {activity.action === "filled" ? (
+                              <CheckCircle className="h-4 w-4 text-green-600" />
+                            ) : activity.action === "added" ? (
+                              <Users className="h-4 w-4 text-blue-600" />
+                            ) : activity.action === "expired" ? (
+                              <AlertTriangle className="h-4 w-4 text-orange-600" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4 text-gray-600" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">{activity.clientName}</p>
+                            <p className="text-xs text-muted-foreground capitalize">{activity.action}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">{activity.time}</p>
+                          <Badge
+                            variant={
+                              activity.status === "completed"
+                                ? "default"
+                                : activity.status === "pending"
+                                  ? "secondary"
+                                  : "outline"
+                            }
+                            className="text-xs"
+                          >
+                            {activity.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Users className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                      <p className="text-sm">No recent waitlist activity</p>
+                      <p className="text-xs mt-1">Activity will appear here as clients join and get booked</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
+          </TabsContent>
 
-        {/* Feature Toggle */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-500/10 rounded-lg">
-                  <Zap className="h-5 w-5 text-emerald-400" />
-                </div>
-                <div>
-                  <CardTitle>Cancellation Flurry</CardTitle>
-                  <CardDescription>
-                    Automatically SMS waiting list customers when a cancellation occurs
-                  </CardDescription>
-                </div>
-              </div>
-              <Switch checked={enabled} onCheckedChange={setEnabled} />
+          {/* Cancellation Flurry Tab */}
+          <TabsContent value="flurry" className="space-y-6 mt-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Zap className="h-5 w-5" />
+                    Cancellation Flurry Configuration
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="flurry-enabled">Enable Cancellation Flurry</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Automatically notify waitlisted clients when a slot opens up
+                      </p>
+                    </div>
+                    <Switch
+                      id="flurry-enabled"
+                      checked={config.cancellationFlurryEnabled}
+                      onCheckedChange={(checked) =>
+                        setConfig((prev) => ({ ...prev, cancellationFlurryEnabled: checked }))
+                      }
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="auto-notify">Auto-Notify on Cancellation</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Send SMS immediately when a cancellation is detected
+                      </p>
+                    </div>
+                    <Switch
+                      id="auto-notify"
+                      checked={config.autoNotifyOnCancel}
+                      onCheckedChange={(checked) =>
+                        setConfig((prev) => ({ ...prev, autoNotifyOnCancel: checked }))
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Message Limit per Cancellation</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Maximum number of clients to notify per cancellation event
+                    </p>
+                    <Input
+                      type="number"
+                      value={config.flurryMessageLimit}
+                      onChange={(e) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          flurryMessageLimit: parseInt(e.target.value) || 1,
+                        }))
+                      }
+                      min={1}
+                      max={20}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="priority-history">Priority by Booking History</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Prioritize loyal clients with more past bookings
+                      </p>
+                    </div>
+                    <Switch
+                      id="priority-history"
+                      checked={config.priorityByBookingHistory}
+                      onCheckedChange={(checked) =>
+                        setConfig((prev) => ({ ...prev, priorityByBookingHistory: checked }))
+                      }
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bell className="h-5 w-5" />
+                    Flurry Performance
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between py-2 border-b">
+                      <span className="text-sm text-muted-foreground">Flurries sent (30d)</span>
+                      <Badge variant="secondary">{metrics?.cancellationFlurriesSent || 0}</Badge>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-b">
+                      <span className="text-sm text-muted-foreground">Slots filled via flurry</span>
+                      <Badge variant="secondary">{metrics?.filledViaFlurry || 0}</Badge>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-b">
+                      <span className="text-sm text-muted-foreground">Avg. response time</span>
+                      <Badge variant="secondary">{metrics?.avgResponseTimeMinutes || 0} min</Badge>
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-sm text-muted-foreground">Flurry fill rate</span>
+                      <Badge variant="outline">{metrics?.flurryFillRate || 0}%</Badge>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-purple-50 rounded-lg">
+                    <h4 className="font-medium mb-2 flex items-center gap-2">
+                      <Zap className="h-4 w-4" />
+                      Cancellation Flurry
+                    </h4>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      <li>A cancellation triggers an instant SMS blast to top waitlisted clients</li>
+                      <li>First to respond gets the slot -- no manual intervention needed</li>
+                      <li>AI personalizes each message based on client history and preferences</li>
+                      <li>Respects quiet hours and client communication preferences</li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </CardHeader>
-          {enabled && (
-            <CardContent className="space-y-6 border-t border-border pt-6">
-              {/* Auto-Notify */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-sm font-medium">Auto-Notify on Cancellation</Label>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    Immediately SMS waiting list customers when a spot opens up
-                  </p>
-                </div>
-                <Switch checked={autoNotify} onCheckedChange={setAutoNotify} />
-              </div>
+          </TabsContent>
 
-              {/* Max Notifications Per Slot */}
-              <div className="space-y-2">
-                <Label>Max Notifications Per Slot</Label>
-                <Select value={maxNotificationsPerSlot} onValueChange={setMaxNotificationsPerSlot}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">1 person</SelectItem>
-                    <SelectItem value="3">3 people</SelectItem>
-                    <SelectItem value="5">5 people</SelectItem>
-                    <SelectItem value="10">10 people</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  How many people to notify when a single slot opens up
-                </p>
-              </div>
+          {/* Settings Tab */}
+          <TabsContent value="settings" className="space-y-6 mt-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ListOrdered className="h-5 w-5" />
+                    Waitlist Limits
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-2">
+                    <Label>Maximum Waitlist Size</Label>
+                    <p className="text-xs text-muted-foreground">
+                      The maximum number of clients that can be on the waiting list at once
+                    </p>
+                    <Input
+                      type="number"
+                      value={config.maxWaitlistSize}
+                      onChange={(e) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          maxWaitlistSize: parseInt(e.target.value) || 1,
+                        }))
+                      }
+                      min={1}
+                      max={500}
+                    />
+                  </div>
 
-              {/* Response Window */}
-              <div className="space-y-2">
-                <Label>Response Window</Label>
-                <Select value={notifyWindow} onValueChange={setNotifyWindow}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="15">15 minutes</SelectItem>
-                    <SelectItem value="30">30 minutes</SelectItem>
-                    <SelectItem value="60">1 hour</SelectItem>
-                    <SelectItem value="120">2 hours</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Time customers have to respond before the next person on the list is notified
-                </p>
-              </div>
+                  <div className="space-y-2">
+                    <Label>Expiration Time (hours)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      How long a client stays on the waitlist before being automatically removed
+                    </p>
+                    <Input
+                      type="number"
+                      value={config.expirationHours}
+                      onChange={(e) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          expirationHours: parseInt(e.target.value) || 1,
+                        }))
+                      }
+                      min={1}
+                      max={720}
+                    />
+                  </div>
 
-              {/* Priority Order */}
-              <div className="space-y-2">
-                <Label>Priority Order</Label>
-                <Select value={priorityOrder} onValueChange={setPriorityOrder}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="wait_time">Longest waiting first</SelectItem>
-                    <SelectItem value="added_recent">Most recently added</SelectItem>
-                    <SelectItem value="service_match">Best service match</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  How to prioritize who gets notified first when a slot opens
-                </p>
-              </div>
+                  <div className="p-4 bg-orange-50 rounded-lg">
+                    <h4 className="font-medium mb-2 flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      Capacity Tips
+                    </h4>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      <li>Keep your waitlist size manageable for better fill rates</li>
+                      <li>Shorter expiration times keep the list fresh and relevant</li>
+                      <li>Consider your cancellation frequency when setting limits</li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
 
-              {/* Notification Template */}
-              <div className="space-y-2">
-                <Label>Notification Message Template</Label>
-                <Textarea
-                  value={notificationTemplate}
-                  onChange={(e) => setNotificationTemplate(e.target.value)}
-                  rows={3}
-                  className="resize-none"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Available variables: {"{{name}}"}, {"{{business}}"}, {"{{date}}"}, {"{{time}}"}, {"{{service}}"}
-                </p>
-              </div>
-            </CardContent>
-          )}
-        </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <RefreshCw className="h-5 w-5" />
+                    Automation Settings
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="auto-remove">Auto-Remove Booked Clients</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Automatically remove clients from the waitlist once they book an appointment
+                      </p>
+                    </div>
+                    <Switch
+                      id="auto-remove"
+                      checked={config.autoRemoveBooked}
+                      onCheckedChange={(checked) =>
+                        setConfig((prev) => ({ ...prev, autoRemoveBooked: checked }))
+                      }
+                    />
+                  </div>
 
-        {/* How It Works */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-muted-foreground" />
-              How It Works
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center p-4 bg-blue-500/10 rounded-lg border border-blue-500/20">
-                <div className="p-3 bg-blue-500/10 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3">
-                  <Users className="h-5 w-5 text-blue-400" />
-                </div>
-                <h4 className="font-medium mb-1 text-sm">1. Clients Join Waitlist</h4>
-                <p className="text-xs text-muted-foreground">
-                  When a client wants a slot that is taken, they are added to your waiting list
-                </p>
-              </div>
-              <div className="text-center p-4 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
-                <div className="p-3 bg-yellow-500/10 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3">
-                  <MessageSquare className="h-5 w-5 text-yellow-400" />
-                </div>
-                <h4 className="font-medium mb-1 text-sm">2. Cancellation Triggers SMS</h4>
-                <p className="text-xs text-muted-foreground">
-                  When someone cancels, waitlisted clients are automatically notified via SMS
-                </p>
-              </div>
-              <div className="text-center p-4 bg-green-500/10 rounded-lg border border-green-500/20">
-                <div className="p-3 bg-green-500/10 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3">
-                  <CheckCircle className="h-5 w-5 text-green-400" />
-                </div>
-                <h4 className="font-medium mb-1 text-sm">3. Slot Gets Filled</h4>
-                <p className="text-xs text-muted-foreground">
-                  First responder books the slot, recovering revenue that would have been lost
-                </p>
-              </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="waiting-list-toggle">Waiting List Active</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Master toggle for the entire waiting list feature
+                      </p>
+                    </div>
+                    <Switch
+                      id="waiting-list-toggle"
+                      checked={config.waitingListEnabled}
+                      onCheckedChange={(checked) =>
+                        setConfig((prev) => ({ ...prev, waitingListEnabled: checked }))
+                      }
+                    />
+                  </div>
+
+                  <div className="p-4 bg-green-50 rounded-lg">
+                    <h4 className="font-medium mb-2 flex items-center gap-2">
+                      <Target className="h-4 w-4" />
+                      Optimization Tips
+                    </h4>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      <li>Enable auto-remove to keep your waitlist accurate</li>
+                      <li>Use priority by booking history to reward loyal clients</li>
+                      <li>Set a reasonable message limit to avoid overwhelming clients</li>
+                      <li>Monitor your fill rate to optimize flurry settings</li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );

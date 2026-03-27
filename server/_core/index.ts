@@ -16,13 +16,17 @@ import * as SystemService from "../services/system.service";
 import { logger } from "./logger";
 import { initSentry, captureException } from "./sentry";
 import { ensureCorrelationId, runWithCorrelationId } from "./requestContext";
+import { registerSecurityMiddleware } from "./security";
 import { readFileSync } from "fs";
 
 // Graceful shutdown state
 let isShuttingDown = false;
 const shutdownTimeoutMs = 30000; // 30 seconds timeout
 
-const corsOrigins = process.env.CORS_ORIGIN?.split(",").map((s) => s.trim()).filter(Boolean) ?? [];
+const corsOrigins = [
+  ...process.env.CORS_ORIGIN?.split(",").map((s) => s.trim()).filter(Boolean) ?? [],
+  ...process.env.ALLOWED_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) ?? [],
+].filter((v, i, a) => a.indexOf(v) === i);
 
 const WORKER_HEARTBEAT_FILE = process.env.WORKER_HEARTBEAT_FILE || "/tmp/worker-heartbeat.json";
 const WORKER_STALE_MS = 2 * 60_000;
@@ -135,7 +139,8 @@ function registerShutdownHandlers(server: any) {
 async function startServer() {
   await initSentry();
   const app = express();
-  app.set("trust proxy", 1);
+  // Trust reverse proxy (nginx → Apache → PHP proxy → Node)
+  app.set('trust proxy', 1);
   const server = createServer(app);
   // Register Stripe webhook route first (it needs raw body)
   registerStripeWebhook(app);
@@ -160,6 +165,10 @@ async function startServer() {
   };
   app.use(express.json({ limit: "2mb", verify: rawBodySaver }));
   app.use(express.urlencoded({ limit: "2mb", extended: true, verify: rawBodySaver }));
+
+  // Security hardening: headers, sanitization, rate limiting, audit logging, CORS
+  registerSecurityMiddleware(app);
+
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   // Inbound SMS webhooks (Telnyx + Twilio, STOP compliance)
@@ -168,11 +177,18 @@ async function startServer() {
   // ─── Health check ─────────────────────────────────────────────────────────
   app.get("/health", async (_req, res) => {
     const dbOk = await pingDb();
+    const memUsage = process.memoryUsage();
     const status = dbOk ? 200 : 503;
     res.status(status).json({
       status: dbOk ? "ok" : "degraded",
       db: dbOk ? "connected" : "unreachable",
       uptime: Math.floor(process.uptime()),
+      memory: {
+        rss: Math.round(memUsage.rss / 1024 / 1024),
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+      },
+      version: process.env.npm_package_version || "2.0.0",
       ts: new Date().toISOString(),
     });
   });
@@ -195,6 +211,18 @@ async function startServer() {
       db: dbOk ? "connected" : "unreachable",
       worker: workerHealthy ? "healthy" : "stale",
       ts: new Date().toISOString(),
+    });
+  });
+
+  // ─── Privacy & compliance endpoints ────────────────────────────────────────
+  app.get("/api/privacy-policy", (_req, res) => {
+    res.json({
+      version: "1.0",
+      lastUpdated: "2026-03-01",
+      dataRetention: "Messages retained for 2 years, then anonymized",
+      encryption: "AES-256 at rest, TLS 1.3 in transit",
+      compliance: ["TCPA", "GDPR", "CCPA", "PCI-DSS"],
+      contact: "privacy@rebooked.io",
     });
   });
 

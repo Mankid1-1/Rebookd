@@ -14,7 +14,7 @@ import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
 import {
   Bot, Sparkles, TrendingUp, Target, MessageSquare,
-  RefreshCw, CheckCircle, AlertCircle, Info, Settings,
+  RefreshCw, CheckCircle, AlertCircle, Info,
   Zap, BarChart3, Clock, Users, DollarSign,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -109,14 +109,14 @@ export function MessageOptimizer({
 
   // Get user data for dynamic configurations
   const { data: tenant } = trpc.tenant.get.useQuery();
-  const userPreferences: any = undefined; // endpoint not yet available
+  const { data: userPreferences } = trpc.user.preferences.useQuery();
 
   // Dynamic configurations based on user
   const tones = getDynamicTones(context.userSkill, tenant?.industry);
   const messageTypes = getDynamicMessageTypes(userPreferences);
 
-  // AI rewrite using existing endpoint
-  const optimizeMessage = trpc.ai.rewrite.useMutation();
+  // Real AI optimization - no more simulation!
+  const optimizeMessage = trpc.ai.optimizeMessage.useMutation();
 
   const handleOptimize = async () => {
     if (!message.trim()) {
@@ -129,23 +129,19 @@ export function MessageOptimizer({
     try {
       // Real AI API call - no simulation!
       const result = await optimizeMessage.mutateAsync({
-        message,
-        tone: selectedTone as "friendly" | "professional" | "casual" | "urgent" | "empathetic",
+        originalMessage: message,
+        tone: selectedTone,
+        messageType: messageType,
+        creativityLevel: creativityLevel[0],
+        userSkillLevel: context.userSkill.level,
+        businessType: tenant?.industry
       });
 
-      const rewrittenText = typeof result.rewritten === 'string' ? result.rewritten : message;
-      const opt: MessageOptimization = {
-        originalMessage: message,
-        optimizedMessage: rewrittenText,
-        tone: selectedTone,
-        score: 85,
-        improvements: generateImprovements(message, selectedTone),
-        predictions: { responseRate: 75, conversionRate: 60, engagementScore: 80 },
-        alternatives: generateAlternatives(message, selectedTone),
-      };
-      setOptimization(opt);
-      onOptimizedMessage?.(rewrittenText);
-      toast.success("Message optimized successfully!");
+      if (result.success) {
+        setOptimization(result.optimization);
+        onOptimizedMessage?.(result.optimization.optimizedMessage);
+        toast.success("Message optimized successfully!");
+      }
     } catch (error: any) {
       toast.error(error.message || "Failed to optimize message");
     } finally {
@@ -181,21 +177,13 @@ export function MessageOptimizer({
     try {
       const result = await optimizeMessage.mutateAsync({
         message,
-        tone: 'professional' as const,
-      });
-
-      const rewrittenText = typeof result.rewritten === 'string' ? result.rewritten : message;
-      const opt: MessageOptimization = {
-        originalMessage: message,
-        optimizedMessage: rewrittenText,
         tone: 'professional',
-        score: 85,
-        improvements: generateImprovements(message, 'professional'),
-        predictions: { responseRate: 75, conversionRate: 60, engagementScore: 80 },
-        alternatives: generateAlternatives(message, 'professional'),
-      };
-      setOptimization(opt);
-      onOptimizedMessage?.(rewrittenText);
+        messageType: 'missed-call',
+        creativityLevel: creativityLevel[0]
+      });
+      
+      setOptimization(result);
+      onOptimizedMessage?.(result.optimizedMessage);
       toast.success("Message optimized quickly");
     } catch (error) {
       toast.error("Quick optimization failed");
@@ -205,7 +193,7 @@ export function MessageOptimizer({
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 90) return 'text-green-400';
+    if (score >= 90) return 'text-green-600';
     if (score >= 70) return 'text-yellow-600';
     return 'text-red-600';
   };
@@ -327,7 +315,7 @@ export function MessageOptimizer({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {messageTypes.map((type) => (
+                  {MESSAGE_TYPES.map((type) => (
                     <SelectItem key={type.value} value={type.value}>
                       {type.label}
                     </SelectItem>
@@ -343,7 +331,7 @@ export function MessageOptimizer({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {tones.map((tone) => (
+                  {TONES.map((tone) => (
                     <SelectItem key={tone.value} value={tone.value}>
                       <div>
                         <div>{tone.label}</div>
@@ -358,7 +346,7 @@ export function MessageOptimizer({
 
           {/* Advanced Settings */}
           {showAdvanced && (
-            <div className="space-y-4 p-4 bg-muted/30 rounded-lg">
+            <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
               <div>
                 <label className="text-sm font-medium mb-2 block">
                   Creativity Level: {creativityLevel[0]}%
@@ -423,7 +411,7 @@ export function MessageOptimizer({
                   <CheckCircle className="h-4 w-4 inline mr-1 text-green-500" />
                   Optimized Version
                 </label>
-                <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-sm">{optimization.optimizedMessage}</p>
                 </div>
               </div>
@@ -455,7 +443,7 @@ export function MessageOptimizer({
                   </label>
                   <div className="space-y-2">
                     {optimization.alternatives.map((alternative, index) => (
-                      <div key={index} className="p-2 bg-muted/30 border rounded text-sm">
+                      <div key={index} className="p-2 bg-gray-50 border rounded text-sm">
                         {alternative}
                       </div>
                     ))}
@@ -482,7 +470,7 @@ export function MessageOptimizer({
                       <MessageSquare className="h-4 w-4 text-blue-500" />
                       <span className="text-sm font-medium">Response Rate</span>
                     </div>
-                    <span className="text-sm font-bold text-blue-400">
+                    <span className="text-sm font-bold text-blue-600">
                       {optimization.predictions.responseRate}%
                     </span>
                   </div>
@@ -496,7 +484,7 @@ export function MessageOptimizer({
                       <Target className="h-4 w-4 text-green-500" />
                       <span className="text-sm font-medium">Conversion Rate</span>
                     </div>
-                    <span className="text-sm font-bold text-green-400">
+                    <span className="text-sm font-bold text-green-600">
                       {optimization.predictions.conversionRate}%
                     </span>
                   </div>
@@ -518,12 +506,12 @@ export function MessageOptimizer({
                 </div>
 
                 {/* Insights */}
-                <div className="bg-blue-500/10 p-4 rounded-lg">
+                <div className="bg-blue-50 p-4 rounded-lg">
                   <div className="flex items-start gap-2">
                     <Info className="h-4 w-4 text-blue-500 mt-0.5" />
                     <div>
                       <h4 className="font-medium text-sm mb-1">AI Insights</h4>
-                      <p className="text-xs text-blue-300">
+                      <p className="text-xs text-blue-800">
                         This message is predicted to perform {optimization.score >= 90 ? 'excellently' : 'well'} 
                         based on your industry benchmarks and historical performance data.
                         {optimization.predictions.responseRate > 80 && 

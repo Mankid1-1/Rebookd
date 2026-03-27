@@ -103,78 +103,40 @@ export const automationTemplates = [
     ],
   },
   {
-    key: "appointment_reminder_24h",
-    name: "24-Hour Appointment Reminder",
-    category: "appointment",
-    trigger: "appointment.reminder_24h",
-    steps: [
-      { type: "sms", message: "Hi {{name}}, reminder: your appointment at {{business}} is tomorrow at {{time}}. Reply CONFIRM to keep it or RESCHEDULE to change." },
-    ],
-  },
-  {
-    key: "appointment_reminder_2h",
-    name: "2-Hour Appointment Reminder",
-    category: "appointment",
-    trigger: "appointment.reminder_2h",
-    steps: [
-      { type: "sms", message: "Hi {{name}}, just a heads up — your appointment at {{business}} is in 2 hours at {{time}}. See you soon!" },
-    ],
-  },
-  {
-    key: "booking_confirmation",
-    name: "Booking Confirmation",
-    category: "appointment",
-    trigger: "appointment.booked",
-    steps: [
-      { type: "sms", message: "You're all set! Your appointment at {{business}} is confirmed for {{date}} at {{time}}. Reply CANCEL if you need to change plans." },
-    ],
-  },
-  {
-    key: "review_request",
-    name: "Review Request",
-    category: "review",
-    trigger: "appointment.completed",
-    steps: [
-      { type: "delay", value: 3600 },
-      { type: "sms", message: "Thanks for visiting {{business}}! We'd love your feedback. Leave us a quick review here: {{review_link}}" },
-    ],
-  },
-  {
     key: "birthday_promo",
     name: "Birthday Promo",
     category: "loyalty",
-    trigger: "contact.birthday",
+    trigger: "lead.birthday",
     steps: [
-      { type: "sms", message: "Happy birthday, {{name}}! 🎂 {{business}} wants to celebrate with you — enjoy {{discount}} off your next visit. Book now!" },
+      { type: "sms", message: "Happy birthday {{first_name}}! 🎂 As a gift from {{business}}, enjoy a special birthday offer. Reply BIRTHDAY to claim yours." },
     ],
   },
   {
     key: "loyalty_milestone",
     name: "Loyalty Milestone",
     category: "loyalty",
-    trigger: "contact.milestone",
+    trigger: "appointment.completed",
     steps: [
-      { type: "sms", message: "Congrats {{name}}! You've hit {{milestone}} visits at {{business}}. As a thank you, here's a special reward: {{reward}}. Book your next visit!" },
+      { type: "sms", message: "Congrats {{first_name}}! You've hit a loyalty milestone at {{business}}. We have a special thank-you reward waiting for you. Reply REWARD to claim it." },
     ],
   },
   {
-    key: "post_visit_feedback",
-    name: "Post-Visit Feedback",
+    key: "review_request",
+    name: "Post-Appointment Review Request",
     category: "follow_up",
     trigger: "appointment.completed",
     steps: [
       { type: "delay", value: 7200 },
-      { type: "sms", message: "Hi {{name}}, how was your visit to {{business}} today? Reply 1-5 (5 = amazing). We'd love to hear from you!" },
+      { type: "sms", message: "Thanks for visiting {{business}} today, {{first_name}}! If you had a great experience, we'd love a quick review: {{review_link}}. It means the world to us!" },
     ],
   },
   {
-    key: "post_visit_upsell",
-    name: "Post-Visit Upsell",
-    category: "follow_up",
-    trigger: "appointment.completed",
+    key: "appointment_reminder_2h",
+    name: "2-Hour Appointment Reminder",
+    category: "appointment",
+    trigger: "appointment.reminder",
     steps: [
-      { type: "delay", value: 86400 },
-      { type: "sms", message: "Hi {{name}}, loved having you at {{business}}! Did you know we also offer {{upsell_service}}? Reply INFO to learn more." },
+      { type: "sms", message: "Quick reminder {{first_name}} — your appointment at {{business}} is in 2 hours ({{time}}). See you soon! Reply RESCHEDULE if you need to change." },
     ],
   },
   {
@@ -183,7 +145,7 @@ export const automationTemplates = [
     category: "cancellation",
     trigger: "appointment.cancelled",
     steps: [
-      { type: "sms", message: "Great news! A spot just opened up at {{business}} on {{date}} at {{time}}. You're on the waiting list — reply BOOK to grab it before it's gone!" },
+      { type: "sms", message: "Great news {{first_name}}! A spot just opened at {{business}} on {{date}} at {{time}}. Want it? Reply YES to grab it before someone else does!" },
     ],
   },
 ];

@@ -5,17 +5,20 @@ import { nanoid } from "nanoid";
 import path from "path";
 
 export async function setupVite(app: Express, server: Server) {
-  // Dynamic import so vite/tailwind/react plugins are never loaded in production
-  const viteModule = await import("vite");
-  const createViteServer = viteModule.createServer;
+  // Dynamic imports so vite is never loaded in production
+  const { createServer: createViteServer } = await import("vite");
+  const viteConfig = (await import("../../vite.config")).default;
+
+  const serverOptions = {
+    middlewareMode: true,
+    hmr: { server },
+    allowedHosts: true as const,
+  };
 
   const vite = await createViteServer({
-    configFile: path.resolve(import.meta.dirname, "../..", "vite.config.ts"),
-    server: {
-      middlewareMode: true,
-      hmr: { server },
-      allowedHosts: true as const,
-    },
+    ...viteConfig,
+    configFile: false,
+    server: serverOptions,
     appType: "custom",
   });
 
@@ -57,23 +60,10 @@ export function serveStatic(app: Express) {
     );
   }
 
-  // Cache hashed assets (immutable), no-cache for HTML
-  app.use("/assets", express.static(path.join(distPath, "assets"), {
-    maxAge: "1y",
-    immutable: true,
-  }));
-  app.use(express.static(distPath, {
-    index: false, // Don't serve index.html from static — let the fallback handle it with proper no-cache headers
-    setHeaders(res, filePath) {
-      if (filePath.endsWith(".html")) {
-        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      }
-    },
-  }));
+  app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }

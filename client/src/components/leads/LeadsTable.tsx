@@ -16,14 +16,14 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { MessageSquare, Users, Plus, Phone, Clock } from "lucide-react";
+import { MessageSquare, Users, Plus, Phone, Mail, Calendar, Clock } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { StatusBadge } from "@/components/ui/StatusBadge";
+import { StatusBadge, CommunicationBadge, ActivityBadge } from "@/components/ui/StatusBadge";
+import { HelpTooltip } from "@/components/ui/HelpTooltip";
 import { useDynamicStatuses } from "@/hooks/useDynamicConfiguration";
-import type { Lead } from "../../../../shared/interfaces";
+import type { Lead } from "../../../shared/interfaces";
 
 interface LeadsTableProps {
   leads: Lead[];
@@ -36,21 +36,21 @@ interface LeadsTableProps {
 export function LeadsTable({ leads, isLoading, onAddClick, isFiltered, onClearFilters }: LeadsTableProps) {
   const statuses = useDynamicStatuses();
   const [, setLocation] = useLocation();
-
+  
   const statusOptions = statuses;
   const utils = trpc.useUtils();
 
-  const updateLeadStatus = trpc.leads.updateStatus.useMutation({
+  const updateLeadStatus = trpc.leads.update.useMutation({
     onSuccess: () => {
       toast.success("Lead status updated");
       utils.leads.list.invalidate();
       utils.analytics.dashboard.invalidate();
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err) => toast.error(err.message),
   });
 
   const handleStatusChange = (leadId: number, newStatus: string) => {
-    updateLeadStatus.mutate({ leadId, status: newStatus as any });
+    updateLeadStatus.mutate({ id: leadId, status: newStatus as any });
   };
 
   const formatDate = (date: Date | string | null) => {
@@ -77,62 +77,33 @@ export function LeadsTable({ leads, isLoading, onAddClick, isFiltered, onClearFi
       .slice(0, 2);
   };
 
-  const handleRowClick = (leadId: number) => {
-    setLocation(`/leads/${leadId}`);
-  };
-
-  const handleSendMessage = (e: React.MouseEvent, leadId: number) => {
-    e.stopPropagation();
+  const handleSendMessage = (leadId: number, leadName: string | null) => {
+    const [, setLocation] = useLocation();
     setLocation(`/inbox?lead=${leadId}`);
   };
 
-  const handleCall = (e: React.MouseEvent, phone: string) => {
-    e.stopPropagation();
+  const handleCall = (phone: string) => {
     window.open(`tel:${phone}`, '_blank');
+  };
+
+  const handleEmail = (email: string) => {
+    window.open(`mailto:${email}`, '_blank');
   };
 
   if (isLoading) {
     return (
-      <Card className="border-border bg-card">
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[220px]">Lead</TableHead>
-                  <TableHead className="w-[120px]">Status</TableHead>
-                  <TableHead className="w-[100px]">Source</TableHead>
-                  <TableHead className="w-[140px]">Last Activity</TableHead>
-                  <TableHead className="w-[110px]">Added</TableHead>
-                  <TableHead className="text-right w-[160px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Skeleton className="w-10 h-10 rounded-full" />
-                        <div className="space-y-1.5">
-                          <Skeleton className="h-4 w-28" />
-                          <Skeleton className="h-3 w-24" />
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-14" /></TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex gap-2 justify-end">
-                        <Skeleton className="h-8 w-20 rounded-md" />
-                        <Skeleton className="h-8 w-8 rounded-md" />
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+      <Card>
+        <CardContent className="p-6">
+          <div className="space-y-4">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex items-center space-x-4">
+                <div className="w-10 h-10 bg-muted rounded-full animate-pulse" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-muted rounded animate-pulse" />
+                  <div className="h-3 bg-muted rounded w-3/4 animate-pulse" />
+                </div>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -141,7 +112,7 @@ export function LeadsTable({ leads, isLoading, onAddClick, isFiltered, onClearFi
 
   if (leads.length === 0) {
     return (
-      <Card className="border-border bg-card">
+      <Card>
         <CardContent className="p-8 text-center">
           <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
             <Users className="h-8 w-8 text-muted-foreground" />
@@ -169,30 +140,56 @@ export function LeadsTable({ leads, isLoading, onAddClick, isFiltered, onClearFi
   }
 
   return (
-    <Card className="border-border bg-card">
+    <Card>
       <CardContent className="p-0">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[220px]">Lead</TableHead>
-                <TableHead className="w-[120px]">Status</TableHead>
+                <TableHead className="w-[200px]">
+                  <div className="flex items-center gap-2">
+                    Lead
+                    <HelpTooltip 
+                      content="Contact information and basic details about the lead"
+                      variant="info"
+                    >
+                      <span />
+                    </HelpTooltip>
+                  </div>
+                </TableHead>
+                <TableHead className="w-[120px]">
+                  <div className="flex items-center gap-2">
+                    Status
+                    <HelpTooltip 
+                      content="Current stage in your sales pipeline"
+                      variant="info"
+                    >
+                      <span />
+                    </HelpTooltip>
+                  </div>
+                </TableHead>
                 <TableHead className="w-[100px]">Source</TableHead>
-                <TableHead className="w-[140px]">Last Activity</TableHead>
-                <TableHead className="w-[110px]">Added</TableHead>
-                <TableHead className="text-right w-[160px]">Actions</TableHead>
+                <TableHead className="w-[150px]">
+                  <div className="flex items-center gap-2">
+                    Last Activity
+                    <HelpTooltip 
+                      content="Most recent communication or interaction"
+                      variant="info"
+                    >
+                      <span />
+                    </HelpTooltip>
+                  </div>
+                </TableHead>
+                <TableHead className="w-[120px]">Added</TableHead>
+                <TableHead className="text-right w-[200px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {leads.map((lead) => (
-                <TableRow
-                  key={lead.id}
-                  className="cursor-pointer hover:bg-muted/50 transition-colors"
-                  onClick={() => handleRowClick(lead.id)}
-                >
+                <TableRow key={lead.id} className="hover:bg-muted/50 transition-colors">
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center shrink-0">
+                      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
                         <span className="text-sm font-medium text-primary">
                           {getInitials(lead.name)}
                         </span>
@@ -201,19 +198,19 @@ export function LeadsTable({ leads, isLoading, onAddClick, isFiltered, onClearFi
                         <div className="font-medium truncate">
                           {lead.name || "Unknown Lead"}
                         </div>
-                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                          <Phone className="h-3 w-3 shrink-0" />
-                          <span className="truncate">{lead.phone}</span>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Phone className="h-3 w-3" />
+                          <span>{lead.phone}</span>
                         </div>
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
+                  <TableCell>
                     <Select
                       value={lead.status}
                       onValueChange={(value) => handleStatusChange(lead.id, value)}
                     >
-                      <SelectTrigger className="w-fit border-none bg-transparent p-0 h-auto shadow-none">
+                      <SelectTrigger className="w-fit">
                         <StatusBadge status={lead.status} size="sm" />
                       </SelectTrigger>
                       <SelectContent>
@@ -234,27 +231,27 @@ export function LeadsTable({ leads, isLoading, onAddClick, isFiltered, onClearFi
                         {lead.source}
                       </Badge>
                     ) : (
-                      <span className="text-muted-foreground text-xs">--</span>
+                      <span className="text-muted-foreground text-xs">—</span>
                     )}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
-                      <span className="text-sm text-muted-foreground">{formatDate((lead as any).lastMessageAt)}</span>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-sm">{formatDate(lead.lastMessageAt)}</span>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className="text-sm text-muted-foreground">
+                    <div className="text-sm text-muted-foreground">
                       {formatDate(lead.createdAt)}
-                    </span>
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center gap-1.5 justify-end">
+                    <div className="flex items-center gap-2 justify-end">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={(e) => handleSendMessage(e, lead.id)}
-                        className="gap-1 h-8 text-xs"
+                        onClick={() => handleSendMessage(lead.id, lead.name)}
+                        className="gap-1"
                       >
                         <MessageSquare className="h-3 w-3" />
                         Message
@@ -262,8 +259,8 @@ export function LeadsTable({ leads, isLoading, onAddClick, isFiltered, onClearFi
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={(e) => handleCall(e, lead.phone)}
-                        className="h-8 w-8 p-0"
+                        onClick={() => handleCall(lead.phone)}
+                        className="gap-1"
                       >
                         <Phone className="h-3 w-3" />
                       </Button>

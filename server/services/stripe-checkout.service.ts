@@ -6,36 +6,48 @@
 import Stripe from 'stripe';
 import { getDb } from '../db';
 import { TRPCError } from '@trpc/server';
-import { stripeSubscriptions } from '../../drizzle/schema';
-import { eq } from 'drizzle-orm';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2022-11-15',
 });
 
 // Price IDs from Stripe Dashboard
-// Professional/Full: $199/mo base + $0.15/unit metered (15% share)
-const PROFESSIONAL_FIXED_PRICE_ID = process.env.STRIPE_PRICE_PROFESSIONAL || 'price_1TDqZtPC6Kl5W2cCTLQrYsKS';
-const PROFESSIONAL_METERED_PRICE_ID = process.env.STRIPE_METERED_PRICE_ID || 'price_1TDx2sPC6Kl5W2cCGPQgHuXz';
-// Flex: slider $29-$149/mo base + $0.20/unit metered (20% share)
-const FLEX_DEFAULT_PRICE_ID = process.env.STRIPE_PRICE_FLEX || 'price_1TExaUPC6Kl5W2cC865JZHpr';
-const FLEX_METERED_PRICE_ID = process.env.STRIPE_METERED_PRICE_FLEX || 'price_1TFgLpPC6Kl5W2cCdN22c86O';
+const FIXED_PRICE_ID = process.env.STRIPE_FIXED_PRICE_ID || 'price_FIXED_199';
+const METERED_PRICE_ID = process.env.STRIPE_METERED_PRICE_ID || 'price_METERED_15';
 
-// Legacy fallbacks
-const FIXED_PRICE_ID = PROFESSIONAL_FIXED_PRICE_ID;
-const METERED_PRICE_ID = PROFESSIONAL_METERED_PRICE_ID;
+// ─── Soft Launch: 30-day free trial for all founding clients ──────────────
+const SOFT_LAUNCH_TRIAL_DAYS = 30;
+const SOFT_LAUNCH_ACTIVE = true; // Set false when founding program ends
+
+// Flex Plan tiered pricing: subscription scales with estimated monthly recovery
+// Tiers ensure clients always keep the majority of recovered revenue
+// Revenue share (20%) is metered separately via METERED_PRICE_ID
+const FLEX_PRICE_MAP: Record<number, string> = {
+  29: 'price_1TFDQgPC6Kl5W2cCWAdbB1ne',   // $29/mo — recovery up to $300/mo
+  49: 'price_1TFDQhPC6Kl5W2cCLP4dsOdp',   // $49/mo — recovery $301-$500/mo
+  79: 'price_1TExaTPC6Kl5W2cCMh7LayCd',   // $79/mo — recovery $501-$800/mo
+  99: 'price_1TExaUPC6Kl5W2cC865JZHpr',   // $99/mo — recovery $801-$1200/mo
+  129: 'price_1TFDQiPC6Kl5W2cCFVVkGscB',  // $129/mo — recovery $1201-$1800/mo
+  149: 'price_1TExaWPC6Kl5W2cC5siHQ6qj',  // $149/mo — recovery $1800+/mo
+};
+
+function getFlexPriceId(sliderValue: number): string {
+  const targetPrice = sliderValue <= 300 ? 29
+    : sliderValue <= 500 ? 49
+    : sliderValue <= 800 ? 79
+    : sliderValue <= 1200 ? 99
+    : sliderValue <= 1800 ? 129
+    : 149;
+  return FLEX_PRICE_MAP[targetPrice] || FLEX_PRICE_MAP[49];
+}
 
 export interface CheckoutSessionData {
   customerEmail: string;
   userId: string;
   tenantId: string;
   referralCode?: string;
-  /** Recovery event ID for attribution tracking */
-  recoveryEventId?: string;
-  /** Plan type — determines which Stripe prices to use */
-  planType?: 'professional' | 'flex';
-  /** For flex plan: specific base price ID from slider selection */
-  flexPriceId?: string;
+  planType?: 'growth' | 'flex';
+  flexSliderValue?: number; // $200-$2500 estimated monthly recovery slider
 }
 
 export interface SubscriptionData {
@@ -72,32 +84,48 @@ export async function createCheckoutSession(data: CheckoutSessionData): Promise<
       customerId = customer.id;
     }
 
-    // Select prices based on plan type
-    const isFlex = data.planType === 'flex';
-    const basePriceId = isFlex
-      ? (data.flexPriceId || FLEX_DEFAULT_PRICE_ID)
-      : PROFESSIONAL_FIXED_PRICE_ID;
-    const meteredPriceId = isFlex
-      ? FLEX_METERED_PRICE_ID
-      : PROFESSIONAL_METERED_PRICE_ID;
+    // Determine which price to use
+    const planType = data.planType || 'growth';
+    const basePriceId = planType === 'flex' && data.flexSliderValue
+      ? getFlexPriceId(data.flexSliderValue)
+      : FIXED_PRICE_ID;
 
-    // Create checkout session with both prices
+    // Build line items
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      {
+        price: basePriceId,
+        quantity: 1,
+      },
+    ];
+
+    // Both plans get metered revenue share (Rebooked 15%, Flex 20% of recovered revenue)
+    lineItems.push({
+      price: METERED_PRICE_ID,
+    });
+
+    // Soft launch: 30-day free trial — no charge until positive ROI
+    const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {};
+    if (SOFT_LAUNCH_ACTIVE) {
+      subscriptionData.trial_period_days = SOFT_LAUNCH_TRIAL_DAYS;
+      subscriptionData.metadata = {
+        softLaunch: 'true',
+        foundingClient: 'true',
+        roiGuarantee: 'true',
+        planType,
+        flexSliderValue: String(data.flexSliderValue || ''),
+      };
+    }
+
+    // Create checkout session with trial
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
       customer_email: customerEmail,
-      line_items: [
-        {
-          price: basePriceId,
-          quantity: 1,
-        },
-        {
-          price: meteredPriceId, // Revenue share metered price
-        },
-      ],
+      line_items: lineItems,
+      subscription_data: subscriptionData,
       success_url: `${process.env.FRONTEND_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL}/pricing`,
-      payment_method_types: ['card'],
+      payment_method_types: ['card', 'cashapp', 'link'],
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
       customer_update: {
@@ -108,8 +136,8 @@ export async function createCheckoutSession(data: CheckoutSessionData): Promise<
         userId,
         tenantId,
         referralCode: referralCode || '',
-        recoveryEventId: data.recoveryEventId || '',
-        planType: data.planType || 'professional',
+        planType,
+        flexSliderValue: String(data.flexSliderValue || ''),
       },
     });
 
@@ -138,11 +166,11 @@ export async function processSuccessfulCheckout(sessionId: string): Promise<Subs
     
     // Store subscription in database
     const db = await getDb();
-
-    await db.insert(stripeSubscriptions).values({
+    
+    await (db as any).insert('subscriptions').values({
       id: subscription.id,
-      userId: parseInt(session.metadata?.userId || '0', 10),
-      tenantId: parseInt(session.metadata?.tenantId || '0', 10),
+      userId: session.metadata?.userId,
+      tenantId: session.metadata?.tenantId,
       customerId: session.customer as string,
       status: subscription.status,
       priceId: FIXED_PRICE_ID,
@@ -182,7 +210,7 @@ export async function processSuccessfulCheckout(sessionId: string): Promise<Subs
 /**
  * Report revenue recovery to Stripe metered billing
  */
-export async function reportRevenueUsage(customerId: string, recoveredAmount: number, recoveryEventId?: string): Promise<void> {
+export async function reportRevenueUsage(customerId: string, recoveredAmount: number): Promise<void> {
   try {
     // For metered billing, we create usage records on the subscription
     // First get the customer's active subscription
@@ -216,7 +244,7 @@ export async function reportRevenueUsage(customerId: string, recoveredAmount: nu
       action: 'increment',
     });
 
-    console.log(`Reported $${recoveredAmount} revenue recovery for customer ${customerId}${recoveryEventId ? ` (recovery_event: ${recoveryEventId})` : ''}`);
+    console.log(`Reported $${recoveredAmount} revenue recovery for customer ${customerId}`);
   } catch (error) {
     console.error('Failed to report revenue usage:', error);
     throw new TRPCError({
@@ -300,12 +328,12 @@ export async function cancelSubscription(subscriptionId: string): Promise<void> 
 
     // Update in database
     const db = await getDb();
-    await db.update(stripeSubscriptions)
-      .set({
+    await (db as any).update('subscriptions')
+      .set({ 
         cancelAtPeriodEnd: true,
         updatedAt: new Date()
       })
-      .where(eq(stripeSubscriptions.id, subscriptionId));
+      .where('id', '=', subscriptionId);
   } catch (error) {
     console.error('Failed to cancel subscription:', error);
     throw new TRPCError({
@@ -326,12 +354,12 @@ export async function resumeSubscription(subscriptionId: string): Promise<void> 
 
     // Update in database
     const db = await getDb();
-    await db.update(stripeSubscriptions)
-      .set({
+    await (db as any).update('subscriptions')
+      .set({ 
         cancelAtPeriodEnd: false,
         updatedAt: new Date()
       })
-      .where(eq(stripeSubscriptions.id, subscriptionId));
+      .where('id', '=', subscriptionId);
   } catch (error) {
     console.error('Failed to resume subscription:', error);
     throw new TRPCError({
@@ -348,13 +376,13 @@ async function processReferralCompletion(referralCode: string, userId: string, s
   try {
     // Import referral service to avoid circular dependency
     const { processReferral, completeReferral } = await import('./referral.service');
-
+    
     // First process the referral
-    const result = await processReferral(referralCode, Number(userId));
-
-    if (result.success && result.referralId) {
+    const result = await processReferral(referralCode, userId);
+    
+    if (result.success && result.referral) {
       // Complete the referral (6+ months requirement will be checked)
-      await completeReferral(result.referralId, subscriptionId, 6);
+      await completeReferral(result.referral.id, subscriptionId, 6);
     }
   } catch (error) {
     console.error('Failed to process referral completion:', error);

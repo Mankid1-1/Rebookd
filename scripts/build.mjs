@@ -25,6 +25,39 @@ try {
     bundle: true,
     format: "esm",
     outfile: join(tempDist, "index.js"),
+    define: {
+      "process.env.NODE_ENV": '"production"',
+    },
+    plugins: [{
+      name: "exclude-vite-dev",
+      setup(build) {
+        // Replace vite dev server module with a production stub
+        build.onResolve({ filter: /\/vite\.ts$/ }, (args) => {
+          if (args.importer.includes("index.ts")) {
+            return { path: args.path, namespace: "vite-stub" };
+          }
+        });
+        build.onLoad({ filter: /.*/, namespace: "vite-stub" }, () => ({
+          contents: `
+            import express from "express";
+            import fs from "fs";
+            import path from "path";
+            export async function setupVite() {}
+            export function serveStatic(app) {
+              const distPath = path.resolve(import.meta.dirname, "public");
+              if (!fs.existsSync(distPath)) {
+                console.error("Build directory not found:", distPath);
+              }
+              app.use(express.static(distPath));
+              app.use("*", (_req, res) => {
+                res.sendFile(path.resolve(distPath, "index.html"));
+              });
+            }
+          `,
+          loader: "js",
+        }));
+      },
+    }],
   });
 
   await esbuild({

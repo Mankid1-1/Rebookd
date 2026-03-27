@@ -22,7 +22,6 @@ import {
   Clock, Target, BarChart3, PieChart as PieChartIcon,
   Settings, RefreshCw, Eye, EyeOff, Share2, Printer,
   Mail, ArrowUp, ArrowDown, Info, CheckCircle,
-  AlertCircle, Sparkles,
 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import { toast } from "sonner";
@@ -133,7 +132,7 @@ const getDynamicMetrics = (businessType?: string, userPreferences?: any) => {
 
 // Dynamic chart colors based on theme
 const getDynamicChartColors = () => {
-  const isDarkMode = document.documentElement.classList.contains('dark');
+  const isDarkMode = document.documentElement.classList.has('dark');
   return isDarkMode 
     ? ['#60a5fa', '#eab308', '#34d399', '#f87171', '#a78bfa', '#9ca3af']
     : ['#3b82f6', '#eab308', '#22c55e', '#ef4444', '#a855f7', '#6b7280'];
@@ -179,15 +178,15 @@ export function AdvancedReporting({
 
   // Get real user data
   const { data: tenant } = trpc.tenant.get.useQuery();
-  const userPreferences: any = undefined; // endpoint not yet available
+  const { data: userPreferences } = trpc.user.preferences.useQuery();
 
   // Dynamic configurations based on user
   const reportTypes = getDynamicReportTypes(user?.role, context.userSkill);
   const metrics = getDynamicMetrics(tenant?.industry, userPreferences);
   const chartColors = getDynamicChartColors();
 
-  // Report generation endpoint not yet available
-  const generateReport = { mutateAsync: async (_input: any) => ({ success: true }) };
+  // Real report generation - no simulation!
+  const generateReport = trpc.reports.generate.useMutation();
 
   // Missing functions that were referenced in the JSX
   const generateReportData = async () => {
@@ -235,7 +234,7 @@ export function AdvancedReporting({
         reportType: selectedReport,
         metrics: selectedMetrics,
         dateFilter,
-        customDateRange: dateRange
+        customDateRange
       });
     } catch (error) {
       toast.error("Failed to generate report");
@@ -244,7 +243,15 @@ export function AdvancedReporting({
     }
   };
 
-  // Second handleExport removed - duplicate definition
+  const handleExport = (format: string) => {
+    if (!reportData) return;
+    
+    exportReport.mutateAsync({
+      reportData,
+      format,
+      reportType: selectedReport
+    });
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -329,7 +336,7 @@ export function AdvancedReporting({
               <Checkbox
                 id="show-comparison"
                 checked={showComparison}
-                onCheckedChange={(checked) => setShowComparison(!!checked)}
+                onCheckedChange={setShowComparison}
               />
               <label htmlFor="show-comparison" className="text-sm">
                 Show comparison
@@ -624,7 +631,7 @@ export function AdvancedReporting({
                         key={format}
                         variant={exportFormat === format ? 'default' : 'outline'}
                         size="sm"
-                        onClick={() => setExportFormat(format as 'pdf' | 'excel' | 'csv')}
+                        onClick={() => setExportFormat(format)}
                       >
                         {format.toUpperCase()}
                       </Button>
@@ -634,7 +641,7 @@ export function AdvancedReporting({
 
                 {/* Export Actions */}
                 <div className="grid gap-4 md:grid-cols-3">
-                  <Button onClick={() => handleExport('csv')} className="w-full">
+                  <Button onClick={handleExport} className="w-full">
                     <Download className="h-4 w-4 mr-2" />
                     Export Report
                   </Button>
@@ -649,12 +656,12 @@ export function AdvancedReporting({
                 </div>
 
                 {/* Report Info */}
-                <div className="bg-blue-500/10 p-4 rounded-lg">
+                <div className="bg-blue-50 p-4 rounded-lg">
                   <div className="flex items-start gap-2">
                     <Info className="h-4 w-4 text-blue-500 mt-0.5" />
                     <div>
                       <h4 className="font-medium text-sm mb-1">Report Information</h4>
-                      <div className="text-xs text-blue-300 space-y-1">
+                      <div className="text-xs text-blue-800 space-y-1">
                         <p>Generated: {format(new Date(), 'MMM dd, yyyy at h:mm a')}</p>
                         <p>Period: {dateFilter}</p>
                         <p>Type: {REPORT_TYPES.find(r => r.id === selectedReport)?.name}</p>

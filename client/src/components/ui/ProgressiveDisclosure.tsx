@@ -16,12 +16,12 @@ import {
   Layers, Grid, List, Sliders, Info,
   User, Clock, BarChart3, Shield,
   Lightbulb, GraduationCap, Award, Star,
-  RotateCcw, AlertCircle, X,
 } from "lucide-react";
 import { toast } from "sonner";
 
 // User skill levels and their characteristics
-export type UserSkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
+export type { UserSkillLevel } from "../../../shared/interfaces";
+export type { UserSkillProfile } from "../../../shared/interfaces";
 
 export interface UserSkillProfile {
   level: UserSkillLevel;
@@ -235,37 +235,11 @@ export function ProgressiveDisclosureProvider({ children, userId = 'current-user
   );
 }
 
-// Hook to use the shared context — returns safe defaults when no provider exists
-const noop = () => {};
-const noopAsync = async () => {};
-const defaultUserSkill: UserSkillProfile = {
-  level: 'intermediate',
-  experience: { totalSessions: 0, sessionDuration: 0, featureUsage: {}, completedTutorials: [], errorRate: 0, helpSeekingFrequency: 0 },
-  preferences: { uiComplexity: 'balanced', learningMode: false, showHints: true, progressiveDisclosure: true, adaptationSpeed: 'moderate' },
-  behavior: { explorationScore: 50, efficiencyScore: 50, confidenceLevel: 50, adaptationWillingness: 50 },
-};
-
-const defaultContext: ReturnType<typeof useProgressiveDisclosure> = {
-  context: { userSkill: defaultUserSkill, currentComplexity: 'standard' as any, disclosedFeatures: new Set(), hiddenFeatures: new Set(), adaptiveHints: [], tutorials: {}, featureUsage: {}, errors: [] },
-  isAnalyzing: false,
-  analyzeUserBehavior: noopAsync as any,
-  trackFeatureUsage: noop,
-  trackSessionStart: noop,
-  trackSessionEnd: noop,
-  trackError: noop,
-  trackHelpSeeking: noop,
-  completeTutorial: noop,
-  adjustComplexity: noop as any,
-  toggleFeature: noop as any,
-  dismissHint: noop as any,
-  onDisclose: noop,
-  onConceal: noop,
-};
-
+// Hook to use the shared context
 export function useProgressiveDisclosureContext() {
   const context = useContext(ProgressiveDisclosureContext);
   if (!context) {
-    return defaultContext;
+    throw new Error('useProgressiveDisclosureContext must be used within a ProgressiveDisclosureProvider');
   }
   return context;
 }
@@ -498,7 +472,17 @@ export function useProgressiveDisclosure(userId: string) {
             confidenceLevel: 0.3,
             adaptationWillingness: 0.3,
           },
-        } as UserSkillProfile;
+          goals: {
+            primary: 'lead_management',
+            secondary: ['communication'],
+            progress: {
+              leadsAdded: 0,
+              messagesSent: 0,
+              campaignsCreated: 0,
+              automationsBuilt: 0,
+            },
+          },
+        };
       }
 
       setUserSkill(profile);

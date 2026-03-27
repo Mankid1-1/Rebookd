@@ -192,9 +192,8 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
       unpaid: 'destructive',
     };
     
-    const variant = (variants[status as keyof typeof variants] || 'outline') as "default" | "destructive" | "outline" | "secondary";
     return (
-      <Badge variant={variant}>
+      <Badge variant={variants[status as keyof typeof variants] || 'outline'}>
         {status.replace('_', ' ').toUpperCase()}
       </Badge>
     );
@@ -245,9 +244,9 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
 
       {/* Error Display */}
       {error && (
-        <Alert className="border-red-500/30 bg-red-500/10">
-          <AlertCircle className="h-4 w-4 text-red-400" />
-          <AlertDescription className="text-red-300">
+        <Alert className="border-red-200 bg-red-50">
+          <AlertCircle className="h-4 w-4 text-red-600" />
+          <AlertDescription className="text-red-800">
             {error}
           </AlertDescription>
         </Alert>
@@ -313,14 +312,14 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
           {currentUsage.totalUsage > 0 && (
             <div className="space-y-3">
               <h4 className="font-semibold">Current Usage</h4>
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-blue-300">Revenue Recovered This Period</span>
-                  <span className="text-2xl font-bold text-blue-300">
+                  <span className="text-blue-800">Revenue Recovered This Period</span>
+                  <span className="text-2xl font-bold text-blue-800">
                     ${currentUsage.totalUsage.toFixed(2)}
                   </span>
                 </div>
-                <div className="text-sm text-blue-400">
+                <div className="text-sm text-blue-600">
                   Estimated charge: ${currentUsage.items.reduce((sum, item) => sum + item.estimatedCharge, 0).toFixed(2)}
                 </div>
               </div>
@@ -331,7 +330,7 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
           {upcomingInvoice && (
             <div className="space-y-3">
               <h4 className="font-semibold">Upcoming Invoice</h4>
-              <div className="bg-muted/30 border border-border rounded-lg p-4">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-gray-700">Amount Due</span>
                   <span className="text-xl font-bold">

@@ -1,7 +1,8 @@
 /**
  * Message Encryption Service
- * 
+ *
  * Provides secure encryption for message bodies and sensitive data
+ * Uses AES-256-GCM with proper IV and authenticated encryption
  * Prevents data leakage and ensures GDPR compliance
  */
 
@@ -20,6 +21,7 @@ interface DecryptionResult {
 
 class MessageEncryption {
   private readonly algorithm = 'aes-256-gcm';
+  private readonly cbcAlgorithm = 'aes-256-cbc';
   private readonly keyLength = 32;
   private readonly ivLength = 16;
   private readonly tagLength = 16;
@@ -31,93 +33,81 @@ class MessageEncryption {
       throw new Error('ENCRYPTION_KEY environment variable is required');
     }
 
-    // Derive a 32-byte key from the environment key
-    this.key = crypto.scryptSync(encryptionKey, 'salt', this.keyLength);
+    // Derive a 32-byte key from the environment key using scrypt
+    this.key = crypto.scryptSync(encryptionKey, 'rebooked-encryption-salt-v2', this.keyLength);
   }
 
   /**
-   * Encrypt message body
+   * Encrypt message body using AES-256-GCM with authenticated encryption
    */
   encrypt(message: string): EncryptionResult {
     try {
-      // Generate random IV
       const iv = crypto.randomBytes(this.ivLength);
-      
-      // Create cipher
-      const cipher = crypto.createCipheriv(this.algorithm, this.key, iv);
+      const cipher = crypto.createCipheriv(this.algorithm, this.key, iv, {
+        authTagLength: this.tagLength,
+      });
       cipher.setAAD(Buffer.from('message-body', 'utf8'));
 
-      // Encrypt the message
       let encrypted = cipher.update(message, 'utf8', 'hex');
       encrypted += cipher.final('hex');
-
-      // Get authentication tag
       const tag = cipher.getAuthTag();
-      
+
       return {
         encrypted,
         iv: iv.toString('hex'),
-        tag: tag.toString('hex')
+        tag: tag.toString('hex'),
       };
-      
-    } catch (error) {
+    } catch (error: any) {
       console.error('Encryption error:', error);
       throw new Error(`Failed to encrypt message: ${error.message}`);
     }
   }
 
   /**
-   * Decrypt message body
+   * Decrypt message body using AES-256-GCM with authenticated encryption
    */
   decrypt(encryptedData: EncryptionResult): DecryptionResult {
     try {
-      // Create decipher
-      const decipher = crypto.createDecipheriv(this.algorithm, this.key, Buffer.from(encryptedData.iv, 'hex'));
+      const iv = Buffer.from(encryptedData.iv, 'hex');
+      const tag = Buffer.from(encryptedData.tag, 'hex');
 
-      // Set authentication tag
+      const decipher = crypto.createDecipheriv(this.algorithm, this.key, iv, {
+        authTagLength: this.tagLength,
+      });
       decipher.setAAD(Buffer.from('message-body', 'utf8'));
-      decipher.setAuthTag(Buffer.from(encryptedData.tag, 'hex'));
-      
-      // Decrypt the message
+      decipher.setAuthTag(tag);
+
       let decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
       decrypted += decipher.final('utf8');
-      
-      return {
-        decrypted,
-        success: true
-      };
-      
+
+      return { decrypted, success: true };
     } catch (error) {
       console.error('Decryption error:', error);
-      return {
-        decrypted: '',
-        success: false
-      };
+      return { decrypted: '', success: false };
     }
   }
 
   /**
-   * Encrypt phone number (for storage)
+   * Encrypt phone number using AES-256-CBC with proper IV
    */
   encryptPhoneNumber(phone: string): string {
     try {
       const normalizedPhone = this.normalizePhone(phone);
       const iv = crypto.randomBytes(this.ivLength);
-      
-      const cipher = crypto.createCipheriv('aes-256-cbc', this.key, iv);
+
+      const cipher = crypto.createCipheriv(this.cbcAlgorithm, this.key, iv);
       let encrypted = cipher.update(normalizedPhone, 'utf8', 'hex');
       encrypted += cipher.final('hex');
-      
+
       return iv.toString('hex') + ':' + encrypted;
-      
-    } catch (error) {
+    } catch (error: any) {
       console.error('Phone encryption error:', error);
       throw new Error(`Failed to encrypt phone: ${error.message}`);
     }
   }
 
   /**
-   * Decrypt phone number
+   * Decrypt phone number using AES-256-CBC with proper IV
    */
   decryptPhoneNumber(encryptedPhone: string): string {
     try {
@@ -125,92 +115,99 @@ class MessageEncryption {
       if (parts.length !== 2) {
         throw new Error('Invalid encrypted phone format');
       }
-      
+
       const iv = Buffer.from(parts[0], 'hex');
       const encrypted = parts[1];
-      
-      const decipher = crypto.createDecipheriv('aes-256-cbc', this.key, iv);
-      
+
+      const decipher = crypto.createDecipheriv(this.cbcAlgorithm, this.key, iv);
       let decrypted = decipher.update(encrypted, 'hex', 'utf8');
       decrypted += decipher.final('utf8');
-      
+
       return decrypted;
-      
-    } catch (error) {
+    } catch (error: any) {
       console.error('Phone decryption error:', error);
       throw new Error(`Failed to decrypt phone: ${error.message}`);
     }
   }
 
   /**
-   * Hash sensitive data for comparison
+   * Hash sensitive data for comparison (one-way)
    */
   hashSensitiveData(data: string): string {
     return crypto
-      .createHash('sha256')
-      .update(data + process.env.HASH_SALT || 'default-salt')
+      .createHmac('sha256', this.key)
+      .update(data)
       .digest('hex');
-  }
-
-  /**
-   * Generate secure random token
-   */
-  generateSecureToken(length: number = 32): string {
-    return crypto.randomBytes(length).toString('hex');
-  }
-
-  /**
-   * Verify data integrity
-   */
-  verifyIntegrity(data: string, hash: string): boolean {
-    const computedHash = this.hashSensitiveData(data);
-    return computedHash === hash;
   }
 
   /**
    * Normalize phone number format
    */
   private normalizePhone(phone: string): string {
-    // Remove all non-digit characters
-    const digits = phone.replace(/\D/g, '');
-    
-    // Ensure it starts with country code (default to US)
-    if (digits.length === 10) {
-      return `+1${digits}`;
-    } else if (digits.length > 10 && !digits.startsWith('+')) {
-      return `+${digits}`;
-    }
-    
-    return digits.startsWith('+') ? digits : `+${digits}`;
-  }
-
-  /**
-   * Check if encryption key is properly configured
-   */
-  isConfigured(): boolean {
-    return !!process.env.ENCRYPTION_KEY && process.env.ENCRYPTION_KEY.length >= 16;
-  }
-
-  /**
-   * Rotate encryption key (for security maintenance)
-   */
-  rotateKey(newKey: string): void {
-    process.env.ENCRYPTION_KEY = newKey;
-    // Re-derive the key
-    const newDerivedKey = crypto.scryptSync(newKey, 'salt', this.keyLength);
-    (this as any).key = newDerivedKey;
-    console.log('🔑 Encryption key rotated successfully');
+    return phone.replace(/[^+\d]/g, '');
   }
 }
 
-// Global instance
-const messageEncryption = new MessageEncryption();
+// Singleton wrapper with lazy initialization and isConfigured() check
+class MessageEncryptionProxy {
+  private _instance: MessageEncryption | null = null;
+  private _configured: boolean | null = null;
 
-export { messageEncryption, MessageEncryption };
+  isConfigured(): boolean {
+    if (this._configured !== null) return this._configured;
+    try {
+      this._getInstance();
+      this._configured = true;
+    } catch {
+      this._configured = false;
+    }
+    return this._configured;
+  }
 
-// Utility functions for easy import
-export const encryptMessage = (message: string) => messageEncryption.encrypt(message);
-export const decryptMessage = (data: any) => messageEncryption.decrypt(data);
-export const encryptPhone = (phone: string) => messageEncryption.encryptPhoneNumber(phone);
-export const decryptPhone = (encryptedPhone: string) => messageEncryption.decryptPhoneNumber(encryptedPhone);
-export const generateSecureToken = (length?: number) => messageEncryption.generateSecureToken(length);
+  private _getInstance(): MessageEncryption {
+    if (!this._instance) {
+      this._instance = new MessageEncryption();
+    }
+    return this._instance;
+  }
+
+  encrypt(message: string): EncryptionResult {
+    return this._getInstance().encrypt(message);
+  }
+
+  decrypt(encryptedData: EncryptionResult): DecryptionResult {
+    return this._getInstance().decrypt(encryptedData);
+  }
+
+  encryptPhoneNumber(phone: string): string {
+    return this._getInstance().encryptPhoneNumber(phone);
+  }
+
+  decryptPhoneNumber(encryptedPhone: string): string {
+    return this._getInstance().decryptPhoneNumber(encryptedPhone);
+  }
+
+  hashSensitiveData(data: string): string {
+    return this._getInstance().hashSensitiveData(data);
+  }
+}
+
+/** Singleton instance with isConfigured() check */
+export const messageEncryption = new MessageEncryptionProxy();
+
+/** Convenience: encrypt a message string */
+export function encryptMessage(message: string): EncryptionResult {
+  return messageEncryption.encrypt(message);
+}
+
+/** Convenience: decrypt a message */
+export function decryptMessage(encryptedData: EncryptionResult): DecryptionResult {
+  return messageEncryption.decrypt(encryptedData);
+}
+
+export function getMessageEncryption(): MessageEncryptionProxy {
+  return messageEncryption;
+}
+
+export { MessageEncryption };
+export type { EncryptionResult, DecryptionResult };
