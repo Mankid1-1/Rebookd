@@ -20,6 +20,11 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
     name: "Sample User",
     loginMethod: "manus",
     role: "user",
+    emailVerifiedAt: new Date(),
+    passwordHash: "",
+    tenantId: 1,
+    active: true,
+    stripeCustomerId: "",
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),
@@ -27,6 +32,7 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
 
   const ctx: TrpcContext = {
     user,
+    db: {} as TrpcContext["db"],
     req: {
       protocol: "https",
       headers: {},

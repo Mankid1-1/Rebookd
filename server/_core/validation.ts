@@ -22,10 +22,9 @@ export function sanitizeInput(input: string, type: 'text' | 'html' | 'email' | '
     
     case 'html':
       // Use DOMPurify to remove dangerous HTML
-      return DOMPurify.sanitize(trimmed, { 
+      return DOMPurify.sanitize(trimmed, {
         ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p', 'br'],
         ALLOWED_ATTR: ['href'],
-        MAX_DOM_TREE_DEPTH: 2,
       });
     
     case 'text':

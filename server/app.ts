@@ -4,9 +4,11 @@
  */
 
 import express, { Express, Request, Response } from 'express';
+// @ts-ignore - missing type declarations
 import compression from 'compression';
+// @ts-ignore - missing type declarations
 import cookieParser from 'cookie-parser';
-import { createRequestHandler } from '@trpc/server/adapters/express';
+import { createExpressMiddleware as createRequestHandler } from '@trpc/server/adapters/express';
 import { gracefulShutdown } from './_core/graceful-shutdown';
 import { logger } from './_core/logger';
 import { appRouter } from './routers';

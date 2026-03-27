@@ -53,7 +53,7 @@ const ConnectOnboarding: React.FC<ConnectOnboardingProps> = ({ onComplete }) => 
       });
 
       if (!linkResponse.ok) {
-        const linkErrorData = await response.json();
+        const linkErrorData = await linkResponse.json();
         throw new Error(linkErrorData.error.message);
       }
 
@@ -178,7 +178,7 @@ const ConnectOnboarding: React.FC<ConnectOnboardingProps> = ({ onComplete }) => 
         </button>
       </form>
 
-      <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+      <div className="mt-6 p-4 bg-muted/30 rounded-lg">
         <h3 className="font-semibold mb-2">What happens next?</h3>
         <ul className="text-sm text-gray-600 space-y-1">
           <li>• We'll create your Stripe Connect account</li>

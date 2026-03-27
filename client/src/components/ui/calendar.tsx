@@ -6,6 +6,9 @@ import {
 } from "lucide-react";
 import { DayButton, DayPicker, getDefaultClassNames } from "react-day-picker";
 
+// Memoize default class names to avoid repeated calls on every render
+const memoizedDefaultClassNames = getDefaultClassNames();
+
 import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
 
@@ -21,7 +24,7 @@ function Calendar({
 }: React.ComponentProps<typeof DayPicker> & {
   buttonVariant?: React.ComponentProps<typeof Button>["variant"];
 }) {
-  const defaultClassNames = getDefaultClassNames();
+  const defaultClassNames = memoizedDefaultClassNames;
 
   return (
     <DayPicker
@@ -176,7 +179,7 @@ function CalendarDayButton({
   modifiers,
   ...props
 }: React.ComponentProps<typeof DayButton>) {
-  const defaultClassNames = getDefaultClassNames();
+  const defaultClassNames = memoizedDefaultClassNames;
 
   const ref = React.useRef<HTMLButtonElement>(null);
   React.useEffect(() => {

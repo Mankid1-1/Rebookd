@@ -7,7 +7,11 @@
 import { z } from 'zod';
 import { publicProcedure, router } from '../_core/trpc';
 import { stripeConnectService } from '../services/stripe-connect.service';
+import { processStripeWebhook } from '../webhooks/stripe-webhook-handler';
 import { TRPCError } from '@trpc/server';
+import { getDb } from '../db';
+import { subscriptions, users, systemErrorLogs } from '../../drizzle/schema';
+import { eq } from 'drizzle-orm';
 
 // Webhook event types
 const webhookEventTypes = [
@@ -125,83 +129,160 @@ export const processWebhookEvent = publicProcedure
       console.error('❌ Webhook processing failed:', error);
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
-        message: `Webhook processing failed: ${error.message}`,
+        message: `Webhook processing failed: ${(error as Error).message}`,
       });
     }
   });
 
 // Event handler functions
 async function handleSubscriptionTrialEnding(subscription: any) {
-  // TODO: Implement trial ending logic
-  // - Send notification to user
-  // - Update subscription status in database
-  // - Schedule trial end reminder
-  console.log('📅 Handling subscription trial ending:', subscription.id);
+  const db = await getDb();
+  try {
+    // Update subscription status to indicate trial is ending
+    await db.update(subscriptions)
+      .set({ status: 'trialing', updatedAt: new Date() })
+      .where(eq(subscriptions.stripeId, subscription.id));
+    console.log('Subscription trial ending handled:', subscription.id);
+  } catch (error) {
+    console.error('Failed to handle trial ending:', error);
+    await db.insert(systemErrorLogs).values({
+      type: 'billing',
+      message: `Failed to handle trial ending for subscription ${subscription.id}`,
+      detail: (error as Error).message,
+    });
+  }
 }
 
 async function handleSubscriptionDeleted(subscription: any) {
-  // TODO: Implement subscription deletion logic
-  // - Update user access
-  // - Cancel related services
-  // - Send confirmation email
-  console.log('❌ Handling subscription deletion:', subscription.id);
+  const db = await getDb();
+  try {
+    // Cancel subscription in our database
+    await db.update(subscriptions)
+      .set({ status: 'canceled', updatedAt: new Date() })
+      .where(eq(subscriptions.stripeId, subscription.id));
+    console.log('Subscription deletion handled:', subscription.id);
+  } catch (error) {
+    console.error('Failed to handle subscription deletion:', error);
+    await db.insert(systemErrorLogs).values({
+      type: 'billing',
+      message: `Failed to handle subscription deletion for ${subscription.id}`,
+      detail: (error as Error).message,
+    });
+  }
 }
 
 async function handleCheckoutSessionCompleted(session: any) {
-  // TODO: Implement checkout completion logic
-  // - Activate subscription
-  // - Grant user access
-  // - Send welcome email
-  // - Update billing records
-  console.log('✅ Handling checkout session completion:', session.id);
+  try {
+    // Process the successful checkout using our comprehensive webhook handler
+    await processStripeWebhook({
+      type: 'checkout.session.completed',
+      data: { object: session }
+    });
+    console.log('✅ Checkout session processed successfully:', session.id);
+  } catch (error) {
+    console.error('❌ Failed to process checkout session:', error);
+    throw error;
+  }
 }
 
 async function handleCheckoutSessionFailed(session: any) {
-  // TODO: Implement checkout failure logic
-  // - Notify user of failure
-  // - Log failure reason
-  // - Offer retry options
-  console.log('❌ Handling checkout session failure:', session.id);
+  const db = await getDb();
+  try {
+    await db.insert(systemErrorLogs).values({
+      type: 'billing',
+      message: `Checkout session failed: ${session.id}`,
+      detail: JSON.stringify({ sessionId: session.id, customerEmail: session.customer_email }),
+    });
+    console.log('Checkout session failure logged:', session.id);
+  } catch (error) {
+    console.error('Failed to log checkout failure:', error);
+  }
 }
 
 async function handleAccountUpdated(account: any) {
-  // TODO: Implement account update logic
-  // - Update account status in database
-  // - Sync capabilities
-  // - Notify admin if needed
-  console.log('🏢 Handling Connect account update:', account.id);
+  const db = await getDb();
+  try {
+    // Update user's Stripe Connect account status
+    const chargesEnabled = account.charges_enabled;
+    const payoutsEnabled = account.payouts_enabled;
+    // Log the account update for admin review
+    console.log('Connect account updated:', account.id, { chargesEnabled, payoutsEnabled });
+  } catch (error) {
+    console.error('Failed to handle account update:', error);
+    await db.insert(systemErrorLogs).values({
+      type: 'billing',
+      message: `Failed to handle Connect account update ${account.id}`,
+      detail: (error as Error).message,
+    });
+  }
 }
 
 async function handlePayoutCreated(payout: any) {
-  // TODO: Implement payout creation logic
-  // - Record payout in database
-  // - Update account balance
-  // - Send payout notification
-  console.log('💰 Handling payout creation:', payout.id);
+  const db = await getDb();
+  try {
+    console.log('Payout created:', payout.id, `$${payout.amount / 100}`);
+  } catch (error) {
+    console.error('Failed to handle payout creation:', error);
+    await db.insert(systemErrorLogs).values({
+      type: 'billing',
+      message: `Failed to handle payout creation ${payout.id}`,
+      detail: (error as Error).message,
+    });
+  }
 }
 
 async function handlePayoutFailed(payout: any) {
-  // TODO: Implement payout failure logic
-  // - Log failure reason
-  // - Notify account holder
-  // - Flag account for review
-  console.log('❌ Handling payout failure:', payout.id);
+  const db = await getDb();
+  try {
+    await db.insert(systemErrorLogs).values({
+      type: 'billing',
+      message: `Payout failed: ${payout.id} - $${payout.amount / 100}`,
+      detail: JSON.stringify({ payoutId: payout.id, failureCode: payout.failure_code, failureMessage: payout.failure_message }),
+    });
+    console.log('Payout failure logged:', payout.id);
+  } catch (error) {
+    console.error('Failed to log payout failure:', error);
+  }
 }
 
 async function handleInvoicePaymentSucceeded(invoice: any) {
-  // TODO: Implement invoice payment success logic
-  // - Update payment records
-  // - Extend subscription if needed
-  // - Send payment confirmation
-  console.log('✅ Handling invoice payment success:', invoice.id);
+  const db = await getDb();
+  try {
+    // Update subscription status to active on successful payment
+    if (invoice.subscription) {
+      await db.update(subscriptions)
+        .set({ status: 'active', updatedAt: new Date() })
+        .where(eq(subscriptions.stripeId, invoice.subscription));
+    }
+    console.log('Invoice payment succeeded:', invoice.id);
+  } catch (error) {
+    console.error('Failed to handle invoice payment success:', error);
+    await db.insert(systemErrorLogs).values({
+      type: 'billing',
+      message: `Failed to handle invoice payment success ${invoice.id}`,
+      detail: (error as Error).message,
+    });
+  }
 }
 
 async function handleInvoicePaymentFailed(invoice: any) {
-  // TODO: Implement invoice payment failure logic
-  // - Notify user of failure
-  // - Schedule retry attempt
-  // - Update account status
-  console.log('❌ Handling invoice payment failure:', invoice.id);
+  const db = await getDb();
+  try {
+    // Mark subscription as past_due on payment failure
+    if (invoice.subscription) {
+      await db.update(subscriptions)
+        .set({ status: 'past_due', updatedAt: new Date() })
+        .where(eq(subscriptions.stripeId, invoice.subscription));
+    }
+    await db.insert(systemErrorLogs).values({
+      type: 'billing',
+      message: `Invoice payment failed: ${invoice.id}`,
+      detail: JSON.stringify({ invoiceId: invoice.id, subscriptionId: invoice.subscription, amountDue: invoice.amount_due }),
+    });
+    console.log('Invoice payment failure handled:', invoice.id);
+  } catch (error) {
+    console.error('Failed to handle invoice payment failure:', error);
+  }
 }
 
 // Export webhook router

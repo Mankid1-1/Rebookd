@@ -9,12 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { 
-  Heart, 
-  Users, 
-  TrendingUp, 
-  Calendar, 
-  Clock, 
+import {
+  Heart,
+  Users,
+  TrendingUp,
+  Calendar,
+  Clock,
   Star,
   Settings,
   Zap,
@@ -23,47 +23,106 @@ import {
   Repeat
 } from "lucide-react";
 import { toast } from "sonner";
+import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
+import { useAuth } from "@/_core/hooks/useAuth";
+
+// Dynamic loyalty tiers based on business type and user skill
+const getDynamicLoyaltyTiers = (businessType?: string, userSkill?: any) => {
+  const baseTiers = [
+    { visits: 3, reward: '10% discount', message: 'Loyalty reward: 10% off your next booking!' }
+  ];
+
+  // Add intermediate tiers for non-beginners
+  if (userSkill?.level !== 'beginner') {
+    baseTiers.push(
+      { visits: 5, reward: '15% discount', message: 'VIP reward: 15% off your next booking!' }
+    );
+  }
+
+  // Add expert tiers for advanced users
+  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
+    baseTiers.push(
+      { visits: 10, reward: '20% discount', message: 'Elite reward: 20% off your next booking!' },
+      { visits: 15, reward: 'Free service', message: 'Platinum reward: Free service on your next visit!' }
+    );
+  }
+
+  // Business-specific tiers
+  if (businessType?.includes('medical') || businessType?.includes('clinic')) {
+    baseTiers.push(
+      { visits: 8, reward: 'Free consultation', message: 'Wellness reward: Free follow-up consultation!' }
+    );
+  } else if (businessType?.includes('salon') || businessType?.includes('spa')) {
+    baseTiers.push(
+      { visits: 8, reward: 'Free upgrade', message: 'Beauty reward: Free service upgrade on next visit!' }
+    );
+  }
+
+  return baseTiers;
+};
 
 export default function RetentionEngine() {
+  const { context } = useProgressiveDisclosureContext();
+  const { user } = useAuth();
+  const { data: tenant } = trpc.tenant.get.useQuery();
+
+  // Get dynamic loyalty tiers
+  const dynamicLoyaltyTiers = getDynamicLoyaltyTiers(tenant?.industry, context.userSkill);
+
   const [activeTab, setActiveTab] = useState("rebooking");
   const [config, setConfig] = useState({
     timeBasedRebooking: true,
     loyaltyProgram: true,
     reactivationCampaigns: true,
     rebookingIntervals: [4, 6, 8], // weeks
-    loyaltyTiers: [
-      { visits: 3, reward: '10% discount', message: 'Loyalty reward: 10% off your next booking!' },
-      { visits: 5, reward: '15% discount', message: 'VIP reward: 15% off your next booking!' },
-      { visits: 10, reward: '20% discount', message: 'Elite reward: 20% off your next booking!' }
-    ]
+    loyaltyTiers: dynamicLoyaltyTiers
   });
 
-  const { data: metrics, isLoading } = trpc.analytics.retentionMetrics.useQuery(undefined, { refetchInterval: 30000 });
-  const { data: settings } = trpc.tenant.settings.useQuery(undefined, { retry: false });
-  const updateConfig = trpc.tenant.updateRetentionEngineConfig.useMutation({
-    onSuccess: () => toast.success("Retention engine configuration updated"),
-    onError: (err) => toast.error(err.message)
+  const { data: dashData, isLoading } = trpc.analytics.dashboard.useQuery(undefined, { refetchInterval: 30000 });
+  const metrics: any = dashData?.metrics;
+  const { data: savedConfig } = trpc.featureConfig.get.useQuery(
+    { feature: "retention-engine" },
+    { retry: false }
+  );
+  const saveConfig = trpc.featureConfig.save.useMutation({
+    onSuccess: () => toast.success("Configuration saved"),
+    onError: (err) => toast.error(err.message),
   });
 
   useEffect(() => {
-    if (settings?.retentionEngineConfig) {
-      setConfig(settings.retentionEngineConfig);
+    if (savedConfig?.config) {
+      setConfig((prev) => ({ ...prev, ...(savedConfig.config as any) }));
     }
-  }, [settings]);
+  }, [savedConfig]);
 
   const handleSaveConfig = () => {
-    updateConfig.mutate(config);
+    saveConfig.mutate({ feature: "retention-engine", config: config as any });
   };
 
   const handleTestRebooking = () => {
-    toast.success("Test rebooking campaign sent successfully");
+    toast.info("To test, add a lead with a phone number first. The automation will trigger automatically.");
   };
 
   const handleTriggerLoyalty = () => {
-    toast.success("Loyalty rewards program activated");
+    toast.info("To test, add a lead with a phone number first. The automation will trigger automatically.");
   };
 
-  if (isLoading) return <DashboardLayout>Loading...</DashboardLayout>;
+  if (isLoading) return (
+    <DashboardLayout>
+      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+        <div className="h-10 w-64 bg-muted rounded animate-pulse" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}><CardContent className="p-4"><div className="h-16 bg-muted rounded animate-pulse" /></CardContent></Card>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card><CardContent className="p-6"><div className="h-48 bg-muted rounded animate-pulse" /></CardContent></Card>
+          <Card><CardContent className="p-6"><div className="h-48 bg-muted rounded animate-pulse" /></CardContent></Card>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
 
   return (
     <DashboardLayout>
@@ -97,54 +156,54 @@ export default function RetentionEngine() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                  <Users className="h-6 w-6 text-blue-600" />
+                <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
+                  <Users className="h-6 w-6 text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total Clients</p>
-                  <p className="text-2xl font-bold">{metrics?.totalClients || 0}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Active Clients</p>
+                  <p className="text-2xl font-bold">{metrics?.leadCount || 0}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg mr-3">
-                  <Repeat className="h-6 w-6 text-green-600" />
+                <div className="p-2 bg-green-500/10 rounded-lg mr-3">
+                  <Repeat className="h-6 w-6 text-green-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Rebooked Clients</p>
-                  <p className="text-2xl font-bold">{metrics?.rebookedClients || 0}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Re-engaged</p>
+                  <p className="text-2xl font-bold">{metrics?.contactedCount || 0}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-100 rounded-lg mr-3">
-                  <TrendingUp className="h-6 w-6 text-purple-600" />
+                <div className="p-2 bg-purple-500/10 rounded-lg mr-3">
+                  <TrendingUp className="h-6 w-6 text-purple-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Retained</p>
+                  <p className="text-2xl font-bold">{metrics?.bookedCount || 0}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center">
+                <div className="p-2 bg-orange-500/10 rounded-lg mr-3">
+                  <Zap className="h-6 w-6 text-orange-400" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Retention Rate</p>
-                  <p className="text-2xl font-bold">{metrics?.retentionRate || 0}%</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center">
-                <div className="p-2 bg-orange-100 rounded-lg mr-3">
-                  <Zap className="h-6 w-6 text-orange-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">LTV Expansion</p>
-                  <p className="text-2xl font-bold">${((metrics?.ltvExpansion || 0) / 100).toFixed(0)}</p>
+                  <p className="text-2xl font-bold">{metrics?.conversionRate || 0}%</p>
                 </div>
               </div>
             </CardContent>
@@ -165,7 +224,7 @@ export default function RetentionEngine() {
                   <TabsTrigger value="reactivation">Reactivation</TabsTrigger>
                   <TabsTrigger value="advanced">Advanced</TabsTrigger>
                 </TabsList>
-                
+
                 <TabsContent value="rebooking" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -173,7 +232,7 @@ export default function RetentionEngine() {
                       <Switch
                         id="time-based"
                         checked={config.timeBasedRebooking}
-                        onCheckedChange={(checked) => 
+                        onCheckedChange={(checked) =>
                           setConfig(prev => ({ ...prev, timeBasedRebooking: checked }))
                         }
                       />
@@ -198,7 +257,7 @@ export default function RetentionEngine() {
                         ))}
                       </div>
                     </div>
-                    <div className="p-4 bg-blue-50 rounded-lg">
+                    <div className="p-4 bg-blue-500/10 rounded-lg">
                       <h4 className="font-medium mb-2">Rebooking Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• 4, 6, 8 week intervals</li>
@@ -209,7 +268,7 @@ export default function RetentionEngine() {
                     </div>
                   </div>
                 </TabsContent>
-                
+
                 <TabsContent value="loyalty" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -217,28 +276,28 @@ export default function RetentionEngine() {
                       <Switch
                         id="loyalty-program"
                         checked={config.loyaltyProgram}
-                        onCheckedChange={(checked) => 
+                        onCheckedChange={(checked) =>
                           setConfig(prev => ({ ...prev, loyaltyProgram: checked }))
                         }
                       />
                     </div>
-                    <div className="p-4 bg-green-50 rounded-lg">
+                    <div className="p-4 bg-green-500/10 rounded-lg">
                       <h4 className="font-medium mb-2">Loyalty Tiers</h4>
                       <div className="space-y-3">
                         {config.loyaltyTiers.map((tier, index) => (
-                          <div key={index} className="flex items-center justify-between p-3 bg-white rounded border">
+                          <div key={index} className="flex items-center justify-between p-3 bg-card rounded border">
                             <div>
                               <p className="font-medium">{tier.visits} Visits</p>
                               <p className="text-sm text-muted-foreground">{tier.reward}</p>
                             </div>
-                            <Badge className="bg-green-100 text-green-800">Active</Badge>
+                            <Badge className="bg-green-500/10 text-green-300">Active</Badge>
                           </div>
                         ))}
                       </div>
                     </div>
                   </div>
                 </TabsContent>
-                
+
                 <TabsContent value="reactivation" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -246,12 +305,12 @@ export default function RetentionEngine() {
                       <Switch
                         id="reactivation-campaigns"
                         checked={config.reactivationCampaigns}
-                        onCheckedChange={(checked) => 
+                        onCheckedChange={(checked) =>
                           setConfig(prev => ({ ...prev, reactivationCampaigns: checked }))
                         }
                       />
                     </div>
-                    <div className="p-4 bg-purple-50 rounded-lg">
+                    <div className="p-4 bg-purple-500/10 rounded-lg">
                       <h4 className="font-medium mb-2">Reactivation Windows</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• 30 days inactive</li>
@@ -262,10 +321,10 @@ export default function RetentionEngine() {
                     </div>
                   </div>
                 </TabsContent>
-                
+
                 <TabsContent value="advanced" className="space-y-6 mt-6">
                   <div className="space-y-4">
-                    <div className="p-4 bg-orange-50 rounded-lg">
+                    <div className="p-4 bg-orange-500/10 rounded-lg">
                       <h4 className="font-medium mb-2">Advanced Options</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Custom rebooking templates</li>
@@ -287,23 +346,20 @@ export default function RetentionEngine() {
             <CardContent>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="text-center p-4 bg-blue-50 rounded-lg">
-                    <Award className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+                  <div className="text-center p-4 bg-blue-500/10 rounded-lg">
+                    <Award className="h-8 w-8 text-blue-400 mx-auto mb-2" />
                     <h3 className="font-medium">Bronze Tier</h3>
                     <p className="text-sm text-muted-foreground">3+ Visits</p>
-                    <Badge className="bg-blue-100 text-blue-800">12 Clients</Badge>
                   </div>
-                  <div className="text-center p-4 bg-green-50 rounded-lg">
-                    <Award className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                  <div className="text-center p-4 bg-green-500/10 rounded-lg">
+                    <Award className="h-8 w-8 text-green-400 mx-auto mb-2" />
                     <h3 className="font-medium">Silver Tier</h3>
                     <p className="text-sm text-muted-foreground">5+ Visits</p>
-                    <Badge className="bg-green-100 text-green-800">8 Clients</Badge>
                   </div>
-                  <div className="text-center p-4 bg-purple-50 rounded-lg">
-                    <Award className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+                  <div className="text-center p-4 bg-purple-500/10 rounded-lg">
+                    <Award className="h-8 w-8 text-purple-400 mx-auto mb-2" />
                     <h3 className="font-medium">Gold Tier</h3>
                     <p className="text-sm text-muted-foreground">10+ Visits</p>
-                    <Badge className="bg-purple-100 text-purple-800">5 Clients</Badge>
                   </div>
                 </div>
                 <div className="p-4 bg-muted rounded-lg">
@@ -331,26 +387,26 @@ export default function RetentionEngine() {
                 <div className="flex items-center justify-between">
                   <Label>Current Retention Rate</Label>
                   <div className="flex items-center space-x-2">
-                    <Progress value={metrics?.retentionRate || 0} className="flex-1" />
-                    <span className="text-sm font-medium">{metrics?.retentionRate || 0}%</span>
+                    <Progress value={metrics?.conversionRate || 0} className="flex-1" />
+                    <span className="text-sm font-medium">{metrics?.conversionRate || 0}%</span>
                   </div>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Target: 25% | Current: {metrics?.retentionRate || 0}%
+                  Target: 25% | Current: {metrics?.conversionRate || 0}%
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <p className="text-2xl font-bold text-blue-600">{metrics?.totalClients || 0}</p>
-                  <p className="text-sm text-muted-foreground">Total Clients</p>
+                <div className="text-center p-3 bg-blue-500/10 rounded-lg">
+                  <p className="text-2xl font-bold text-blue-400">{metrics?.leadCount || 0}</p>
+                  <p className="text-sm text-muted-foreground">Active Clients</p>
                 </div>
-                <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <p className="text-2xl font-bold text-green-600">{metrics?.rebookedClients || 0}</p>
-                  <p className="text-sm text-muted-foreground">Rebooked</p>
+                <div className="text-center p-3 bg-green-500/10 rounded-lg">
+                  <p className="text-2xl font-bold text-green-400">{metrics?.contactedCount || 0}</p>
+                  <p className="text-sm text-muted-foreground">Re-engaged</p>
                 </div>
-                <div className="text-center p-3 bg-purple-50 rounded-lg">
-                  <p className="text-2xl font-bold text-purple-600">${((metrics?.ltvExpansion || 0) / 100).toFixed(0)}</p>
-                  <p className="text-sm text-muted-foreground">LTV Expansion</p>
+                <div className="text-center p-3 bg-purple-500/10 rounded-lg">
+                  <p className="text-2xl font-bold text-purple-400">{metrics?.bookedCount || 0}</p>
+                  <p className="text-sm text-muted-foreground">Retained</p>
                 </div>
               </div>
             </div>

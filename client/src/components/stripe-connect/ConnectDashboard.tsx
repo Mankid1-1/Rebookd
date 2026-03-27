@@ -87,26 +87,26 @@ const ConnectDashboard: React.FC = () => {
         {/* Account Status Overview */}
         {accountStatus && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div className="bg-blue-50 rounded-lg p-6">
+            <div className="bg-blue-500/10 rounded-lg p-6">
               <h3 className="text-lg font-semibold text-blue-900 mb-2">Account ID</h3>
               <p className="text-blue-700 font-mono text-sm">{accountStatus.id}</p>
             </div>
             
-            <div className="bg-green-50 rounded-lg p-6">
+            <div className="bg-green-500/10 rounded-lg p-6">
               <h3 className="text-lg font-semibold text-green-900 mb-2">Charges</h3>
               <p className={`text-2xl font-bold ${accountStatus.charges_enabled ? 'text-green-600' : 'text-red-600'}`}>
                 {accountStatus.charges_enabled ? 'Enabled' : 'Disabled'}
               </p>
             </div>
             
-            <div className="bg-purple-50 rounded-lg p-6">
+            <div className="bg-purple-500/10 rounded-lg p-6">
               <h3 className="text-lg font-semibold text-purple-900 mb-2">Payouts</h3>
               <p className={`text-2xl font-bold ${accountStatus.payouts_enabled ? 'text-green-600' : 'text-red-600'}`}>
                 {accountStatus.payouts_enabled ? 'Enabled' : 'Disabled'}
               </p>
             </div>
             
-            <div className="bg-yellow-50 rounded-lg p-6">
+            <div className="bg-yellow-500/10 rounded-lg p-6">
               <h3 className="text-lg font-semibold text-yellow-900 mb-2">Status</h3>
               <p className={`text-xl font-bold ${accountStatus.details_submitted ? 'text-green-600' : 'text-yellow-600'}`}>
                 {accountStatus.details_submitted ? 'Active' : 'Pending'}
@@ -117,7 +117,7 @@ const ConnectDashboard: React.FC = () => {
 
         {/* Onboarding Required */}
         {needsOnboarding && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-8">
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-6 mb-8">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <svg className="h-6 w-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -125,10 +125,10 @@ const ConnectDashboard: React.FC = () => {
                 </svg>
               </div>
               <div className="ml-3">
-                <h3 className="text-lg font-semibold text-yellow-800">
+                <h3 className="text-lg font-semibold text-yellow-300">
                   Complete Stripe Onboarding
                 </h3>
-                <p className="text-yellow-700 mt-1">
+                <p className="text-yellow-300 mt-1">
                   You need to complete your Stripe Connect account setup before you can access all features.
                 </p>
               </div>

@@ -7,32 +7,44 @@ import {
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from "recharts";
 
-const STATUS_COLORS: Record<string, string> = {
-  new: "#3b82f6",
-  contacted: "#eab308",
-  qualified: "#a855f7",
-  booked: "#22c55e",
-  lost: "#ef4444",
-  unsubscribed: "#6b7280",
+// Dynamic colors based on user theme
+const getDynamicAnalyticsColors = () => {
+  const isDarkMode = document.documentElement.classList.contains('dark');
+  return {
+    new: isDarkMode ? "#60a5fa" : "#3b82f6",
+    contacted: isDarkMode ? "#fbbf24" : "#eab308",
+    qualified: isDarkMode ? "#c084fc" : "#a855f7",
+    booked: isDarkMode ? "#34d399" : "#22c55e",
+    lost: isDarkMode ? "#f87171" : "#ef4444",
+    unsubscribed: isDarkMode ? "#9ca3af" : "#6b7280",
+  };
 };
 
-const TOOLTIP_STYLE = {
-  contentStyle: {
-    background: "oklch(0.16 0.025 255)",
-    border: "1px solid oklch(0.25 0.03 255)",
-    borderRadius: "8px",
-    fontSize: "12px",
-  },
-  labelStyle: { color: "oklch(0.95 0.01 255)" },
+// Dynamic tooltip style based on user theme
+const getDynamicTooltipStyle = () => {
+  const isDarkMode = document.documentElement.classList.contains('dark');
+  return {
+    contentStyle: {
+      background: isDarkMode ? "oklch(0.16 0.025 255)" : "oklch(0.98 0.01 255)",
+      border: `1px solid ${isDarkMode ? "oklch(0.25 0.03 255)" : "oklch(0.85 0.02 255)"}`,
+      borderRadius: "8px",
+      fontSize: "12px",
+    },
+    labelStyle: { color: isDarkMode ? "oklch(0.95 0.01 255)" : "oklch(0.15 0.02 255)" },
+  };
 };
 
 export default function Analytics() {
   const { data, isLoading } = trpc.analytics.dashboard.useQuery(undefined, { retry: false });
 
+  // Dynamic configurations based on user preferences
+  const statusColors = getDynamicAnalyticsColors();
+  const tooltipStyle = getDynamicTooltipStyle();
+
   const metrics = data?.metrics;
   const statusBreakdown = data?.statusBreakdown ?? [];
   const messageVolume = data?.messageVolume ?? [];
-  const automationStats = (data as any)?.automationStats;
+  const automationStats = null; // TODO: Add automation stats to backend if needed
 
   // Build message volume chart data
   const chartData = (() => {
@@ -165,7 +177,7 @@ export default function Analytics() {
                   <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 255)" />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: "oklch(0.60 0.03 255)" }} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: "oklch(0.60 0.03 255)" }} tickLine={false} axisLine={false} />
-                  <Tooltip {...TOOLTIP_STYLE} />
+                  <Tooltip {...tooltipStyle} />
                   <Legend wrapperStyle={{ fontSize: "12px" }} />
                   <Area type="monotone" dataKey="outbound" stroke="oklch(0.62 0.22 255)" fill="url(#outboundGrad)" strokeWidth={2} name="Outbound" />
                   <Area type="monotone" dataKey="inbound" stroke="oklch(0.70 0.18 190)" fill="url(#inboundGrad)" strokeWidth={2} name="Inbound" />
@@ -193,10 +205,10 @@ export default function Analytics() {
                     <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 255)" horizontal={false} />
                     <XAxis type="number" tick={{ fontSize: 11, fill: "oklch(0.60 0.03 255)" }} tickLine={false} axisLine={false} />
                     <YAxis dataKey="status" type="category" tick={{ fontSize: 11, fill: "oklch(0.60 0.03 255)" }} tickLine={false} width={80} />
-                    <Tooltip {...TOOLTIP_STYLE} />
+                    <Tooltip {...tooltipStyle} />
                     <Bar dataKey="count" radius={[0, 4, 4, 0]}>
                       {statusBreakdown.map((entry) => (
-                        <Cell key={entry.status} fill={STATUS_COLORS[entry.status] ?? "#6b7280"} />
+                        <Cell key={entry.status} fill={statusColors[entry.status] ?? "#6b7280"} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -230,16 +242,16 @@ export default function Analytics() {
                         labelLine={false}
                       >
                         {statusBreakdown.map((entry) => (
-                          <Cell key={entry.status} fill={STATUS_COLORS[entry.status] ?? "#6b7280"} />
+                          <Cell key={entry.status} fill={statusColors[entry.status] ?? "#6b7280"} />
                         ))}
                       </Pie>
-                      <Tooltip {...TOOLTIP_STYLE} />
+                      <Tooltip {...tooltipStyle} />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="grid grid-cols-2 gap-2 mt-2">
                     {statusBreakdown.map((item) => (
                       <div key={item.status} className="flex items-center gap-2 text-xs">
-                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: STATUS_COLORS[item.status] ?? "#6b7280" }} />
+                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: statusColors[item.status] ?? "#6b7280" }} />
                         <span className="capitalize text-muted-foreground">{item.status}</span>
                         <span className="font-medium ml-auto">{item.count}</span>
                       </div>

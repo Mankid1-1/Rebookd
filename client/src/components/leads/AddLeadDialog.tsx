@@ -18,10 +18,60 @@ import { toast } from "sonner";
 import { SmartInput, PhoneInput, EmailInput } from "@/components/ui/SmartInput";
 import { HelpTooltip } from "@/components/ui/HelpTooltip";
 import { Badge } from "@/components/ui/badge";
+import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
+import { useAuth } from "@/_core/hooks/useAuth";
+
+// Dynamic source options based on user skill and business type
+const getDynamicSourceOptions = (userSkill?: any, businessType?: string) => {
+  const baseOptions = [
+    { value: "website", label: "Website Form", description: "Lead from website contact form" },
+    { value: "phone", label: "Phone Call", description: "Lead called in directly" },
+    { value: "email", label: "Email", description: "Lead sent email inquiry" },
+    { value: "referral", label: "Referral", description: "Referred by existing customer" },
+    { value: "other", label: "Other", description: "Different source" }
+  ];
+
+  // Add advanced options for intermediate+ users
+  if (userSkill?.level !== 'beginner') {
+    baseOptions.push(
+      { value: "social", label: "Social Media", description: "From social media platform" },
+      { value: "event", label: "Event", description: "Met at trade show or event" }
+    );
+  }
+
+  // Add expert options for advanced users
+  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
+    baseOptions.push(
+      { value: "cold", label: "Cold Outreach", description: "Proactive outreach" },
+      { value: "partner", label: "Partner", description: "From business partner" }
+    );
+  }
+
+  // Business-specific options
+  if (businessType?.includes('medical') || businessType?.includes('clinic')) {
+    baseOptions.push(
+      { value: "referral_doctor", label: "Doctor Referral", description: "Referred by medical professional" },
+      { value: "insurance", label: "Insurance Directory", description: "From insurance provider listing" }
+    );
+  } else if (businessType?.includes('salon') || businessType?.includes('spa')) {
+    baseOptions.push(
+      { value: "walk_in", label: "Walk-in", description: "Customer walked in off the street" },
+      { value: "hotel", label: "Hotel Guest", description: "Guest from partnered hotel" }
+    );
+  }
+
+  return baseOptions;
+};
 
 export function AddLeadDialog() {
   const [open, setOpen] = useState(false);
   const utils = trpc.useUtils();
+  const { context } = useProgressiveDisclosureContext();
+  const { user } = useAuth();
+  const { data: tenant } = trpc.tenant.get.useQuery();
+  
+  // Get dynamic source options
+  const sourceOptions = getDynamicSourceOptions(context.userSkill, tenant?.industry);
   
   const form = useForm({
     resolver: zodResolver(createLeadSchema),
@@ -57,17 +107,6 @@ export function AddLeadDialog() {
   });
 
   const { errors, touchedFields, isValid } = form.formState;
-
-  const sourceOptions = [
-    { value: "website", label: "Website Form", description: "Lead from website contact form" },
-    { value: "phone", label: "Phone Call", description: "Lead called in directly" },
-    { value: "email", label: "Email", description: "Lead sent email inquiry" },
-    { value: "referral", label: "Referral", description: "Referred by existing customer" },
-    { value: "social", label: "Social Media", description: "From social media platform" },
-    { value: "event", label: "Event", description: "Met at trade show or event" },
-    { value: "cold", label: "Cold Outreach", description: "Proactive outreach" },
-    { value: "other", label: "Other", description: "Different source" }
-  ];
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

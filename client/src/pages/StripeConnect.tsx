@@ -7,16 +7,18 @@
 import React from 'react';
 import StripeConnectProvider, { useStripeConnect } from '../components/stripe-connect/StripeConnectProvider';
 import ConnectDashboard from '../components/stripe-connect/ConnectDashboard';
+import DashboardLayout from '@/components/DashboardLayout';
 
 const StripeConnect: React.FC = () => {
   return (
-    <StripeConnectProvider>
-      <div className="min-h-screen bg-gray-50">
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600">
-          <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
+    <DashboardLayout>
+      <StripeConnectProvider>
+        <div className="min-h-screen">
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600">
+            <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
                   <img 
                     className="h-8 w-8" 
                     src="https://img.icons8.com/color/48/stripe.png" 
@@ -48,7 +50,7 @@ const StripeConnect: React.FC = () => {
         </main>
 
         {/* Footer */}
-        <footer className="bg-white border-t border-gray-200">
+        <footer className="bg-card border-t border-border">
           <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center">
               <p className="text-gray-500 text-sm">
@@ -70,6 +72,7 @@ const StripeConnect: React.FC = () => {
         </footer>
       </div>
     </StripeConnectProvider>
+    </DashboardLayout>
   );
 };
 

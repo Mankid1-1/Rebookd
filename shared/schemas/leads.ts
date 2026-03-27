@@ -50,3 +50,17 @@ export const sendMessageSchema = z.object({
   // Idempotency key — client generates a UUID per send attempt to prevent duplicates
   idempotencyKey: z.string().uuid("idempotencyKey must be a UUID").optional(),
 });
+
+// Login schema - must match server signup requirements (12+ chars, mixed case, digit, special)
+export const loginSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(12, "Password must be at least 12 characters"),
+});
+
+// Pagination schema
+export const paginationSchema = z.object({
+  page: z.number().int().min(1).default(1),
+  limit: z.number().int().min(1).max(100).default(20),
+  sortBy: z.string().optional(),
+  sortOrder: z.enum(["asc", "desc"]).default("desc"),
+});

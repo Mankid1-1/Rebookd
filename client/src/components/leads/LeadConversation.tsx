@@ -3,14 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MessageSquare, Bot, Copy } from "lucide-react";
 import { useRef, useEffect } from "react";
 import { toast } from "sonner";
-
-interface Message {
-  id: number;
-  direction: "inbound" | "outbound";
-  body: string;
-  createdAt: Date | string;
-  aiRewritten?: boolean | null;
-}
+import type { Message } from "../../../../shared/interfaces";
 
 interface LeadConversationProps {
   messages: Message[];
@@ -100,7 +93,7 @@ export function LeadConversation({ messages, outboundCount, inboundCount }: Lead
                             minute: "2-digit",
                           })}
                         </span>
-                        {msg.aiRewritten && (
+                        {(msg as any).aiRewritten && (
                           <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
                             <Bot className="w-2.5 h-2.5" /> AI
                           </span>

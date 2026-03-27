@@ -32,11 +32,15 @@ export async function claimDueAutomationJobs(db: Db, limit = 50) {
 
   const claimed = [];
   for (const row of rows) {
-    await db
+    const result = await db
       .update(automationJobs)
       .set({ status: "running", attempts: row.attempts + 1, updatedAt: new Date() })
       .where(and(eq(automationJobs.id, row.id), eq(automationJobs.status, "pending")));
-    claimed.push({ ...row, status: "running", attempts: row.attempts + 1 });
+    // Only claim if we actually changed the row (prevents double-claim race condition)
+    const affectedRows = (result as any)?.[0]?.affectedRows ?? (result as any)?.rowsAffected ?? 1;
+    if (affectedRows > 0) {
+      claimed.push({ ...row, status: "running", attempts: row.attempts + 1 });
+    }
   }
   return claimed;
 }

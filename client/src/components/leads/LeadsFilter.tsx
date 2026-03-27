@@ -7,6 +7,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search } from "lucide-react";
+import { useDynamicStatuses } from "@/hooks/useDynamicConfiguration";
 
 interface LeadsFilterProps {
   search: string;
@@ -16,8 +17,6 @@ interface LeadsFilterProps {
   statusCounts: Record<string, number>;
 }
 
-const STATUSES = ["all", "new", "contacted", "qualified", "booked", "lost", "unsubscribed"];
-
 export function LeadsFilter({
   search,
   onSearchChange,
@@ -25,6 +24,13 @@ export function LeadsFilter({
   onStatusFilterChange,
   statusCounts,
 }: LeadsFilterProps) {
+  const statuses = useDynamicStatuses();
+  
+  // Add "all" option to the beginning
+  const allStatuses = [
+    { value: "all", label: "All statuses", color: "", order: 0, enabled: true },
+    ...statuses
+  ];
   return (
     <div className="flex flex-col sm:flex-row gap-3">
       <div className="relative flex-1">
@@ -41,12 +47,12 @@ export function LeadsFilter({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {STATUSES.map((s) => (
-            <SelectItem key={s} value={s}>
+          {allStatuses.map((s) => (
+            <SelectItem key={s.value} value={s.value}>
               <span className="flex items-center justify-between gap-3 w-full">
-                <span>{s === "all" ? "All statuses" : s.charAt(0).toUpperCase() + s.slice(1)}</span>
-                {s !== "all" && statusCounts[s] != null && (
-                  <span className="text-muted-foreground text-xs">{statusCounts[s]}</span>
+                <span>{s.label}</span>
+                {s.value !== "all" && statusCounts[s.value] != null && (
+                  <span className="text-muted-foreground text-xs">{statusCounts[s.value]}</span>
                 )}
               </span>
             </SelectItem>

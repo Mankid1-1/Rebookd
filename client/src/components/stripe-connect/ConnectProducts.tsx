@@ -157,11 +157,11 @@ const ConnectProducts: React.FC = () => {
   if (needsOnboarding) {
     return (
       <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-          <h3 className="text-lg font-semibold text-yellow-800 mb-2">
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-6 text-center">
+          <h3 className="text-lg font-semibold text-yellow-300 mb-2">
             Complete Onboarding Required
           </h3>
-          <p className="text-yellow-700">
+          <p className="text-yellow-300">
             You need to complete your Stripe Connect onboarding before you can manage products.
           </p>
         </div>
@@ -263,7 +263,7 @@ const ConnectProducts: React.FC = () => {
       )}
 
       {accountStatus && (
-        <div className="mt-8 bg-gray-50 rounded-lg p-6">
+        <div className="mt-8 bg-muted/30 rounded-lg p-6">
           <h3 className="text-lg font-semibold mb-4">Account Status</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div>

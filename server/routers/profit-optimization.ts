@@ -6,8 +6,10 @@
  */
 
 import { z } from "zod";
+import { sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { publicProcedure, tenantProcedure } from "../_core/trpc";
+import { adminProcedure, tenantProcedure } from "../_core/trpc";
+import { subscriptions, plans } from "../../drizzle/schema";
 import { 
   generateRevenueStrategies, 
   optimizeTenantRevenue, 
@@ -106,158 +108,66 @@ export const profitOptimizationRouter = {
       return alerts;
     }),
 
-  // Admin-only endpoints
-  getSystemProfitMetrics: publicProcedure
+  // Admin-only endpoints — use adminProcedure for proper auth
+  getSystemProfitMetrics: adminProcedure
     .input(z.object({ periodDays: z.number().int().min(1).max(365).default(30) }))
     .query(async ({ ctx, input }) => {
-      // Only allow admin access
-      if (!ctx.user || ctx.user.role !== 'admin') {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Admin access required"
-        });
-      }
-
       const metrics = await calculateProfitMetrics(ctx.db, input.periodDays);
       return metrics;
     }),
 
-  // Start automated profit optimizer (admin only)
-  startAutomatedOptimizer: publicProcedure
+  startAutomatedOptimizer: adminProcedure
     .mutation(async ({ ctx }) => {
-      // Only allow admin access
-      if (!ctx.user || ctx.user.role !== 'admin') {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Admin access required"
-        });
-      }
-
       if (globalOptimizer) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "Automated optimizer is already running"
-        });
+        throw new TRPCError({ code: "CONFLICT", message: "Automated optimizer is already running" });
       }
-
       globalOptimizer = await startAutomatedProfitOptimizer(ctx.db);
       return { success: true, message: "Automated profit optimizer started" };
     }),
 
-  // Stop automated profit optimizer (admin only)
-  stopAutomatedOptimizer: publicProcedure
+  stopAutomatedOptimizer: adminProcedure
     .mutation(async ({ ctx }) => {
-      // Only allow admin access
-      if (!ctx.user || ctx.user.role !== 'admin') {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Admin access required"
-        });
-      }
-
       if (!globalOptimizer) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Automated optimizer is not running"
-        });
+        throw new TRPCError({ code: "NOT_FOUND", message: "Automated optimizer is not running" });
       }
-
       globalOptimizer.stopOptimization();
       globalOptimizer = null;
       return { success: true, message: "Automated profit optimizer stopped" };
     }),
 
-  // Get optimizer status and dashboard (admin only)
-  getOptimizerDashboard: publicProcedure
+  getOptimizerDashboard: adminProcedure
     .query(async ({ ctx }) => {
-      // Only allow admin access
-      if (!ctx.user || ctx.user.role !== 'admin') {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Admin access required"
-        });
-      }
-
       if (!globalOptimizer) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Automated optimizer is not running"
-        });
+        throw new TRPCError({ code: "NOT_FOUND", message: "Automated optimizer is not running" });
       }
-
       const dashboard = await globalOptimizer.getProfitDashboard();
       const history = globalOptimizer.getOptimizationHistory();
-
-      return {
-        dashboard,
-        recentHistory: history.slice(-10), // Last 10 optimizations
-        isRunning: true
-      };
+      return { dashboard, recentHistory: history.slice(-10), isRunning: true };
     }),
 
-  // Get system-wide revenue strategies (admin only)
-  getSystemRevenueStrategies: publicProcedure
+  getSystemRevenueStrategies: adminProcedure
     .query(async ({ ctx }) => {
-      // Only allow admin access
-      if (!ctx.user || ctx.user.role !== 'admin') {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Admin access required"
-        });
-      }
-
       const strategies = await generateRevenueStrategies(ctx.db);
       return strategies;
     }),
 
-  // Get system-wide revenue alerts (admin only)
-  getSystemRevenueAlerts: publicProcedure
+  getSystemRevenueAlerts: adminProcedure
     .query(async ({ ctx }) => {
-      // Only allow admin access
-      if (!ctx.user || ctx.user.role !== 'admin') {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Admin access required"
-        });
-      }
-
       const alerts = await generateRevenueAlerts(ctx.db);
       return alerts;
     }),
 
-  // Force optimization cycle (admin only)
-  forceOptimizationCycle: publicProcedure
+  forceOptimizationCycle: adminProcedure
     .mutation(async ({ ctx }) => {
-      // Only allow admin access
-      if (!ctx.user || ctx.user.role !== 'admin') {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Admin access required"
-        });
-      }
-
       if (!globalOptimizer) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Automated optimizer is not running"
-        });
+        throw new TRPCError({ code: "NOT_FOUND", message: "Automated optimizer is not running" });
       }
-
       await globalOptimizer.runOptimizationCycle();
       return { success: true, message: "Optimization cycle completed" };
     }),
 
-  // Get promotional pricing statistics (admin only)
-  getPromotionalStats: publicProcedure
+  getPromotionalStats: adminProcedure
     .query(async ({ ctx }) => {
-      // Only allow admin access
-      if (!ctx.user || ctx.user.role !== 'admin') {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Admin access required"
-        });
-      }
-
       const [stats] = await ctx.db
         .select({
           totalPromotionalSubscriptions: sql<number>`COUNT(*)`,
@@ -287,36 +197,23 @@ export const profitOptimizationRouter = {
       };
     }),
 
-  // Get profit forecast (admin only)
-  getProfitForecast: publicProcedure
+  getProfitForecast: adminProcedure
     .input(z.object({ months: z.number().int().min(1).max(24).default(12) }))
     .query(async ({ ctx, input }) => {
-      // Only allow admin access
-      if (!ctx.user || ctx.user.role !== 'admin') {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Admin access required"
-        });
-      }
-
       const currentMetrics = await calculateProfitMetrics(ctx.db);
       const strategies = await generateRevenueStrategies(ctx.db);
-      
-      // Calculate projected growth based on strategies
-      const monthlyGrowthRate = 0.15; // 15% monthly growth target
+
+      const monthlyGrowthRate = 0.15;
       const strategyImpact = strategies.reduce((sum, s) => sum + (s.potentialIncrease / 100), 0);
-      
+
       const forecast = [];
       let projectedProfit = currentMetrics.grossProfit;
-      
+
       for (let month = 1; month <= input.months; month++) {
         projectedProfit *= (1 + monthlyGrowthRate);
-        
-        // Add strategy impact distributed over months
-        if (month <= 6) { // Strategies impact first 6 months
+        if (month <= 6) {
           projectedProfit += (strategyImpact / 6) / 100;
         }
-        
         forecast.push({
           month,
           projectedProfit,

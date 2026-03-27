@@ -6,7 +6,7 @@
  */
 
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
-import { leads, subscriptions, plans, tenants } from "../../drizzle/schema";
+import { leads, subscriptions, plans, tenants, recoveryEvents } from "../../drizzle/schema";
 import type { Db } from "../_core/context";
 import { generateRevenueStrategies, optimizeTenantRevenue, generateRevenueAlerts } from "./revenue-maximization.service";
 import { calculateProfitMetrics } from "./profit-optimization.service";
@@ -259,26 +259,28 @@ export class AutomatedProfitOptimizer {
     console.log("💰 Executing revenue share optimization");
 
     // Find high-performing tenants who could benefit from enterprise pricing
+    // Use recovery_events (realized payments) as the authoritative revenue source
     const highPerformers = await this.db
       .select({
         tenantId: tenants.id,
-        recoveredRevenue: sql<number>`COALESCE(l.recoveredRevenue, 0)`
+        recoveredRevenue: sql<number>`COALESCE(re.totalRealized, 0)`
       })
       .from(tenants)
       .innerJoin(subscriptions, eq(subscriptions.tenantId, tenants.id))
       .innerJoin(plans, eq(subscriptions.planId, plans.id))
       .leftJoin(
-        sql`(SELECT tenantId, SUM(estimatedRevenue) as recoveredRevenue 
-             FROM leads 
-             WHERE status = 'recovered' 
-             AND createdAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-             GROUP BY tenantId) as l`,
-        eq(tenants.id, sql`l.tenantId`)
+        sql`(SELECT tenantId, SUM(realizedRevenue) as totalRealized
+             FROM recovery_events
+             WHERE isPrimaryAttribution = true
+             AND status IN ('realized', 'manual_realized')
+             AND realizedAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+             GROUP BY tenantId) as re`,
+        eq(tenants.id, sql`re.tenantId`)
       )
       .where(
         and(
           eq(plans.slug, 'professional'),
-          sql`l.recoveredRevenue > 50000` // > $500 recovered
+          sql`re.totalRealized > 50000` // > $500 recovered (in cents)
         )
       );
 
@@ -480,7 +482,7 @@ export class AutomatedProfitOptimizer {
     const totalProfit = recentResults.reduce((sum, r) => sum + r.netProfit, 0);
     
     // Calculate projected monthly profit
-    const dailyProfit = totalRevenue > 0 ? totalProfit / optimizationCount : 0;
+    const dailyProfit = totalProfit > 0 ? totalProfit / optimizationCount : 0;
     const projectedMonthlyProfit = dailyProfit * 30;
 
     return {

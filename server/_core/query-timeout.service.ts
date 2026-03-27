@@ -5,6 +5,7 @@
  * Prevents hanging queries and memory leaks
  */
 
+import { sql } from 'drizzle-orm';
 import type { Db } from './context';
 
 interface QueryOptions {
