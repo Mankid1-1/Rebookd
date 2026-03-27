@@ -219,7 +219,7 @@ export function ProgressiveDisclosure({
                       "p-3 border rounded-lg cursor-pointer transition-colors",
                       currentLevel === level.id
                         ? 'bg-blue-50 border-blue-500'
-                        : 'hover:bg-gray-50'
+                        : 'hover:bg-muted/30'
                     )}
                     onClick={() => {
                       if (canProgressToLevel(level.id) || level.id === currentLevel) {
@@ -297,7 +297,7 @@ export function ProgressiveDisclosure({
 // Progressive Disclosure Hook
 export function useProgressiveDisclosure(
   initialLevel: string = 'basic',
-  levels: ProgressiveLevel[]
+  levels: ProgressiveLevel[] = []
 ) {
   const [currentLevel, setCurrentLevel] = useState(initialLevel);
   const [completedFeatures, setCompletedFeatures] = useState<Set<string>>(new Set());

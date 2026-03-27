@@ -18,7 +18,7 @@ const processPayoutsSchema = z.object({
 });
 
 const getUserPayoutsSchema = z.object({
-  userId: z.string(),
+  userId: z.coerce.number().int(),
 });
 
 export const referralPayoutsRouter = {
@@ -67,7 +67,7 @@ export const referralPayoutsRouter = {
     .input(getUserPayoutsSchema)
     .query(async ({ input, ctx }) => {
       // Users can only see their own payout timeline
-      if (input.userId !== ctx.user.id.toString()) {
+      if (input.userId !== ctx.user.id) {
         throw new Error("Unauthorized: You can only view your own payout timeline");
       }
 
@@ -84,7 +84,7 @@ export const referralPayoutsRouter = {
   // Get current user's payout timeline (protected - no input needed)
   getMyPayoutTimeline: protectedProcedure
     .query(async ({ ctx }) => {
-      const timeline = await getUserPayoutTimeline(ctx.user.id.toString());
+      const timeline = await getUserPayoutTimeline(ctx.user.id);
       
       return {
         success: true,

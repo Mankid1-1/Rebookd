@@ -198,7 +198,7 @@ async function handleInbound(msg: InboundMessage) {
     const stopText =
       process.env.TCPA_STOP_REPLY_TEXT ||
       "You have been unsubscribed from SMS from this business. Reply START to receive messages again.";
-    await sendSMS(from, stopText, undefined, undefined).catch((err) =>
+    await sendSMS(from, stopText, undefined, tenantId).catch((err) =>
       logger.warn("TCPA STOP confirmation SMS failed", { error: String(err) }),
     );
     await SystemService.createSystemError(db as any, {

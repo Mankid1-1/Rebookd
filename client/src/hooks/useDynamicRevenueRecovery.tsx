@@ -5,39 +5,46 @@
  * successful automations, and historical performance data.
  */
 
+import React from 'react';
 import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
-import { trpc } from '@/lib/trpc';
-import { useAuth } from '@/_core/hooks/useAuth';
+
 
 // Dynamic leakage detection based on user's historical conversion rates
 export function useDynamicLeakageDetection() {
-  const { data: userMetrics } = trpc.analytics.userConversionMetrics.useQuery();
-  const { data: automationPerformance } = trpc.analytics.automationPerformance.useQuery();
+  const userMetrics: any = undefined; // endpoint not yet available
+  const automationPerformance: any = undefined; // endpoint not yet available
   const { context } = useProgressiveDisclosureContext();
   
   return React.useMemo(() => {
-    const baseLeakageTypes = [
+    const baseLeakageTypes: Array<{
+      id: string;
+      type: string;
+      baseDetectionRate: number;
+      severity: string;
+      description: string;
+      recoveryActions: string[];
+    }> = [
       {
         id: 'no_show',
-        type: "no_show" as const,
-        baseDetectionRate: 0.15, // 15% base no-show rate
-        severity: "medium" as const,
+        type: "no_show",
+        baseDetectionRate: 0.15,
+        severity: "medium",
         description: "Missed appointments",
         recoveryActions: ["automated_reminder", "rescheduling_bot", "deposit_required"]
       },
       {
         id: 'cancellation',
-        type: "cancellation" as const,
-        baseDetectionRate: 0.08, // 8% base cancellation rate
-        severity: "low" as const,
+        type: "cancellation",
+        baseDetectionRate: 0.08,
+        severity: "low",
         description: "Cancelled appointments",
         recoveryActions: ["retention_offer", "reschedule_incentive", "feedback_collection"]
       },
       {
         id: 'followup_missed',
-        type: "followup_missed" as const,
-        baseDetectionRate: 0.25, // 25% base follow-up miss rate
-        severity: "high" as const,
+        type: "followup_missed",
+        baseDetectionRate: 0.25,
+        severity: "high",
         description: "Missed follow-up opportunities",
         recoveryActions: ["automated_followup", "priority_queue", "staff_notification"]
       }
@@ -56,8 +63,8 @@ export function useDynamicLeakageDetection() {
         // Users with low conversion rates get more sensitive detection
         if (conversionRate < 0.3) {
           adaptedDetectionRate *= 1.5; // 50% more sensitive
-          adaptedSeverity = adaptedSeverity === "low" ? "medium" : 
-                          adaptedSeverity === "medium" ? "high" : "critical";
+          adaptedSeverity = adaptedSeverity === "low" ? "medium" :
+                          adaptedSeverity === "medium" ? "high" : "high";
         }
         // Users with high conversion rates get less sensitive detection
         else if (conversionRate > 0.7) {
@@ -106,9 +113,9 @@ export function useDynamicLeakageDetection() {
 
 // Dynamic recovery strategy recommendations based on user performance
 export function useDynamicRecoveryStrategies() {
-  const { data: userMetrics } = trpc.analytics.userConversionMetrics.useQuery();
-  const { data: automationPerformance } = trpc.analytics.automationPerformance.useQuery();
-  const { data: recoveryHistory } = trpc.analytics.recoveryHistory.useQuery();
+  const userMetrics: any = undefined; // endpoint not yet available
+  const automationPerformance: any = undefined; // endpoint not yet available
+  const recoveryHistory: any = undefined; // endpoint not yet available
   const { context } = useProgressiveDisclosureContext();
   
   return React.useMemo(() => {
@@ -241,8 +248,8 @@ export function useDynamicRecoveryStrategies() {
 
 // Dynamic recovery probability calculation based on user's historical success
 export function useDynamicRecoveryProbability() {
-  const { data: recoveryHistory } = trpc.analytics.recoveryHistory.useQuery();
-  const { data: automationPerformance } = trpc.analytics.automationPerformance.useQuery();
+  const recoveryHistory: any = undefined; // endpoint not yet available
+  const automationPerformance: any = undefined; // endpoint not yet available
   const { context } = useProgressiveDisclosureContext();
   
   return React.useCallback((leakageType: string, estimatedRevenue: number) => {
@@ -290,7 +297,7 @@ export function useDynamicRecoveryProbability() {
 
 // Dynamic recovery action prioritization based on user's success patterns
 export function useDynamicActionPrioritization() {
-  const { data: actionPerformance } = trpc.analytics.actionPerformance.useQuery();
+  const actionPerformance: any = undefined; // endpoint not yet available
   const { context } = useProgressiveDisclosureContext();
   
   return React.useCallback((recoveryActions: string[], leakageType: string) => {
@@ -342,8 +349,8 @@ export function useDynamicActionPrioritization() {
 
 // Dynamic revenue impact calculation based on user's conversion patterns
 export function useDynamicRevenueImpact() {
-  const { data: userMetrics } = trpc.analytics.userConversionMetrics.useQuery();
-  const { data: marketData } = trpc.analytics.marketData.useQuery();
+  const userMetrics: any = undefined; // endpoint not yet available
+  const marketData: any = undefined; // endpoint not yet available
   
   return React.useCallback((baseImpact: number, actionType: string) => {
     let adjustedImpact = baseImpact;

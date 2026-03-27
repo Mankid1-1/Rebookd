@@ -6,20 +6,36 @@
 import Stripe from 'stripe';
 import { getDb } from '../db';
 import { TRPCError } from '@trpc/server';
+import { stripeSubscriptions } from '../../drizzle/schema';
+import { eq } from 'drizzle-orm';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2022-11-15',
 });
 
 // Price IDs from Stripe Dashboard
-const FIXED_PRICE_ID = process.env.STRIPE_FIXED_PRICE_ID || 'price_FIXED_199';
-const METERED_PRICE_ID = process.env.STRIPE_METERED_PRICE_ID || 'price_METERED_15';
+// Professional/Full: $199/mo base + $0.15/unit metered (15% share)
+const PROFESSIONAL_FIXED_PRICE_ID = process.env.STRIPE_PRICE_PROFESSIONAL || 'price_1TDqZtPC6Kl5W2cCTLQrYsKS';
+const PROFESSIONAL_METERED_PRICE_ID = process.env.STRIPE_METERED_PRICE_ID || 'price_1TDx2sPC6Kl5W2cCGPQgHuXz';
+// Flex: slider $29-$149/mo base + $0.20/unit metered (20% share)
+const FLEX_DEFAULT_PRICE_ID = process.env.STRIPE_PRICE_FLEX || 'price_1TExaUPC6Kl5W2cC865JZHpr';
+const FLEX_METERED_PRICE_ID = process.env.STRIPE_METERED_PRICE_FLEX || 'price_1TFgLpPC6Kl5W2cCdN22c86O';
+
+// Legacy fallbacks
+const FIXED_PRICE_ID = PROFESSIONAL_FIXED_PRICE_ID;
+const METERED_PRICE_ID = PROFESSIONAL_METERED_PRICE_ID;
 
 export interface CheckoutSessionData {
   customerEmail: string;
   userId: string;
   tenantId: string;
   referralCode?: string;
+  /** Recovery event ID for attribution tracking */
+  recoveryEventId?: string;
+  /** Plan type — determines which Stripe prices to use */
+  planType?: 'professional' | 'flex';
+  /** For flex plan: specific base price ID from slider selection */
+  flexPriceId?: string;
 }
 
 export interface SubscriptionData {
@@ -56,6 +72,15 @@ export async function createCheckoutSession(data: CheckoutSessionData): Promise<
       customerId = customer.id;
     }
 
+    // Select prices based on plan type
+    const isFlex = data.planType === 'flex';
+    const basePriceId = isFlex
+      ? (data.flexPriceId || FLEX_DEFAULT_PRICE_ID)
+      : PROFESSIONAL_FIXED_PRICE_ID;
+    const meteredPriceId = isFlex
+      ? FLEX_METERED_PRICE_ID
+      : PROFESSIONAL_METERED_PRICE_ID;
+
     // Create checkout session with both prices
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
@@ -63,11 +88,11 @@ export async function createCheckoutSession(data: CheckoutSessionData): Promise<
       customer_email: customerEmail,
       line_items: [
         {
-          price: FIXED_PRICE_ID, // $199 fixed monthly price
+          price: basePriceId,
           quantity: 1,
         },
         {
-          price: METERED_PRICE_ID, // 15% metered price (no quantity needed)
+          price: meteredPriceId, // Revenue share metered price
         },
       ],
       success_url: `${process.env.FRONTEND_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
@@ -83,6 +108,8 @@ export async function createCheckoutSession(data: CheckoutSessionData): Promise<
         userId,
         tenantId,
         referralCode: referralCode || '',
+        recoveryEventId: data.recoveryEventId || '',
+        planType: data.planType || 'professional',
       },
     });
 
@@ -111,11 +138,11 @@ export async function processSuccessfulCheckout(sessionId: string): Promise<Subs
     
     // Store subscription in database
     const db = await getDb();
-    
-    await (db as any).insert('subscriptions').values({
+
+    await db.insert(stripeSubscriptions).values({
       id: subscription.id,
-      userId: session.metadata?.userId,
-      tenantId: session.metadata?.tenantId,
+      userId: parseInt(session.metadata?.userId || '0', 10),
+      tenantId: parseInt(session.metadata?.tenantId || '0', 10),
       customerId: session.customer as string,
       status: subscription.status,
       priceId: FIXED_PRICE_ID,
@@ -155,7 +182,7 @@ export async function processSuccessfulCheckout(sessionId: string): Promise<Subs
 /**
  * Report revenue recovery to Stripe metered billing
  */
-export async function reportRevenueUsage(customerId: string, recoveredAmount: number): Promise<void> {
+export async function reportRevenueUsage(customerId: string, recoveredAmount: number, recoveryEventId?: string): Promise<void> {
   try {
     // For metered billing, we create usage records on the subscription
     // First get the customer's active subscription
@@ -189,7 +216,7 @@ export async function reportRevenueUsage(customerId: string, recoveredAmount: nu
       action: 'increment',
     });
 
-    console.log(`Reported $${recoveredAmount} revenue recovery for customer ${customerId}`);
+    console.log(`Reported $${recoveredAmount} revenue recovery for customer ${customerId}${recoveryEventId ? ` (recovery_event: ${recoveryEventId})` : ''}`);
   } catch (error) {
     console.error('Failed to report revenue usage:', error);
     throw new TRPCError({
@@ -273,12 +300,12 @@ export async function cancelSubscription(subscriptionId: string): Promise<void> 
 
     // Update in database
     const db = await getDb();
-    await (db as any).update('subscriptions')
-      .set({ 
+    await db.update(stripeSubscriptions)
+      .set({
         cancelAtPeriodEnd: true,
         updatedAt: new Date()
       })
-      .where('id', '=', subscriptionId);
+      .where(eq(stripeSubscriptions.id, subscriptionId));
   } catch (error) {
     console.error('Failed to cancel subscription:', error);
     throw new TRPCError({
@@ -299,12 +326,12 @@ export async function resumeSubscription(subscriptionId: string): Promise<void> 
 
     // Update in database
     const db = await getDb();
-    await (db as any).update('subscriptions')
-      .set({ 
+    await db.update(stripeSubscriptions)
+      .set({
         cancelAtPeriodEnd: false,
         updatedAt: new Date()
       })
-      .where('id', '=', subscriptionId);
+      .where(eq(stripeSubscriptions.id, subscriptionId));
   } catch (error) {
     console.error('Failed to resume subscription:', error);
     throw new TRPCError({
@@ -321,13 +348,13 @@ async function processReferralCompletion(referralCode: string, userId: string, s
   try {
     // Import referral service to avoid circular dependency
     const { processReferral, completeReferral } = await import('./referral.service');
-    
+
     // First process the referral
-    const result = await processReferral(referralCode, userId);
-    
-    if (result.success && result.referral) {
+    const result = await processReferral(referralCode, Number(userId));
+
+    if (result.success && result.referralId) {
       // Complete the referral (6+ months requirement will be checked)
-      await completeReferral(result.referral.id, subscriptionId, 6);
+      await completeReferral(result.referralId, subscriptionId, 6);
     }
   } catch (error) {
     console.error('Failed to process referral completion:', error);

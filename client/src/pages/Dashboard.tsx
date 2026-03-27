@@ -1,5 +1,4 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import {
   BarChart3, Bot, MessageSquare, TrendingUp, Users, Zap,
-  ArrowRight, Calendar, Plus, Settings, DollarSign, AlertTriangle,
+  ArrowRight, Calendar, Plus, DollarSign, AlertTriangle,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import {
@@ -21,38 +20,84 @@ import { toast } from "sonner";
 import { RevenueDashboard } from "@/components/analytics/RevenueDashboard";
 import { RevenueLeakageDashboard } from "@/components/analytics/RevenueLeakageDashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useDynamicQuickActions } from "@/hooks/useDynamicConfiguration";
-import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
+import { SetupChecklist } from "@/components/SetupChecklist";
 
-// Dynamic status colors based on user theme and preferences
-const getDynamicStatusColors = () => {
-  const isDarkMode = document.documentElement.classList.contains('dark');
-  return {
-    new: isDarkMode ? "#60a5fa" : "#3b82f6",
-    contacted: isDarkMode ? "#fbbf24" : "#eab308", 
-    qualified: isDarkMode ? "#c084fc" : "#a855f7",
-    booked: isDarkMode ? "#34d399" : "#22c55e",
-    lost: isDarkMode ? "#f87171" : "#ef4444",
-    unsubscribed: isDarkMode ? "#9ca3af" : "#6b7280",
-  };
+// Status colors for lead status pie chart
+const STATUS_COLORS: Record<string, string> = {
+  new: "#60a5fa",
+  contacted: "#fbbf24",
+  qualified: "#c084fc",
+  booked: "#34d399",
+  lost: "#f87171",
+  unsubscribed: "#9ca3af",
 };
+
+// Type for recentMessages items returned by the dashboard query
+interface RecentMessageItem {
+  msg: {
+    id: number;
+    body: string | null;
+    direction: string;
+    createdAt: string | Date;
+    fromNumber?: string | null;
+    toNumber?: string | null;
+  };
+  lead: {
+    id: number;
+    name: string | null;
+    phone: string;
+  };
+}
+
+function SkeletonCard() {
+  return (
+    <Card className="border-border bg-card">
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between">
+          <div className="space-y-2">
+            <div className="h-3 w-24 bg-muted rounded animate-pulse" />
+            <div className="h-8 w-16 bg-muted rounded animate-pulse" />
+            <div className="h-3 w-16 bg-muted rounded animate-pulse" />
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-muted animate-pulse" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SkeletonChart() {
+  return (
+    <Card className="border-border bg-card">
+      <CardHeader className="pb-2">
+        <div className="h-4 w-48 bg-muted rounded animate-pulse" />
+      </CardHeader>
+      <CardContent>
+        <div className="h-48 bg-muted/30 rounded animate-pulse" />
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const utils = trpc.useUtils();
-  const { data, isLoading, dataUpdatedAt } = trpc.analytics.dashboard.useQuery(undefined, { retry: false, refetchInterval: 30000 });
+  const { data, isLoading } = trpc.analytics.dashboard.useQuery(undefined, {
+    retry: false,
+    refetchInterval: 30000,
+  });
   const { data: tenant } = trpc.tenant.get.useQuery(undefined, { retry: false });
-  const { data: leakageReport, isLoading: leakageLoading } = trpc.analytics.revenueLeakage.useQuery({ days: 90 }, { retry: false, refetchInterval: 60000 });
+  const { data: leakageReport, isLoading: leakageLoading } = trpc.analytics.revenueLeakage.useQuery(
+    { days: 90 },
+    { retry: false, refetchInterval: 60000 },
+  );
   const createRecoveryCampaign = trpc.analytics.createRecoveryCampaign.useMutation({
     onSuccess: () => {
       toast.success("Recovery campaign created successfully");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err: { message: string }) => toast.error(err.message),
   });
-
-  // Dynamic status colors based on user preferences
-  const statusColors = getDynamicStatusColors();
 
   const [showAddLead, setShowAddLead] = useState(false);
   const [newLead, setNewLead] = useState({ phone: "", name: "" });
@@ -70,22 +115,20 @@ export default function Dashboard() {
       setNewLead({ phone: "", name: "" });
       utils.analytics.dashboard.invalidate();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err: { message: string }) => toast.error(err.message),
   });
 
-  const handleRecoveryAction = async (actionType: string, leadIds: number[]) => {
+  const handleRecoveryAction = async (actionType: string, _leadIds: number[]) => {
     if (actionType === "bulk_recovery") {
       await createRecoveryCampaign.mutateAsync({
         leakageType: "no_show",
         priority: "high",
-        discountAmount: 20
+        discountAmount: 20,
       });
     } else if (actionType === "targeted_recovery") {
-      // Handle targeted recovery for specific leakage types
-      // TODO: Determine actual leakage type from the leakage report data
       await createRecoveryCampaign.mutateAsync({
-        leakageType: "cancellation", // Fixed: use actual leakage type instead of lead ID
-        priority: "medium"
+        leakageType: "cancellation",
+        priority: "medium",
       });
     }
   };
@@ -93,7 +136,7 @@ export default function Dashboard() {
   const metrics = data?.metrics;
   const statusBreakdown = data?.statusBreakdown ?? [];
   const messageVolume = data?.messageVolume ?? [];
-  const recentMessages = (data as any)?.recentMessages ?? [];
+  const recentMessages = (data?.recentMessages ?? []) as RecentMessageItem[];
   const revenueMetrics = data?.revenueMetrics;
   const revenueTrends = data?.revenueTrends ?? [];
 
@@ -119,9 +162,16 @@ export default function Dashboard() {
     { title: "Booked", value: metrics?.bookedCount ?? 0, icon: Calendar, color: "text-green-400", bg: "bg-green-500/10", action: () => setLocation("/analytics") },
   ];
 
+  // Format currency
+  const fmtCurrency = (n: number) =>
+    n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n.toLocaleString()}`;
+
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
+        {/* Setup Checklist */}
+        <SetupChecklist />
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -141,6 +191,76 @@ export default function Dashboard() {
             </Button>
           </div>
         </div>
+
+        {/* Revenue Summary Row */}
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="border-border bg-card">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium mb-2">Total Recovered Revenue</p>
+                    <p className="text-3xl font-bold text-emerald-400">
+                      {fmtCurrency(revenueMetrics?.totalRecoveredRevenue ?? 0)}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      {revenueMetrics?.bookedLeadsCount ?? 0} bookings all time
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                    <DollarSign className="w-5 h-5 text-emerald-400" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border bg-card">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium mb-2">This Month Revenue</p>
+                    <p className="text-3xl font-bold text-blue-400">
+                      {fmtCurrency(revenueMetrics?.recentRecoveredRevenue ?? 0)}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      {revenueMetrics?.recentBookingsCount ?? 0} bookings this month
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5 text-blue-400" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border bg-card">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium mb-2">Active Automations</p>
+                    <p className="text-3xl font-bold text-cyan-400">
+                      {metrics?.automationCount ?? 0}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      {revenueMetrics?.overallRecoveryRate != null
+                        ? `${revenueMetrics.overallRecoveryRate.toFixed(1)}% recovery rate`
+                        : "No data yet"}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center">
+                    <Zap className="w-5 h-5 text-cyan-400" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -162,115 +282,131 @@ export default function Dashboard() {
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
             {/* Stat Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {statCards.map((stat) => (
-                <Card
-                  key={stat.title}
-                  className="border-border bg-card cursor-pointer hover:border-primary/20 transition-all"
-                  onClick={stat.action}
-                >
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-xs text-muted-foreground font-medium mb-2">{stat.title}</p>
-                        <p className="text-3xl font-bold">{isLoading ? "—" : stat.value.toLocaleString()}</p>
-                        {stat.title === "Booked" && metrics?.leadCount ? (
-                          <p className="text-xs text-muted-foreground mt-1.5">{bookingRate}% conversion</p>
-                        ) : (
-                          <p className="text-xs text-muted-foreground mt-1.5">All time</p>
-                        )}
+            {isLoading ? (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" data-tour="stats-cards">
+                {statCards.map((stat) => (
+                  <Card
+                    key={stat.title}
+                    className="border-border bg-card cursor-pointer hover:border-primary/20 transition-all"
+                    onClick={stat.action}
+                  >
+                    <CardContent className="p-5">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-xs text-muted-foreground font-medium mb-2">{stat.title}</p>
+                          <p className="text-3xl font-bold">{stat.value.toLocaleString()}</p>
+                          {stat.title === "Booked" && metrics?.leadCount ? (
+                            <p className="text-xs text-muted-foreground mt-1.5">{bookingRate}% conversion</p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground mt-1.5">All time</p>
+                          )}
+                        </div>
+                        <div className={`w-10 h-10 rounded-xl ${stat.bg} flex items-center justify-center`}>
+                          <stat.icon className={`w-5 h-5 ${stat.color}`} />
+                        </div>
                       </div>
-                      <div className={`w-10 h-10 rounded-xl ${stat.bg} flex items-center justify-center`}>
-                        <stat.icon className={`w-5 h-5 ${stat.color}`} />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
 
             {/* Charts Row */}
-            <div className="grid lg:grid-cols-3 gap-4">
-              <Card className="lg:col-span-2 border-border bg-card">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-primary" />
-                    Message Volume (Last 14 Days)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {chartData.length === 0 ? (
-                    <div className="h-48 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-                      <MessageSquare className="w-8 h-8 opacity-30" />
-                      <p className="text-sm">No messages yet — add a lead and start a conversation</p>
-                      <Button size="sm" variant="outline" onClick={() => setShowAddLead(true)}>
-                        <Plus className="w-3.5 h-3.5 mr-1.5" /> Add your first lead
-                      </Button>
-                    </div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={200}>
-                      <AreaChart data={chartData}>
-                        <defs>
-                          <linearGradient id="outboundGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="oklch(0.62 0.22 255)" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="oklch(0.62 0.22 255)" stopOpacity={0} />
-                          </linearGradient>
-                          <linearGradient id="inboundGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="oklch(0.70 0.18 190)" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="oklch(0.70 0.18 190)" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 255)" />
-                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: "oklch(0.60 0.03 255)" }} tickLine={false} />
-                        <YAxis tick={{ fontSize: 11, fill: "oklch(0.60 0.03 255)" }} tickLine={false} axisLine={false} />
-                        <Tooltip contentStyle={{ background: "oklch(0.16 0.025 255)", border: "1px solid oklch(0.25 0.03 255)", borderRadius: "8px", fontSize: "12px" }} labelStyle={{ color: "oklch(0.95 0.01 255)" }} />
-                        <Area type="monotone" dataKey="outbound" stroke="oklch(0.62 0.22 255)" fill="url(#outboundGrad)" strokeWidth={2} name="Outbound" />
-                        <Area type="monotone" dataKey="inbound" stroke="oklch(0.70 0.18 190)" fill="url(#inboundGrad)" strokeWidth={2} name="Inbound" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="border-border bg-card">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                    <Users className="w-4 h-4 text-primary" /> Lead Status
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {statusBreakdown.length === 0 ? (
-                    <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No leads yet</div>
-                  ) : (
-                    <>
-                      <ResponsiveContainer width="100%" height={140}>
-                        <PieChart>
-                          <Pie data={statusBreakdown} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="count" nameKey="status">
-                            {statusBreakdown.map((entry) => (
-                              <Cell key={entry.status} fill={statusColors[entry.status] ?? "#6b7280"} />
-                            ))}
-                          </Pie>
-                          <Tooltip contentStyle={{ background: "oklch(0.16 0.025 255)", border: "1px solid oklch(0.25 0.03 255)", borderRadius: "8px", fontSize: "12px" }} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div className="space-y-1.5 mt-2">
-                        {statusBreakdown.map((item) => (
-                          <div key={item.status} className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2.5 h-2.5 rounded-full" style={{ background: statusColors[item.status] ?? "#6b7280" }} />
-                              <span className="capitalize text-muted-foreground">{item.status}</span>
-                            </div>
-                            <span className="font-medium">{item.count}</span>
-                          </div>
-                        ))}
+            {isLoading ? (
+              <div className="grid lg:grid-cols-3 gap-4">
+                <div className="lg:col-span-2"><SkeletonChart /></div>
+                <SkeletonChart />
+              </div>
+            ) : (
+              <div className="grid lg:grid-cols-3 gap-4">
+                <Card className="lg:col-span-2 border-border bg-card">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4 text-primary" />
+                      Message Volume (Last 14 Days)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {chartData.length === 0 ? (
+                      <div className="h-48 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                        <MessageSquare className="w-8 h-8 opacity-30" />
+                        <p className="text-sm">No messages yet — add a lead and start a conversation</p>
+                        <Button size="sm" variant="outline" onClick={() => setShowAddLead(true)}>
+                          <Plus className="w-3.5 h-3.5 mr-1.5" /> Add your first lead
+                        </Button>
                       </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={200}>
+                        <AreaChart data={chartData}>
+                          <defs>
+                            <linearGradient id="outboundGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="oklch(0.62 0.22 255)" stopOpacity={0.3} />
+                              <stop offset="95%" stopColor="oklch(0.62 0.22 255)" stopOpacity={0} />
+                            </linearGradient>
+                            <linearGradient id="inboundGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="oklch(0.70 0.18 190)" stopOpacity={0.3} />
+                              <stop offset="95%" stopColor="oklch(0.70 0.18 190)" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 255)" />
+                          <XAxis dataKey="date" tick={{ fontSize: 11, fill: "oklch(0.60 0.03 255)" }} tickLine={false} />
+                          <YAxis tick={{ fontSize: 11, fill: "oklch(0.60 0.03 255)" }} tickLine={false} axisLine={false} />
+                          <Tooltip contentStyle={{ background: "oklch(0.16 0.025 255)", border: "1px solid oklch(0.25 0.03 255)", borderRadius: "8px", fontSize: "12px" }} labelStyle={{ color: "oklch(0.95 0.01 255)" }} />
+                          <Area type="monotone" dataKey="outbound" stroke="oklch(0.62 0.22 255)" fill="url(#outboundGrad)" strokeWidth={2} name="Outbound" />
+                          <Area type="monotone" dataKey="inbound" stroke="oklch(0.70 0.18 190)" fill="url(#inboundGrad)" strokeWidth={2} name="Inbound" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    )}
+                  </CardContent>
+                </Card>
 
-            {/* Recent Messages */}
+                <Card className="border-border bg-card">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                      <Users className="w-4 h-4 text-primary" /> Lead Status
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {statusBreakdown.length === 0 ? (
+                      <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No leads yet</div>
+                    ) : (
+                      <>
+                        <ResponsiveContainer width="100%" height={140}>
+                          <PieChart>
+                            <Pie data={statusBreakdown} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="count" nameKey="status">
+                              {statusBreakdown.map((entry) => (
+                                <Cell key={entry.status} fill={STATUS_COLORS[entry.status] ?? "#6b7280"} />
+                              ))}
+                            </Pie>
+                            <Tooltip contentStyle={{ background: "oklch(0.16 0.025 255)", border: "1px solid oklch(0.25 0.03 255)", borderRadius: "8px", fontSize: "12px" }} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div className="space-y-1.5 mt-2">
+                          {statusBreakdown.map((item) => (
+                            <div key={item.status} className="flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2.5 h-2.5 rounded-full" style={{ background: STATUS_COLORS[item.status] ?? "#6b7280" }} />
+                                <span className="capitalize text-muted-foreground">{item.status}</span>
+                              </div>
+                              <span className="font-medium">{item.count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Recent Messages / Activity Feed */}
             <Card className="border-border bg-card">
               <CardHeader className="pb-2 flex flex-row items-center justify-between">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -281,17 +417,29 @@ export default function Dashboard() {
                 </Button>
               </CardHeader>
               <CardContent>
-                {recentMessages.length === 0 ? (
+                {isLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-muted/30">
+                        <div className="w-2 h-2 rounded-full mt-1.5 bg-muted animate-pulse" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3 w-32 bg-muted rounded animate-pulse" />
+                          <div className="h-3 w-full bg-muted rounded animate-pulse" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : recentMessages.length === 0 ? (
                   <div className="py-8 text-center text-muted-foreground text-sm">
                     No messages yet. Add a lead and send your first message.
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {recentMessages.map((item: { msg: any; lead: any }, i: number) => (
+                    {recentMessages.map((item, i) => (
                       <div
                         key={i}
                         className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
-                        onClick={() => setLocation(`/leads/${item.lead?.id}` as any)}
+                        onClick={() => setLocation(`/leads/${item.lead?.id}`)}
                       >
                         <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${item.msg?.direction === "outbound" ? "bg-primary" : "bg-green-400"}`} />
                         <div className="min-w-0 flex-1">
@@ -314,7 +462,7 @@ export default function Dashboard() {
           {/* Revenue Recovery Tab */}
           <TabsContent value="revenue" className="space-y-6">
             {revenueMetrics ? (
-              <RevenueDashboard 
+              <RevenueDashboard
                 revenueMetrics={revenueMetrics}
                 revenueTrends={revenueTrends}
                 isLoading={isLoading}
@@ -335,8 +483,8 @@ export default function Dashboard() {
           {/* Revenue Leakage Tab */}
           <TabsContent value="leakage" className="space-y-6">
             {leakageReport ? (
-              <RevenueLeakageDashboard 
-                leakageReport={leakageReport}
+              <RevenueLeakageDashboard
+                leakageReport={leakageReport as Parameters<typeof RevenueLeakageDashboard>[0]["leakageReport"]}
                 isLoading={leakageLoading}
                 onRecoveryAction={handleRecoveryAction}
               />
@@ -366,7 +514,7 @@ export default function Dashboard() {
                 <Input
                   placeholder="+1 (555) 000-0000"
                   value={newLead.phone}
-                  onChange={(e) => setNewLead(prev => ({ ...prev, phone: e.target.value }))}
+                  onChange={(e) => setNewLead((prev) => ({ ...prev, phone: e.target.value }))}
                   autoFocus
                 />
               </div>
@@ -376,7 +524,7 @@ export default function Dashboard() {
                   <Input
                     placeholder="Jane Smith"
                     value={newLead.name}
-                    onChange={(e) => setNewLead(prev => ({ ...prev, name: e.target.value }))}
+                    onChange={(e) => setNewLead((prev) => ({ ...prev, name: e.target.value }))}
                   />
                 </div>
               </div>
@@ -389,7 +537,7 @@ export default function Dashboard() {
                   disabled={!newLead.phone || createLead.isPending}
                   onClick={() => createLead.mutate({ phone: newLead.phone, name: newLead.name || null })}
                 >
-                  {createLead.isPending ? "Adding…" : "Add Lead"}
+                  {createLead.isPending ? "Adding..." : "Add Lead"}
                 </Button>
               </div>
             </div>

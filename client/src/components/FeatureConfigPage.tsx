@@ -79,11 +79,11 @@ export function FeatureConfigPage({
 
       {/* Unsaved Changes Warning */}
       {isDirty && (
-        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+        <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
           <div className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-yellow-600" />
             <div>
-              <p className="text-sm font-medium text-yellow-800">You have unsaved changes</p>
+              <p className="text-sm font-medium text-yellow-300">You have unsaved changes</p>
               <p className="text-xs text-yellow-600">Click "Save Changes" to persist your configuration</p>
             </div>
           </div>

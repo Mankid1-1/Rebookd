@@ -10,7 +10,7 @@ import { simpleParser } from 'mailparser';
 import { logger } from './logger';
 import type { Db } from './context';
 
-type POP3Client = InstanceType<typeof poplib.POP3Client>;
+type POP3Client = any;
 
 export interface POP3Config {
   host: string;
@@ -42,7 +42,7 @@ export interface POP3Result {
  */
 export async function connectPOP3(config: POP3Config): Promise<POP3Client> {
   return new Promise((resolve, reject) => {
-    const client = new POP3Client(config.port, config.host, {
+    const client = new (poplib as any).POP3Client(config.port, config.host, {
       tls: config.tls,
     });
 

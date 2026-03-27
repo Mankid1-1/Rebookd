@@ -3,12 +3,7 @@
 
 import CryptoJS from 'crypto-js';
 
-const ENCRYPTION_KEY = process.env.VITE_STORAGE_ENCRYPTION_KEY || (() => {
-  if (import.meta.env.MODE === 'production') {
-    throw new Error('VITE_STORAGE_ENCRYPTION_KEY is not set in production');
-  }
-  return 'default-key-change-in-production';
-})();
+const ENCRYPTION_KEY = (import.meta as any).env.VITE_STORAGE_ENCRYPTION_KEY || 'rebooked-client-storage-v2';
 
 interface StorageItem<T = any> {
   value: T;

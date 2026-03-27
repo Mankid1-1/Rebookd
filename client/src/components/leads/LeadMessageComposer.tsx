@@ -82,47 +82,25 @@ export function LeadMessageComposer({ leadId, leadName }: LeadMessageComposerPro
   }, [messageBody]);
 
   const sendMessage = trpc.leads.sendMessage.useMutation({
-    onMutate: async (input) => {
-      const previous = utils.leads.messages.getData({ leadId: input.leadId });
-      const optimistic = {
-        id: -Date.now(),
-        tenantId: 0,
-        leadId: input.leadId,
-        direction: "outbound" as const,
-        body: input.body,
-        status: "sent" as const,
-        createdAt: new Date(),
-        twilioSid: null as string | null,
-        provider: null as string | null,
-        providerError: null as string | null,
-        fromNumber: null as string | null,
-        toNumber: null as string | null,
-      };
-      utils.leads.messages.setData({ leadId: input.leadId }, (old) => [...(old ?? []), optimistic as any]);
-      return { previous };
-    },
-    onError: (err, input, ctx) => {
-      if (ctx?.previous !== undefined) {
-        utils.leads.messages.setData({ leadId: input.leadId }, ctx.previous);
-      }
+    onError: (err) => {
       toast.error(err.message);
     },
-    onSuccess: (data) => {
-      if (!data.success) {
-        toast.warning("Message saved — SMS delivery failed. Check Twilio config.");
-      } else {
-        toast.success("Message sent ✓");
-      }
+    onSuccess: () => {
+      toast.success("Message sent");
       setMessageBody("");
       setCharCount(0);
-      utils.leads.messages.invalidate({ leadId });
       utils.leads.list.invalidate();
+      utils.leads.messages.invalidate({ leadId });
     },
   });
 
   const doSend = () => {
     if (!messageBody.trim() || sendMessage.isPending) return;
-    sendMessage.mutate({ leadId, body: messageBody, tone });
+    sendMessage.mutate({
+      leadId,
+      body: messageBody,
+      ...(useAI ? { tone } : {}),
+    });
   };
 
   const smsLimit = 160;

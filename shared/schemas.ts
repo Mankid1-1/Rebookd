@@ -39,10 +39,10 @@ export const sendMessageSchema = z.object({
   idempotencyKey: z.string().uuid().optional(),
 });
 
-// Auth schemas
+// Auth schemas - must match server signup requirements (12+ chars)
 export const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(1),
+  password: z.string().min(12, "Password must be at least 12 characters"),
 });
 
 // Pagination schemas
@@ -60,7 +60,7 @@ export const updateProfileSchema = z.object({
 // Tenant schemas
 export const updateTenantSchema = z.object({
   name: z.string().min(1).optional(),
-  settings: z.record(z.any()).optional(),
+  settings: z.record(z.string(), z.any()).optional(),
 });
 
 // Template schemas
@@ -86,11 +86,11 @@ export const createAutomationSchema = z.object({
   name: z.string().min(1, "Name is required"),
   trigger: z.object({
     type: z.string(),
-    conditions: z.record(z.any()),
+    conditions: z.record(z.string(), z.any()),
   }),
   actions: z.array(z.object({
     type: z.string(),
-    config: z.record(z.any()),
+    config: z.record(z.string(), z.any()),
   })),
   isActive: z.boolean().default(true),
 });
@@ -100,11 +100,11 @@ export const updateAutomationSchema = z.object({
   name: z.string().min(1).optional(),
   trigger: z.object({
     type: z.string(),
-    conditions: z.record(z.any()),
+    conditions: z.record(z.string(), z.any()),
   }).optional(),
   actions: z.array(z.object({
     type: z.string(),
-    config: z.record(z.any()),
+    config: z.record(z.string(), z.any()),
   })).optional(),
   isActive: z.boolean().optional(),
 });

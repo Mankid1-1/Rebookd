@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, ilike, or } from "drizzle-orm";
+import { eq, and, desc, sql, or } from "drizzle-orm";
 import { leads, messages } from "../../drizzle/schema";
 import { decrypt, encryptIfNeeded } from "../_core/crypto";
 import { hashPhoneNumber, normalizePhoneNumber } from "../_core/phone";

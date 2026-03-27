@@ -21,10 +21,9 @@ export async function getDb() {
     enableKeepAlive: true,
     keepAliveInitialDelay: 10_000,
     connectTimeout: 10_000,
-    // Query timeouts for production safety
-    timeout: parseInt(process.env.DB_QUERY_TIMEOUT || "30000", 10), // 30 seconds default
-    acquireTimeout: parseInt(process.env.DB_ACQUIRE_TIMEOUT || "60000", 10), // 60 seconds
-    ssl: { rejectUnauthorized: false },
+    ...(process.env.DB_SSL !== "false" && !dbUrl.includes("localhost") && !dbUrl.includes("127.0.0.1")
+      ? { ssl: { rejectUnauthorized: false } }
+      : {}),
   });
 
   _db = drizzle(_pool, { schema, mode: "default" }) as any;
@@ -34,6 +33,7 @@ export async function getDb() {
 /** Ping the DB — used by the health check endpoint. */
 export async function pingDb(): Promise<boolean> {
   try {
+    if (!_pool) await getDb();
     const pool = _pool;
     if (!pool) return false;
     const conn = await pool.getConnection();

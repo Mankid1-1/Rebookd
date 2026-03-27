@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod';
-import { publicProcedure, router } from '../_core/trpc';
+import { publicProcedure, protectedProcedure, tenantProcedure, router } from '../_core/trpc';
 import { stripeConnectService } from '../services/stripe-connect.service';
 import { TRPCError } from '@trpc/server';
 
@@ -32,7 +32,7 @@ const createPortalSessionSchema = z.object({
 });
 
 // Create a new Stripe Connect account
-export const createConnectAccount = publicProcedure
+export const createConnectAccount = protectedProcedure
   .input(createConnectAccountSchema)
   .mutation(async ({ input }) => {
     try {
@@ -41,13 +41,13 @@ export const createConnectAccount = publicProcedure
     } catch (error) {
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
-        message: error.message,
+        message: (error as Error).message,
       });
     }
   });
 
 // Create account link for onboarding
-export const createAccountLink = publicProcedure
+export const createAccountLink = protectedProcedure
   .input(z.object({ accountId: z.string().min(1) }))
   .mutation(async ({ input }) => {
     try {
@@ -56,13 +56,13 @@ export const createAccountLink = publicProcedure
     } catch (error) {
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
-        message: error.message,
+        message: (error as Error).message,
       });
     }
   });
 
 // Get account status and requirements
-export const getAccountStatus = publicProcedure
+export const getAccountStatus = tenantProcedure
   .input(z.object({ accountId: z.string().min(1) }))
   .query(async ({ input }) => {
     try {
@@ -71,13 +71,13 @@ export const getAccountStatus = publicProcedure
     } catch (error) {
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
-        message: error.message,
+        message: (error as Error).message,
       });
     }
   });
 
 // Create a product and price for a connected account
-export const createProduct = publicProcedure
+export const createProduct = tenantProcedure
   .input(createProductSchema)
   .mutation(async ({ input }) => {
     try {
@@ -86,13 +86,13 @@ export const createProduct = publicProcedure
     } catch (error) {
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
-        message: error.message,
+        message: (error as Error).message,
       });
     }
   });
 
 // Get products for a specific account
-export const getProducts = publicProcedure
+export const getProducts = tenantProcedure
   .input(z.object({ accountId: z.string().min(1) }))
   .query(async ({ input }) => {
     try {
@@ -101,13 +101,13 @@ export const getProducts = publicProcedure
     } catch (error) {
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
-        message: error.message,
+        message: (error as Error).message,
       });
     }
   });
 
 // Create checkout session for connected account
-export const createCheckoutSession = publicProcedure
+export const createCheckoutSession = tenantProcedure
   .input(createCheckoutSessionSchema)
   .mutation(async ({ input }) => {
     try {
@@ -116,13 +116,13 @@ export const createCheckoutSession = publicProcedure
     } catch (error) {
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
-        message: error.message,
+        message: (error as Error).message,
       });
     }
   });
 
 // Create subscription to platform (for platform services)
-export const subscribeToPlatform = publicProcedure
+export const subscribeToPlatform = protectedProcedure
   .input(z.object({ accountId: z.string().min(1) }))
   .mutation(async ({ input }) => {
     try {
@@ -131,13 +131,13 @@ export const subscribeToPlatform = publicProcedure
     } catch (error) {
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
-        message: error.message,
+        message: (error as Error).message,
       });
     }
   });
 
 // Create billing portal session
-export const createPortalSession = publicProcedure
+export const createPortalSession = protectedProcedure
   .input(createPortalSessionSchema)
   .mutation(async ({ input }) => {
     try {
@@ -146,7 +146,7 @@ export const createPortalSession = publicProcedure
     } catch (error) {
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
-        message: error.message,
+        message: (error as Error).message,
       });
     }
   });

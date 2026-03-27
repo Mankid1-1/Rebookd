@@ -131,7 +131,7 @@ export function StripeCheckout({ onSuccess, onCancel, referralCode }: StripeChec
             <div className="border rounded-lg p-6 space-y-4 bg-gradient-to-br from-blue-50 to-indigo-50">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Revenue Recovery</h3>
-                <Badge className="bg-blue-100 text-blue-800">Performance</Badge>
+                <Badge className="bg-blue-100 text-blue-300">Performance</Badge>
               </div>
               <div className="space-y-2">
                 <div className="text-3xl font-bold">{revenueSharePercent}%</div>
@@ -164,9 +164,9 @@ export function StripeCheckout({ onSuccess, onCancel, referralCode }: StripeChec
 
           {/* Referral Code */}
           {referralCode && (
-            <Alert className="bg-green-50 border-green-200">
-              <Check className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800">
+            <Alert className="bg-green-500/10 border-green-500/30">
+              <Check className="h-4 w-4 text-green-400" />
+              <AlertDescription className="text-green-300">
                 <strong>Referral Applied:</strong> You're using referral code <code className="bg-green-100 px-1 rounded">{referralCode}</code>
               </AlertDescription>
             </Alert>
@@ -187,9 +187,9 @@ export function StripeCheckout({ onSuccess, onCancel, referralCode }: StripeChec
 
           {/* Error Display */}
           {error && (
-            <Alert className="border-red-200 bg-red-50">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <AlertDescription className="text-red-800">
+            <Alert className="border-red-500/30 bg-red-500/10">
+              <AlertCircle className="h-4 w-4 text-red-400" />
+              <AlertDescription className="text-red-300">
                 {error}
               </AlertDescription>
             </Alert>
@@ -258,7 +258,7 @@ export function StripeCheckout({ onSuccess, onCancel, referralCode }: StripeChec
           
           <div className="border-t pt-4">
             <h4 className="font-semibold mb-2">Example Monthly Bill</h4>
-            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+            <div className="bg-muted/30 rounded-lg p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span>Platform Access (Fixed)</span>
                 <span>${fixedPrice}.00</span>

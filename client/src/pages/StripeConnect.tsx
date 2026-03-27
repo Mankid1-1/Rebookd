@@ -50,7 +50,7 @@ const StripeConnect: React.FC = () => {
         </main>
 
         {/* Footer */}
-        <footer className="bg-white border-t border-gray-200">
+        <footer className="bg-card border-t border-border">
           <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center">
               <p className="text-gray-500 text-sm">

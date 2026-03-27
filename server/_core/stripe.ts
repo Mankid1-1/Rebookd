@@ -1,12 +1,16 @@
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import type { Express, Request, Response } from "express";
 import express from "express";
 import Stripe from "stripe";
 import { getDb } from "../db";
-import { billingInvoices, plans, subscriptions } from "../../drizzle/schema";
+import { billingInvoices, plans, subscriptions, recoveryEvents } from "../../drizzle/schema";
 import * as BillingService from "../services/billing.service";
+import * as RecoveryAttribution from "../services/recovery-attribution.service";
+import * as RoiGuarantee from "../services/roi-guarantee.service";
+import { reportRevenueUsage } from "../services/stripe-checkout.service";
 import { ENV } from "./env";
 import type { Db } from "./context";
+import { logger } from "./logger";
 
 const stripe = new Stripe(ENV.stripeSecretKey || "", { apiVersion: "2022-11-15" });
 
@@ -87,6 +91,64 @@ export function registerStripeWebhook(app: Express) {
               currentPeriodStart: (invoice as any).period_start ? new Date((invoice as any).period_start * 1000) : undefined,
               currentPeriodEnd: (invoice as any).period_end ? new Date((invoice as any).period_end * 1000) : undefined,
             }).where(eq(subscriptions.id, subscription.id));
+
+            // Link Stripe payment to recovery events and report metered usage
+            if (event.type === "invoice.paid" && invoice.payment_intent) {
+              const paymentIntentId = typeof invoice.payment_intent === "string"
+                ? invoice.payment_intent
+                : invoice.payment_intent.id;
+              const amountPaid = invoice.amount_paid || 0; // in cents
+
+              // Find ALL "converted" recovery events for this tenant and realize them
+              // No artificial limit — process all pending conversions
+              const convertedEvents = await db
+                .select()
+                .from(recoveryEvents)
+                .where(and(
+                  eq(recoveryEvents.tenantId, subscription.tenantId),
+                  eq(recoveryEvents.status, "converted"),
+                  eq(recoveryEvents.isPrimaryAttribution, true),
+                ));
+
+              for (const re of convertedEvents) {
+                try {
+                  await RecoveryAttribution.markRecoveryRealized(db, subscription.tenantId, re.leadId, {
+                    stripePaymentIntentId: paymentIntentId,
+                    stripeInvoiceId: invoice.id,
+                    realizedRevenue: re.estimatedRevenue, // use estimated until we can link exact amounts
+                  });
+                } catch (err) {
+                  logger.warn("Failed to realize recovery event", { recoveryEventId: re.id, error: String(err) });
+                }
+              }
+
+              // Report recovered revenue to Stripe metered billing (15% commission)
+              if (convertedEvents.length > 0) {
+                const totalRealized = convertedEvents.reduce((sum, e) => sum + e.estimatedRevenue, 0);
+                const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+                if (customerId && totalRealized > 0) {
+                  try {
+                    await reportRevenueUsage(customerId, Math.round(totalRealized / 100)); // convert cents to dollars
+                    logger.info("Reported metered revenue usage to Stripe", { tenantId: subscription.tenantId, amount: totalRealized });
+                  } catch (err) {
+                    logger.warn("Failed to report metered usage", { error: String(err) });
+                  }
+                }
+              }
+            }
+
+            // Evaluate ROI guarantee on each billing cycle
+            try {
+              const result = await RoiGuarantee.evaluateGuarantee(db, subscription.tenantId);
+              if (result.action === "refund_eligible") {
+                logger.warn("ROI guarantee refund eligible — admin action needed", {
+                  tenantId: subscription.tenantId,
+                  clientNetROI: result.roi?.clientNetROI,
+                });
+              }
+            } catch (err) {
+              logger.warn("Failed to evaluate ROI guarantee", { tenantId: subscription.tenantId, error: String(err) });
+            }
             break;
           }
 

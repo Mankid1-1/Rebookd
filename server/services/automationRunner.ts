@@ -9,6 +9,9 @@ import * as AutomationJobService from "./automationJob.service";
 import * as AutomationService from "./automation.service";
 import * as LeadService from "./lead.service";
 import * as TenantService from "./tenant.service";
+import * as RecoveryAttribution from "./recovery-attribution.service";
+import * as TcpaCompliance from "./tcpaCompliance.service";
+import * as SystemService from "./system.service";
 
 const MAX_RETRY = 3;
 
@@ -44,10 +47,36 @@ function shouldAutomateForEvent(automation: any, event: EventPayload): boolean {
   return eventToTriggerTypes(event.type).includes(automation.triggerType);
 }
 
-async function executeStep(db: Db, step: any, event: EventPayload, tenantId: number, leadId?: number) {
+/** Recovery-related event types that should create attribution tracking */
+const RECOVERY_EVENT_TYPES: Set<string> = new Set([
+  "appointment.no_show",
+  "appointment.cancelled",
+  "lead.created", // lead capture recovery
+]);
+
+/** Map event types to leakage types for attribution */
+function getLeakageType(eventType: string): string {
+  switch (eventType) {
+    case "appointment.no_show": return "no_show";
+    case "appointment.cancelled": return "cancellation";
+    case "lead.created": return "new_lead";
+    default: return "followup";
+  }
+}
+
+async function executeStep(db: Db, step: any, event: EventPayload, tenantId: number, leadId?: number, automationId?: number) {
   switch (step.type) {
     case "sms":
     case "send_message": {
+      // TCPA compliance: check consent + unsubscribe status before sending
+      if (leadId) {
+        const tcpaCheck = await TcpaCompliance.canSendSms(db, tenantId, leadId);
+        if (!tcpaCheck.allowed) {
+          console.log(`TCPA block: skipping SMS to lead ${leadId} — ${tcpaCheck.reason}`);
+          return;
+        }
+      }
+
       let toPhone = event.data?.phone ?? event.data?.leadPhone;
       if (!toPhone && leadId) {
         const lead = await LeadService.getLeadById(db, tenantId, leadId);
@@ -56,8 +85,33 @@ async function executeStep(db: Db, step: any, event: EventPayload, tenantId: num
       if (!toPhone) throw new Error("No target phone number for sms step");
       const normalized = normalizePhoneE164(String(toPhone));
       if (!normalized) throw new Error("Invalid phone number for SMS automation step");
-      const body = resolveTemplate(String(step.message || step.body || ""), { ...event.data });
+
+      // Create recovery attribution event for recovery-type automations
+      let recoveryEventId: number | undefined;
+      let trackingToken: string | undefined;
+      const isRecoveryEvent = leadId && RECOVERY_EVENT_TYPES.has(event.type);
+
+      if (isRecoveryEvent) {
+        const recovery = await RecoveryAttribution.createRecoveryEvent(db, {
+          tenantId,
+          leadId: leadId!,
+          automationId,
+          leakageType: getLeakageType(event.type),
+          originalAppointmentId: event.data?.appointmentId ? String(event.data.appointmentId) : undefined,
+          estimatedRevenue: Number(event.data?.estimatedRevenue || 25000), // default $250 in cents
+        });
+        recoveryEventId = recovery.recoveryEventId;
+        trackingToken = recovery.trackingToken;
+      }
+
+      // Resolve template and append tracking token to SMS body
+      let body = resolveTemplate(String(step.message || step.body || ""), { ...event.data });
+      if (trackingToken) {
+        body += `\n\nRef: ${trackingToken}`;
+      }
+
       const res = await sendWithRetry(normalized, body, undefined, tenantId);
+
       if (leadId) {
         await LeadService.createMessage(db, {
           tenantId,
@@ -71,6 +125,7 @@ async function executeStep(db: Db, step: any, event: EventPayload, tenantId: num
           retryCount: res.retryCount || 0,
           deliveredAt: res.success ? new Date() : undefined,
           failedAt: res.success ? undefined : new Date(),
+          automationId,
         });
       }
       return;
@@ -125,7 +180,7 @@ async function continueAutomation(
     await new Promise<void>((resolve, reject) => {
       setImmediate(async () => {
         try {
-          await executeStep(db, step, event, event.tenantId, leadId);
+          await executeStep(db, step, event, event.tenantId, leadId, automation.id);
           resolve();
         } catch (error) {
           reject(error);
@@ -177,11 +232,18 @@ export async function runAutomationsForEvent(event: EventPayload, db?: Db) {
     try {
       await continueAutomation(resolvedDb, automation, event, 0, leadId);
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       await AutomationService.updateAutomation(resolvedDb, event.tenantId, automation.id, {
         errorCount: sql`${automations.errorCount} + 1` as any,
         lastRunAt: new Date(),
       });
-      // Log error but don't throw to avoid blocking other automations
+      // Surface error to tenant dashboard via system errors
+      await SystemService.createSystemError(resolvedDb as any, {
+        type: "automation",
+        message: `Automation "${automation.name || automation.id}" failed: ${errorMsg}`,
+        detail: JSON.stringify({ automationId: automation.id, leadId, eventType: event.type, error: errorMsg }),
+        tenantId: event.tenantId,
+      }).catch(() => undefined);
       console.error(`Automation ${automation.id} failed:`, error);
     }
   });
@@ -203,6 +265,14 @@ export async function processQueuedAutomationJobs(db: Db, limit = 50) {
       if (!automation || !automation.enabled) {
         await AutomationJobService.failAutomationJob(db, job.id, "Automation no longer available");
         continue;
+      }
+      // TCPA: re-check lead consent before executing delayed steps
+      if (job.leadId) {
+        const tcpaCheck = await TcpaCompliance.canSendSms(db, job.tenantId, job.leadId);
+        if (!tcpaCheck.allowed) {
+          await AutomationJobService.failAutomationJob(db, job.id, `TCPA block: ${tcpaCheck.reason}`);
+          continue;
+        }
       }
       const event: EventPayload = {
         type: job.eventType as EventPayload["type"],

@@ -8,16 +8,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  MessageSquare, 
-  Phone, 
-  Bot, 
-  Clock, 
-  Zap, 
+import {
+  MessageSquare,
+  Phone,
+  Bot,
+  Clock,
+  Zap,
   Settings,
   TrendingUp,
   CheckCircle,
-  AlertTriangle
+  Users
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,28 +31,45 @@ export default function LeadCapture() {
     bookingLinkExpiry: 24
   });
 
-  const { data: metrics, isLoading } = trpc.analytics.leadCaptureMetrics.useQuery(undefined, { refetchInterval: 30000 });
-  const { data: settings } = trpc.tenant.settings.useQuery(undefined, { retry: false });
-  const updateConfig = trpc.tenant.updateLeadCaptureConfig.useMutation({
-    onSuccess: () => toast.success("Lead capture configuration updated"),
-    onError: (err) => toast.error(err.message)
+  const { data: dashData, isLoading } = trpc.analytics.dashboard.useQuery(undefined, { refetchInterval: 30000 });
+  const metrics: any = dashData?.metrics;
+  const { data: settings } = trpc.tenant.get.useQuery(undefined, { retry: false });
+  const { data: savedConfig } = trpc.featureConfig.get.useQuery(
+    { feature: "lead-capture" },
+    { retry: false }
+  );
+  const saveConfig = trpc.featureConfig.save.useMutation({
+    onSuccess: () => toast.success("Configuration saved"),
+    onError: (err) => toast.error(err.message),
   });
 
   useEffect(() => {
-    if (settings?.leadCaptureConfig) {
-      setConfig(settings.leadCaptureConfig);
+    if (savedConfig?.config) {
+      setConfig((prev) => ({ ...prev, ...(savedConfig.config as any) }));
     }
-  }, [settings]);
+  }, [savedConfig]);
 
   const handleSaveConfig = () => {
-    updateConfig.mutate(config);
+    saveConfig.mutate({ feature: "lead-capture", config: config as any });
   };
 
   const handleTestResponse = () => {
-    toast.success("Test lead response sent successfully");
+    toast.info("To test, add a lead with a phone number first. The automation will trigger automatically.");
   };
 
-  if (isLoading) return <DashboardLayout>Loading...</DashboardLayout>;
+  if (isLoading) return (
+    <DashboardLayout>
+      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+        <div className="h-10 w-64 bg-muted rounded animate-pulse" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}><CardContent className="p-4"><div className="h-16 bg-muted rounded animate-pulse" /></CardContent></Card>
+          ))}
+        </div>
+        <Card><CardContent className="p-6"><div className="h-48 bg-muted rounded animate-pulse" /></CardContent></Card>
+      </div>
+    </DashboardLayout>
+  );
 
   return (
     <DashboardLayout>
@@ -82,54 +99,54 @@ export default function LeadCapture() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                  <TrendingUp className="h-6 w-6 text-blue-600" />
+                <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
+                  <Zap className="h-6 w-6 text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">New Leads Today</p>
+                  <p className="text-2xl font-bold">{metrics?.todayLeads || 0}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center">
+                <div className="p-2 bg-green-500/10 rounded-lg mr-3">
+                  <Users className="h-6 w-6 text-green-400" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Leads</p>
-                  <p className="text-2xl font-bold">{metrics?.totalLeads || 0}</p>
+                  <p className="text-2xl font-bold">{metrics?.leadCount || 0}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg mr-3">
-                  <Zap className="h-6 w-6 text-green-600" />
+                <div className="p-2 bg-purple-500/10 rounded-lg mr-3">
+                  <MessageSquare className="h-6 w-6 text-purple-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Instant Responses</p>
-                  <p className="text-2xl font-bold">{metrics?.instantResponses || 0}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Responses Sent</p>
+                  <p className="text-2xl font-bold">{metrics?.messagesSent || 0}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-100 rounded-lg mr-3">
-                  <Clock className="h-6 w-6 text-purple-600" />
+                <div className="p-2 bg-orange-500/10 rounded-lg mr-3">
+                  <TrendingUp className="h-6 w-6 text-orange-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Avg Response Time</p>
-                  <p className="text-2xl font-bold">{metrics?.averageResponseTime || 0}s</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center">
-                <div className="p-2 bg-orange-100 rounded-lg mr-3">
-                  <AlertTriangle className="h-6 w-6 text-orange-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Revenue Impact</p>
-                  <p className="text-2xl font-bold">${((metrics?.revenueImpact || 0) / 100).toFixed(0)}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Conversion Rate</p>
+                  <p className="text-2xl font-bold">{metrics?.conversionRate || 0}%</p>
                 </div>
               </div>
             </CardContent>
@@ -149,7 +166,7 @@ export default function LeadCapture() {
                 <TabsTrigger value="after-hours">After Hours</TabsTrigger>
                 <TabsTrigger value="advanced">Advanced</TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="response" className="space-y-6 mt-6">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -157,7 +174,7 @@ export default function LeadCapture() {
                     <Switch
                       id="instant-response"
                       checked={config.instantResponseEnabled}
-                      onCheckedChange={(checked) => 
+                      onCheckedChange={(checked) =>
                         setConfig(prev => ({ ...prev, instantResponseEnabled: checked }))
                       }
                     />
@@ -168,7 +185,7 @@ export default function LeadCapture() {
                       id="response-time"
                       type="number"
                       value={config.responseTimeLimit}
-                      onChange={(e) => 
+                      onChange={(e) =>
                         setConfig(prev => ({ ...prev, responseTimeLimit: parseInt(e.target.value) }))
                       }
                       min={30}
@@ -181,7 +198,7 @@ export default function LeadCapture() {
                       id="booking-expiry"
                       type="number"
                       value={config.bookingLinkExpiry}
-                      onChange={(e) => 
+                      onChange={(e) =>
                         setConfig(prev => ({ ...prev, bookingLinkExpiry: parseInt(e.target.value) }))
                       }
                       min={1}
@@ -190,7 +207,7 @@ export default function LeadCapture() {
                   </div>
                 </div>
               </TabsContent>
-              
+
               <TabsContent value="ai" className="space-y-6 mt-6">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -198,7 +215,7 @@ export default function LeadCapture() {
                     <Switch
                       id="ai-chat"
                       checked={config.aiChatEnabled}
-                      onCheckedChange={(checked) => 
+                      onCheckedChange={(checked) =>
                         setConfig(prev => ({ ...prev, aiChatEnabled: checked }))
                       }
                     />
@@ -214,7 +231,7 @@ export default function LeadCapture() {
                   </div>
                 </div>
               </TabsContent>
-              
+
               <TabsContent value="after-hours" className="space-y-6 mt-6">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -222,12 +239,12 @@ export default function LeadCapture() {
                     <Switch
                       id="after-hours"
                       checked={config.afterHoursEnabled}
-                      onCheckedChange={(checked) => 
+                      onCheckedChange={(checked) =>
                         setConfig(prev => ({ ...prev, afterHoursEnabled: checked }))
                       }
                     />
                   </div>
-                  <div className="p-4 bg-blue-50 rounded-lg">
+                  <div className="p-4 bg-blue-500/10 rounded-lg">
                     <h4 className="font-medium mb-2">After Hours Features</h4>
                     <ul className="space-y-2 text-sm">
                       <li>• 24/7 lead capture</li>
@@ -238,10 +255,10 @@ export default function LeadCapture() {
                   </div>
                 </div>
               </TabsContent>
-              
+
               <TabsContent value="advanced" className="space-y-6 mt-6">
                 <div className="space-y-4">
-                  <div className="p-4 bg-orange-50 rounded-lg">
+                  <div className="p-4 bg-orange-500/10 rounded-lg">
                     <h4 className="font-medium mb-2">Advanced Options</h4>
                     <ul className="space-y-2 text-sm">
                       <li>• Custom response templates</li>
@@ -263,26 +280,10 @@ export default function LeadCapture() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <div className="flex items-center">
-                  <Phone className="h-4 w-4 mr-2 text-green-600" />
-                  <span className="font-medium">Missed Call Response</span>
-                </div>
-                <Badge variant="secondary">2 min ago</Badge>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <div className="flex items-center">
-                  <Bot className="h-4 w-4 mr-2 text-blue-600" />
-                  <span className="font-medium">AI Chat Engagement</span>
-                </div>
-                <Badge variant="secondary">5 min ago</Badge>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <div className="flex items-center">
-                  <MessageSquare className="h-4 w-4 mr-2 text-purple-600" />
-                  <span className="font-medium">After Hours Capture</span>
-                </div>
-                <Badge variant="secondary">12 min ago</Badge>
+              <div className="text-center p-4 text-muted-foreground">
+                <Phone className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No recent lead activity</p>
+                <p className="text-xs">Lead capture activity will appear here as leads come in</p>
               </div>
             </div>
           </CardContent>

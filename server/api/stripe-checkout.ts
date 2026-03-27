@@ -4,8 +4,29 @@
  */
 
 import { z } from 'zod';
-import { publicProcedure, protectedProcedure } from '../_core/trpc';
+import { publicProcedure, tenantProcedure } from '../_core/trpc';
+import { TRPCError } from '@trpc/server';
+import { eq, and } from 'drizzle-orm';
+import { stripeSubscriptions, subscriptions, plans } from '../../drizzle/schema';
 import * as StripeCheckoutService from '../services/stripe-checkout.service';
+
+/** Verify a Stripe customerId belongs to the calling tenant */
+async function verifyCustomerOwnership(db: any, tenantId: number, customerId: string) {
+  const [sub] = await db.select({ id: stripeSubscriptions.id })
+    .from(stripeSubscriptions)
+    .where(and(eq(stripeSubscriptions.tenantId, tenantId), eq(stripeSubscriptions.customerId, customerId)))
+    .limit(1);
+  if (!sub) throw new TRPCError({ code: 'FORBIDDEN', message: 'Customer does not belong to your account' });
+}
+
+/** Verify a Stripe subscriptionId belongs to the calling tenant */
+async function verifySubscriptionOwnership(db: any, tenantId: number, subscriptionId: string) {
+  const [sub] = await db.select({ id: stripeSubscriptions.id })
+    .from(stripeSubscriptions)
+    .where(and(eq(stripeSubscriptions.tenantId, tenantId), eq(stripeSubscriptions.id, subscriptionId)))
+    .limit(1);
+  if (!sub) throw new TRPCError({ code: 'FORBIDDEN', message: 'Subscription does not belong to your account' });
+}
 
 // Validation schemas
 const createCheckoutSessionSchema = z.object({
@@ -40,13 +61,13 @@ const getCurrentUsageSchema = z.object({
 
 export const stripeCheckoutRouter = {
   // Create Stripe Checkout Session
-  createCheckoutSession: protectedProcedure
+  createCheckoutSession: tenantProcedure
     .input(createCheckoutSessionSchema)
     .mutation(async ({ input, ctx }) => {
       const checkoutUrl = await StripeCheckoutService.createCheckoutSession({
         customerEmail: input.customerEmail,
         userId: ctx.user.id.toString(),
-        tenantId: ctx.user.tenantId?.toString() || '',
+        tenantId: ctx.tenantId.toString(),
         referralCode: input.referralCode,
       });
       
@@ -71,9 +92,10 @@ export const stripeCheckoutRouter = {
     }),
 
   // Report revenue recovery usage
-  reportUsage: protectedProcedure
+  reportUsage: tenantProcedure
     .input(reportUsageSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await verifyCustomerOwnership(ctx.db, ctx.tenantId, input.customerId);
       await StripeCheckoutService.reportRevenueUsage(
         input.customerId,
         input.recoveredAmount
@@ -86,23 +108,34 @@ export const stripeCheckoutRouter = {
     }),
 
   // Get current usage for billing period
-  getCurrentUsage: protectedProcedure
+  getCurrentUsage: tenantProcedure
     .input(getCurrentUsageSchema)
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await verifyCustomerOwnership(ctx.db, ctx.tenantId, input.customerId);
       const usage = await StripeCheckoutService.getCurrentUsage(input.customerId);
-      
+
+      // Look up tenant's plan-specific revenue share rate instead of hardcoded 15%
+      const [sub] = await ctx.db.select({ revenueSharePercent: plans.revenueSharePercent })
+        .from(subscriptions)
+        .innerJoin(plans, eq(subscriptions.planId, plans.id))
+        .where(eq(subscriptions.tenantId, ctx.tenantId))
+        .limit(1);
+      const revenueShareRate = (sub?.revenueSharePercent ?? 15) / 100;
+
       return {
         success: true,
         usage,
-        estimatedCharge: usage * 0.15, // 15% of recovered revenue
+        estimatedCharge: usage * revenueShareRate,
+        revenueSharePercent: sub?.revenueSharePercent ?? 15,
         message: `Current usage: $${usage} recovered revenue`,
       };
     }),
 
   // Create customer portal session
-  createPortalSession: protectedProcedure
+  createPortalSession: tenantProcedure
     .input(createPortalSessionSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await verifyCustomerOwnership(ctx.db, ctx.tenantId, input.customerId);
       const portalUrl = await StripeCheckoutService.createCustomerPortalSession(input.customerId);
       
       return {
@@ -113,9 +146,10 @@ export const stripeCheckoutRouter = {
     }),
 
   // Cancel subscription
-  cancelSubscription: protectedProcedure
+  cancelSubscription: tenantProcedure
     .input(cancelSubscriptionSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await verifySubscriptionOwnership(ctx.db, ctx.tenantId, input.subscriptionId);
       await StripeCheckoutService.cancelSubscription(input.subscriptionId);
       
       return {
@@ -125,9 +159,10 @@ export const stripeCheckoutRouter = {
     }),
 
   // Resume cancelled subscription
-  resumeSubscription: protectedProcedure
+  resumeSubscription: tenantProcedure
     .input(resumeSubscriptionSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await verifySubscriptionOwnership(ctx.db, ctx.tenantId, input.subscriptionId);
       await StripeCheckoutService.resumeSubscription(input.subscriptionId);
       
       return {
@@ -137,9 +172,10 @@ export const stripeCheckoutRouter = {
     }),
 
   // Get subscription details
-  getSubscriptionDetails: protectedProcedure
+  getSubscriptionDetails: tenantProcedure
     .input(getSubscriptionDetailsSchema)
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await verifySubscriptionOwnership(ctx.db, ctx.tenantId, input.subscriptionId);
       const subscription = await StripeCheckoutService.getSubscriptionDetails(input.subscriptionId);
       
       return {

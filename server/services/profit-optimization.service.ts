@@ -6,7 +6,7 @@
  */
 
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
-import { leads, subscriptions, plans, tenants } from "../../drizzle/schema";
+import { leads, subscriptions, plans, tenants, recoveryEvents } from "../../drizzle/schema";
 import type { Db } from "../_core/context";
 
 export interface ProfitMetrics {
@@ -48,25 +48,17 @@ export async function calculateProfitMetrics(
   periodStart.setDate(periodStart.getDate() - periodDays);
 
   // Calculate total revenue from subscriptions and revenue share
+  // Use recovery_events (realized payments) as the source of truth for revenue share
   const [revenueData] = await db
     .select({
-      subscriptionRevenue: sql<number>`SUM(CASE 
-        WHEN s.isPromotional = true AND s.promotionalExpiresAt > NOW() THEN 0
-        ELSE p.priceMonthly / 100 
+      subscriptionRevenue: sql<number>`SUM(CASE
+        WHEN ${subscriptions.isPromotional} = true AND ${subscriptions.promotionalExpiresAt} > NOW() THEN 0
+        ELSE ${plans.priceMonthly} / 100
       END)`,
-      revenueShareRevenue: sql<number>`SUM(COALESCE(l.recoveredRevenue, 0) * p.revenueSharePercent / 100 / 100)`,
-      totalCustomers: sql<number>`COUNT(DISTINCT s.tenantId)`
+      totalCustomers: sql<number>`COUNT(DISTINCT ${subscriptions.tenantId})`
     })
     .from(subscriptions)
     .leftJoin(plans, eq(subscriptions.planId, plans.id))
-    .leftJoin(
-      sql`(SELECT tenantId, SUM(estimatedRevenue) as recoveredRevenue 
-           FROM leads 
-           WHERE status = 'recovered' 
-           AND createdAt >= ${periodStart}
-           GROUP BY tenantId) as l`,
-      eq(subscriptions.tenantId, sql`l.tenantId`)
-    )
     .where(
       and(
         eq(subscriptions.status, 'active'),
@@ -74,10 +66,40 @@ export async function calculateProfitMetrics(
       )
     );
 
+  // Revenue share from ACTUAL realized recovery events (not leads table)
+  const [recoveryData] = await db
+    .select({
+      totalRealizedRevenue: sql<number>`COALESCE(SUM(${recoveryEvents.realizedRevenue}), 0)`,
+    })
+    .from(recoveryEvents)
+    .where(
+      and(
+        eq(recoveryEvents.isPrimaryAttribution, true),
+        sql`${recoveryEvents.status} IN ('realized', 'manual_realized')`,
+        gte(recoveryEvents.realizedAt, periodStart)
+      )
+    );
+
+  // Calculate revenue share per tenant using their plan's rate
+  const [revenueShareData] = await db
+    .select({
+      revenueShareRevenue: sql<number>`COALESCE(SUM(re.realizedRevenue * ${plans.revenueSharePercent} / 100 / 100), 0)`,
+    })
+    .from(recoveryEvents)
+    .innerJoin(subscriptions, eq(recoveryEvents.tenantId, subscriptions.tenantId))
+    .innerJoin(plans, eq(subscriptions.planId, plans.id))
+    .where(
+      and(
+        eq(recoveryEvents.isPrimaryAttribution, true),
+        sql`${recoveryEvents.status} IN ('realized', 'manual_realized')`,
+        gte(recoveryEvents.realizedAt, periodStart)
+      )
+    );
+
   // Calculate costs (simplified - would include actual operational costs)
   const operationalCosts = await calculateOperationalCosts(db, periodDays);
   
-  const totalRevenue = (revenueData?.subscriptionRevenue || 0) + (revenueData?.revenueShareRevenue || 0);
+  const totalRevenue = (revenueData?.subscriptionRevenue || 0) + (revenueShareData?.revenueShareRevenue || 0);
   const totalCosts = operationalCosts;
   const grossProfit = totalRevenue - totalCosts;
   const profitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
@@ -145,10 +167,11 @@ export async function identifyUpsellOpportunities(
       eq(tenants.id, sql`u.tenantId`)
     )
     .leftJoin(
-      sql`(SELECT tenantId, SUM(estimatedRevenue) as recoveredRevenue 
-           FROM leads 
-           WHERE status = 'recovered' 
-           AND createdAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      sql`(SELECT tenantId, SUM(realizedRevenue) as recoveredRevenue
+           FROM recovery_events
+           WHERE isPrimaryAttribution = true
+           AND status IN ('realized', 'manual_realized')
+           AND realizedAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)
            GROUP BY tenantId) as l`,
       eq(tenants.id, sql`l.tenantId`)
     )
@@ -156,8 +179,8 @@ export async function identifyUpsellOpportunities(
 
   for (const tenant of tenantsWithUsage) {
     // Check if tenant is approaching limits
-    const messageUtilization = tenant.messagesUsed / tenant.maxMessages;
-    const automationUtilization = tenant.automationsUsed / tenant.maxAutomations;
+    const messageUtilization = tenant.maxMessages > 0 ? tenant.messagesUsed / tenant.maxMessages : 0;
+    const automationUtilization = tenant.maxAutomations > 0 ? tenant.automationsUsed / tenant.maxAutomations : 0;
 
     // High utilization indicates need for upgrade
     if (messageUtilization > 0.8 || automationUtilization > 0.8) {

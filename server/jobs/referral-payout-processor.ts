@@ -1,42 +1,68 @@
 /**
- * 🎯 REFERRAL PAYOUT PROCESSOR
- * Processes referral payouts 1 month after completion
+ * REFERRAL PAYOUT PROCESSOR
+ * Processes referral payouts 1 month after completion.
+ * Uses Drizzle ORM throughout - no raw SQL.
  */
 
 import { processScheduledPayouts } from '../services/referral.service';
 import { getDb } from '../db';
+import { referrals, referralPayouts } from '../../drizzle/schema';
+import { eq, and, isNull, lte, gte, desc, sql } from 'drizzle-orm';
 
-// Export the function for external use
+export interface PayoutResult {
+  processed: number;
+  total: number;
+  message: string;
+}
+
+export interface UpcomingPayout {
+  id: number;
+  referrerId: number;
+  rewardAmount: number;
+  payoutScheduledAt: Date | null;
+  completedAt: Date | null;
+  daysUntilPayout: number | null;
+}
+
+export interface PayoutStats {
+  processedToday: number;
+  pendingProcessing: number;
+  totalPaidOut: number;
+  lastProcessingTime: Date | null;
+}
+
+// Re-export for external use
 export { processScheduledPayouts };
 
 /**
- * Manual trigger for processing scheduled payouts
- * Can be called via API endpoint or admin dashboard
+ * Manual trigger for processing scheduled payouts.
+ * Can be called via API endpoint or admin dashboard.
  */
-export async function processReferralPayouts(): Promise<{ processed: number; total: number; message: string }> {
-  console.log('🎯 Processing scheduled referral payouts...');
-  
+export async function processReferralPayouts(): Promise<PayoutResult> {
+  console.log('Processing scheduled referral payouts...');
+
   try {
     const result = await processScheduledPayouts();
-    
-    const message = result.processed > 0 
+
+    const message = result.processed > 0
       ? `Successfully processed ${result.processed} referral payouts out of ${result.total} scheduled`
       : `No payouts ready for processing (${result.total} scheduled)`;
-    
-    console.log(`✅ ${message}`);
-    
+
+    console.log(message);
+
     return {
       processed: result.processed,
       total: result.total,
-      message
+      message,
     };
-  } catch (error) {
-    console.error('❌ Error processing referral payouts:', error);
-    
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('Error processing referral payouts:', error);
+
     return {
       processed: 0,
       total: 0,
-      message: `Error processing payouts: ${error.message}`
+      message: `Error processing payouts: ${errMsg}`,
     };
   }
 }
@@ -44,29 +70,40 @@ export async function processReferralPayouts(): Promise<{ processed: number; tot
 /**
  * Get upcoming payout schedule (for admin dashboard)
  */
-export async function getUpcomingPayoutSchedule(): Promise<any[]> {
+export async function getUpcomingPayoutSchedule(): Promise<UpcomingPayout[]> {
   const db = await getDb();
-  
+
   try {
-    const upcomingPayouts = await (db as any).select({
-      id: true,
-      referrerId: true,
-      rewardAmount: true,
-      payoutScheduledAt: true,
-      completedAt: true,
-    })
-      .from("referrals")
-      .where("status", "=", "completed")
-      .where("payoutScheduledAt", ">", new Date())
-      .where("payoutProcessedAt", "=", null)
-      .orderBy("payoutScheduledAt", "asc")
+    const now = new Date();
+
+    const upcomingPayouts = await db
+      .select({
+        id: referrals.id,
+        referrerId: referrals.referrerId,
+        rewardAmount: referrals.rewardAmount,
+        payoutScheduledAt: referrals.payoutScheduledAt,
+        completedAt: referrals.completedAt,
+      })
+      .from(referrals)
+      .where(
+        and(
+          eq(referrals.status, 'completed'),
+          isNull(referrals.payoutProcessedAt)
+        )
+      )
+      .orderBy(referrals.payoutScheduledAt)
       .limit(50);
 
-    return upcomingPayouts.map(payout => ({
+    return upcomingPayouts.map((payout) => ({
       ...payout,
-      daysUntilPayout: Math.ceil((new Date(payout.payoutScheduledAt).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+      daysUntilPayout: payout.payoutScheduledAt
+        ? Math.ceil(
+            (new Date(payout.payoutScheduledAt).getTime() - now.getTime()) /
+              (1000 * 60 * 60 * 24)
+          )
+        : null,
     }));
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error getting upcoming payout schedule:', error);
     return [];
   }
@@ -75,45 +112,54 @@ export async function getUpcomingPayoutSchedule(): Promise<any[]> {
 /**
  * Get payout processing statistics (for admin dashboard)
  */
-export async function getPayoutProcessingStats(): Promise<any> {
+export async function getPayoutProcessingStats(): Promise<PayoutStats> {
   const db = await getDb();
-  
+
   try {
-    // Get today's processing results
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
-    const todayStats = await (db as any).select({
-      processed: true,
-    })
-      .from("referrals")
-      .where("payoutProcessedAt", ">=", today);
 
-    // Get pending payouts
-    const pendingStats = await (db as any).select({
-      count: true,
-    })
-      .from("referrals")
-      .where("status", "=", "completed")
-      .where("payoutProcessedAt", "=", null)
-      .where("payoutScheduledAt", "<=", new Date());
+    // Referrals processed today (have a payoutProcessedAt >= start of today)
+    const todayProcessed = await db
+      .select({ id: referrals.id })
+      .from(referrals)
+      .where(gte(referrals.payoutProcessedAt, today));
 
-    // Get total paid out
-    const totalPaidStats = await (db as any).select({
-      amount: true,
-    })
-      .from("referral_payouts")
-      .where("status", "=", "completed");
+    // Pending payouts (completed, not yet processed, scheduled time has passed)
+    const pendingPayouts = await db
+      .select({ id: referrals.id })
+      .from(referrals)
+      .where(
+        and(
+          eq(referrals.status, 'completed'),
+          isNull(referrals.payoutProcessedAt),
+          lte(referrals.payoutScheduledAt, new Date())
+        )
+      );
 
-    const totalPaid = totalPaidStats.reduce((sum, p) => sum + p.amount, 0);
+    // Total amount paid out via referral_payouts
+    const totalPaidRecords = await db
+      .select({ amount: referralPayouts.amount })
+      .from(referralPayouts)
+      .where(eq(referralPayouts.status, 'completed'));
+
+    const totalPaidOut = totalPaidRecords.reduce((sum, p) => sum + p.amount, 0);
+
+    // Most recent processing time today
+    const lastProcessed = await db
+      .select({ payoutProcessedAt: referrals.payoutProcessedAt })
+      .from(referrals)
+      .where(gte(referrals.payoutProcessedAt, today))
+      .orderBy(desc(referrals.payoutProcessedAt))
+      .limit(1);
 
     return {
-      processedToday: todayStats.length,
-      pendingProcessing: pendingStats[0]?.count || 0,
-      totalPaidOut: totalPaid,
-      lastProcessingTime: todayStats.length > 0 ? todayStats[todayStats.length - 1].processedAt : null,
+      processedToday: todayProcessed.length,
+      pendingProcessing: pendingPayouts.length,
+      totalPaidOut,
+      lastProcessingTime: lastProcessed[0]?.payoutProcessedAt ?? null,
     };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error getting payout processing stats:', error);
     return {
       processedToday: 0,
@@ -127,40 +173,60 @@ export async function getPayoutProcessingStats(): Promise<any> {
 /**
  * Get referral payout timeline for a specific user
  */
-export async function getUserPayoutTimeline(userId: string): Promise<any[]> {
+export async function getUserPayoutTimeline(userId: number): Promise<Array<{
+  referralId: number;
+  referralCode: string;
+  status: string;
+  rewardAmount: number;
+  completedAt: Date | null;
+  payoutScheduledAt: Date | null;
+  payoutProcessedAt: Date | null;
+  payoutStatus: string;
+  payoutMethod: string | null;
+  daysUntilPayout: number | null;
+}>> {
   const db = await getDb();
-  
+
   try {
-    const referrals = await (db as any).select({
-      id: true,
-      referralCode: true,
-      referredUserId: true,
-      status: true,
-      rewardAmount: true,
-      completedAt: true,
-      payoutScheduledAt: true,
-      payoutProcessedAt: true,
-      createdAt: true,
-    })
-      .from("referrals")
-      .where("referrerId", "=", userId)
-      .orderBy("createdAt", "desc");
+    const now = new Date();
 
-    // Get payout records
-    const payouts = await (db as any).select({
-      amount: true,
-      status: true,
-      createdAt: true,
-      processedAt: true,
-      method: true,
-    })
-      .from("referral_payouts")
-      .where("userId", "=", userId)
-      .orderBy("createdAt", "desc");
+    const userReferrals = await db
+      .select({
+        id: referrals.id,
+        referralCode: referrals.referralCode,
+        referredUserId: referrals.referredUserId,
+        status: referrals.status,
+        rewardAmount: referrals.rewardAmount,
+        completedAt: referrals.completedAt,
+        payoutScheduledAt: referrals.payoutScheduledAt,
+        payoutProcessedAt: referrals.payoutProcessedAt,
+        createdAt: referrals.createdAt,
+      })
+      .from(referrals)
+      .where(eq(referrals.referrerId, userId))
+      .orderBy(desc(referrals.createdAt));
 
-    return referrals.map(referral => {
-      const payout = payouts.find(p => p.amount === referral.rewardAmount && p.createdAt >= (referral.completedAt || new Date()));
-      
+    // Get payout records for this user
+    const payouts = await db
+      .select({
+        amount: referralPayouts.amount,
+        status: referralPayouts.status,
+        createdAt: referralPayouts.createdAt,
+        processedAt: referralPayouts.processedAt,
+        method: referralPayouts.method,
+      })
+      .from(referralPayouts)
+      .where(eq(referralPayouts.userId, userId))
+      .orderBy(desc(referralPayouts.createdAt));
+
+    return userReferrals.map((referral) => {
+      const payout = payouts.find(
+        (p) =>
+          p.amount === referral.rewardAmount &&
+          referral.completedAt &&
+          p.createdAt >= referral.completedAt
+      );
+
       return {
         referralId: referral.id,
         referralCode: referral.referralCode,
@@ -171,12 +237,16 @@ export async function getUserPayoutTimeline(userId: string): Promise<any[]> {
         payoutProcessedAt: referral.payoutProcessedAt,
         payoutStatus: payout ? payout.status : 'pending',
         payoutMethod: payout ? payout.method : null,
-        daysUntilPayout: referral.payoutScheduledAt && !referral.payoutProcessedAt 
-          ? Math.ceil((new Date(referral.payoutScheduledAt).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-          : null,
+        daysUntilPayout:
+          referral.payoutScheduledAt && !referral.payoutProcessedAt
+            ? Math.ceil(
+                (new Date(referral.payoutScheduledAt).getTime() - now.getTime()) /
+                  (1000 * 60 * 60 * 24)
+              )
+            : null,
       };
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error getting user payout timeline:', error);
     return [];
   }

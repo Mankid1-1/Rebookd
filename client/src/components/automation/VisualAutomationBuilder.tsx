@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { useDynamicAutomationNodes } from '@/hooks/useDynamicConfiguration';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -23,7 +24,6 @@ import {
   MousePointer, Hand, Move, Maximize2, Minimize2, X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useDynamicAutomationNodes } from "@/hooks/useDynamicConfiguration";
 import { trpc } from "@/lib/trpc";
 
 // Dynamic colors based on user theme
@@ -107,7 +107,7 @@ export default function VisualAutomationBuilder() {
   
   // Convert dynamic nodes to the format expected by the component
   const NODE_TEMPLATES: Omit<WorkflowNode, 'id' | 'position' | 'inputs' | 'outputs'>[] = dynamicNodes.map(node => ({
-    type: node.type,
+    type: node.type as WorkflowNode['type'],
     name: node.name,
     description: node.description,
     icon: node.icon,
@@ -131,6 +131,9 @@ export default function VisualAutomationBuilder() {
     },
     settings: {
       timeout: 300,
+      retryPolicy: 'none',
+      maxRetries: 0,
+      logging: true,
     }
   });
   const [selectedNode, setSelectedNode] = useState<WorkflowNode | null>(null);
@@ -139,11 +142,15 @@ export default function VisualAutomationBuilder() {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [canvasOffset, setCanvasOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const [draggedNode, setDraggedNode] = useState<string | null>(null);
+  const [draggedNode, setDraggedNode] = useState<WorkflowNode | null>(null);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const readOnly = false;
+  const canvasRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const colors = getDynamicAutomationColors();
 
   // Generate node ports based on type
   const generateNodePorts = (nodeType: string): { inputs: NodePort[]; outputs: NodePort[] } => {
@@ -449,9 +456,8 @@ export default function VisualAutomationBuilder() {
 
   // Save workflow
   const handleSave = useCallback(() => {
-    onSave?.(workflow);
     toast.success('Workflow saved successfully');
-  }, [workflow, onSave]);
+  }, [workflow]);
 
   // Execute workflow
   const handleExecute = useCallback(() => {
@@ -459,9 +465,8 @@ export default function VisualAutomationBuilder() {
       toast.error('Workflow must be active to execute');
       return;
     }
-    onExecute?.(workflow.id);
     toast.info('Executing workflow...');
-  }, [workflow, onExecute]);
+  }, [workflow]);
 
   // Handle canvas pan
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
@@ -502,7 +507,7 @@ export default function VisualAutomationBuilder() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="h-screen flex flex-col bg-muted/30">
       {/* Header */}
       <div className="bg-white border-b px-4 py-3">
         <div className="flex items-center justify-between">
@@ -566,7 +571,7 @@ export default function VisualAutomationBuilder() {
                     .map(template => (
                       <div
                         key={template.name}
-                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                        className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => !readOnly && addNode(template)}
                       >
                         <div className="p-2 bg-white rounded border">
@@ -662,7 +667,7 @@ export default function VisualAutomationBuilder() {
                 onClick={() => setSelectedNode(node)}
               >
                 {/* Node Header */}
-                <div className="flex items-center gap-2 p-3 border-b bg-gray-50 rounded-t-lg">
+                <div className="flex items-center gap-2 p-3 border-b bg-muted/30 rounded-t-lg">
                   <div className="p-1 bg-white rounded border">
                     {node.icon}
                   </div>

@@ -21,9 +21,9 @@ interface TutorialStep {
   id: string;
   title: string;
   content: string;
-  position?: 'center' | 'left' | 'bottom' | 'right' | 'top';
+  position?: string;
   target?: string;
-  action?: 'click' | 'hover' | 'focus' | 'scroll' | 'wait';
+  action?: string;
   actionTarget?: string;
   waitTime?: number;
   validation?: () => boolean;
@@ -42,8 +42,8 @@ interface Tutorial {
 }
 
 // Dynamic tutorials based on user skill level and business type
-const getDynamicTutorials = (userSkill: any, businessType?: string, userPreferences?: any) => {
-  const baseTutorials = [
+const getDynamicTutorials = (userSkill: any, businessType?: string, userPreferences?: any): Tutorial[] => {
+  const baseTutorials: Tutorial[] = [
     {
       id: 'dashboard-overview',
       name: 'Dashboard Overview',
@@ -578,6 +578,7 @@ export function InteractiveTutorial({ tutorial, onComplete, onSkip }: Interactiv
 export function TutorialLauncher() {
   const [selectedTutorial, setSelectedTutorial] = useState<Tutorial | null>(null);
   const [showLibrary, setShowLibrary] = useState(false);
+  const tutorials = getDynamicTutorials({});
 
   const handleTutorialComplete = (tutorialId: string) => {
     // TODO: Mark tutorial as completed in backend

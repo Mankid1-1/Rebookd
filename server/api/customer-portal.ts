@@ -4,8 +4,20 @@
  */
 
 import { z } from 'zod';
-import { publicProcedure, protectedProcedure } from '../_core/trpc';
+import { tenantProcedure } from '../_core/trpc';
+import { TRPCError } from '@trpc/server';
+import { eq, and } from 'drizzle-orm';
+import { stripeSubscriptions } from '../../drizzle/schema';
 import * as CustomerPortalService from '../services/customer-portal.service';
+
+/** Verify a Stripe customerId belongs to the calling tenant */
+async function verifyCustomerOwnership(db: any, tenantId: number, customerId: string) {
+  const [sub] = await db.select({ id: stripeSubscriptions.id })
+    .from(stripeSubscriptions)
+    .where(and(eq(stripeSubscriptions.tenantId, tenantId), eq(stripeSubscriptions.customerId, customerId)))
+    .limit(1);
+  if (!sub) throw new TRPCError({ code: 'FORBIDDEN', message: 'Customer does not belong to your account' });
+}
 
 // Validation schemas
 const createPortalSessionSchema = z.object({
@@ -49,9 +61,10 @@ const createSetupIntentSchema = z.object({
 
 export const customerPortalRouter = {
   // Create Customer Portal session
-  createPortalSession: protectedProcedure
+  createPortalSession: tenantProcedure
     .input(createPortalSessionSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await verifyCustomerOwnership(ctx.db, ctx.tenantId, input.customerId);
       const session = await CustomerPortalService.createCustomerPortalSession({
         customerId: input.customerId,
         returnUrl: input.returnUrl,
@@ -68,9 +81,10 @@ export const customerPortalRouter = {
     }),
 
   // Get subscription details for portal display
-  getSubscriptionDetails: protectedProcedure
+  getSubscriptionDetails: tenantProcedure
     .input(getSubscriptionDetailsSchema)
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await verifyCustomerOwnership(ctx.db, ctx.tenantId, input.customerId);
       const details = await CustomerPortalService.getCustomerSubscriptionDetails(input.customerId);
       
       return {
@@ -81,9 +95,10 @@ export const customerPortalRouter = {
     }),
 
   // Update default payment method
-  updateDefaultPaymentMethod: protectedProcedure
+  updateDefaultPaymentMethod: tenantProcedure
     .input(updatePaymentMethodSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await verifyCustomerOwnership(ctx.db, ctx.tenantId, input.customerId);
       await CustomerPortalService.updateDefaultPaymentMethod(
         input.customerId,
         input.paymentMethodId
@@ -96,9 +111,10 @@ export const customerPortalRouter = {
     }),
 
   // Remove payment method
-  removePaymentMethod: protectedProcedure
+  removePaymentMethod: tenantProcedure
     .input(removePaymentMethodSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await verifyCustomerOwnership(ctx.db, ctx.tenantId, input.customerId);
       await CustomerPortalService.removePaymentMethod(
         input.customerId,
         input.paymentMethodId
@@ -111,9 +127,10 @@ export const customerPortalRouter = {
     }),
 
   // Add new payment method
-  addPaymentMethod: protectedProcedure
+  addPaymentMethod: tenantProcedure
     .input(addPaymentMethodSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await verifyCustomerOwnership(ctx.db, ctx.tenantId, input.customerId);
       await CustomerPortalService.addPaymentMethod(
         input.customerId,
         input.paymentMethodId
@@ -126,9 +143,10 @@ export const customerPortalRouter = {
     }),
 
   // Get billing history
-  getBillingHistory: protectedProcedure
+  getBillingHistory: tenantProcedure
     .input(getBillingHistorySchema)
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await verifyCustomerOwnership(ctx.db, ctx.tenantId, input.customerId);
       const history = await CustomerPortalService.getBillingHistory(
         input.customerId,
         input.limit
@@ -143,7 +161,7 @@ export const customerPortalRouter = {
     }),
 
   // Download invoice PDF
-  downloadInvoice: protectedProcedure
+  downloadInvoice: tenantProcedure
     .input(downloadInvoiceSchema)
     .query(async ({ input }) => {
       const pdfUrl = await CustomerPortalService.downloadInvoicePdf(input.invoiceId);
@@ -156,9 +174,10 @@ export const customerPortalRouter = {
     }),
 
   // Get upcoming invoice details
-  getUpcomingInvoice: protectedProcedure
+  getUpcomingInvoice: tenantProcedure
     .input(getSubscriptionDetailsSchema)
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await verifyCustomerOwnership(ctx.db, ctx.tenantId, input.customerId);
       const upcomingInvoice = await CustomerPortalService.getUpcomingInvoice(input.customerId);
       
       return {
@@ -169,9 +188,10 @@ export const customerPortalRouter = {
     }),
 
   // Create setup intent for adding payment method
-  createSetupIntent: protectedProcedure
+  createSetupIntent: tenantProcedure
     .input(createSetupIntentSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await verifyCustomerOwnership(ctx.db, ctx.tenantId, input.customerId);
       const setupIntent = await CustomerPortalService.createSetupIntent(input.customerId);
       
       return {

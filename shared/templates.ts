@@ -102,4 +102,88 @@ export const automationTemplates = [
       { type: "sms", message: "Hi {{name}}, thanks for reaching out! Reply with a time that works and we'll book you." },
     ],
   },
+  {
+    key: "appointment_reminder_24h",
+    name: "24-Hour Appointment Reminder",
+    category: "appointment",
+    trigger: "appointment.reminder_24h",
+    steps: [
+      { type: "sms", message: "Hi {{name}}, reminder: your appointment at {{business}} is tomorrow at {{time}}. Reply CONFIRM to keep it or RESCHEDULE to change." },
+    ],
+  },
+  {
+    key: "appointment_reminder_2h",
+    name: "2-Hour Appointment Reminder",
+    category: "appointment",
+    trigger: "appointment.reminder_2h",
+    steps: [
+      { type: "sms", message: "Hi {{name}}, just a heads up — your appointment at {{business}} is in 2 hours at {{time}}. See you soon!" },
+    ],
+  },
+  {
+    key: "booking_confirmation",
+    name: "Booking Confirmation",
+    category: "appointment",
+    trigger: "appointment.booked",
+    steps: [
+      { type: "sms", message: "You're all set! Your appointment at {{business}} is confirmed for {{date}} at {{time}}. Reply CANCEL if you need to change plans." },
+    ],
+  },
+  {
+    key: "review_request",
+    name: "Review Request",
+    category: "review",
+    trigger: "appointment.completed",
+    steps: [
+      { type: "delay", value: 3600 },
+      { type: "sms", message: "Thanks for visiting {{business}}! We'd love your feedback. Leave us a quick review here: {{review_link}}" },
+    ],
+  },
+  {
+    key: "birthday_promo",
+    name: "Birthday Promo",
+    category: "loyalty",
+    trigger: "contact.birthday",
+    steps: [
+      { type: "sms", message: "Happy birthday, {{name}}! 🎂 {{business}} wants to celebrate with you — enjoy {{discount}} off your next visit. Book now!" },
+    ],
+  },
+  {
+    key: "loyalty_milestone",
+    name: "Loyalty Milestone",
+    category: "loyalty",
+    trigger: "contact.milestone",
+    steps: [
+      { type: "sms", message: "Congrats {{name}}! You've hit {{milestone}} visits at {{business}}. As a thank you, here's a special reward: {{reward}}. Book your next visit!" },
+    ],
+  },
+  {
+    key: "post_visit_feedback",
+    name: "Post-Visit Feedback",
+    category: "follow_up",
+    trigger: "appointment.completed",
+    steps: [
+      { type: "delay", value: 7200 },
+      { type: "sms", message: "Hi {{name}}, how was your visit to {{business}} today? Reply 1-5 (5 = amazing). We'd love to hear from you!" },
+    ],
+  },
+  {
+    key: "post_visit_upsell",
+    name: "Post-Visit Upsell",
+    category: "follow_up",
+    trigger: "appointment.completed",
+    steps: [
+      { type: "delay", value: 86400 },
+      { type: "sms", message: "Hi {{name}}, loved having you at {{business}}! Did you know we also offer {{upsell_service}}? Reply INFO to learn more." },
+    ],
+  },
+  {
+    key: "cancellation_flurry",
+    name: "Cancellation Flurry (Waiting List)",
+    category: "cancellation",
+    trigger: "appointment.cancelled",
+    steps: [
+      { type: "sms", message: "Great news! A spot just opened up at {{business}} on {{date}} at {{time}}. You're on the waiting list — reply BOOK to grab it before it's gone!" },
+    ],
+  },
 ];

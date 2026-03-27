@@ -5,49 +5,62 @@
  * based on user's automation success rates, conversion patterns, and skill level.
  */
 
+import React from 'react';
 import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
 
 // Dynamic automation templates based on user performance
 export function useDynamicAutomationTemplates() {
-  const { data: userMetrics } = trpc.analytics.userConversionMetrics.useQuery();
-  const { data: automationPerformance } = trpc.analytics.automationPerformance.useQuery();
+  const userMetrics: any = undefined; // endpoint not yet available
+  const automationPerformance: any = undefined; // endpoint not yet available
   const { data: tenantConfig } = trpc.tenant.get.useQuery();
   const { context } = useProgressiveDisclosureContext();
   
   return React.useMemo(() => {
-    const baseTemplates = [
+    const baseTemplates: Array<{
+      key: string;
+      name: string;
+      category: string;
+      icon: string;
+      description: string;
+      defaultMessage: string;
+      configFields: Array<{ key: string; label: string; type: string; unit?: string; defaultValue: any; options?: Array<{ value: string; label: string }> }>;
+      planRequired: string;
+      recommended: boolean;
+      requiredSkill: string;
+      successRate: number;
+    }> = [
       // Core appointment automations (available to all users)
       {
         key: "appointment_reminder_24h",
         name: "24-Hour Reminder",
-        category: "appointment" as const,
+        category: "appointment",
         icon: "Bell",
         description: "Sends an automatic reminder 24 hours before appointment",
         defaultMessage: "Hi {{name}}, just a reminder that your appointment at {{business}} is tomorrow at {{time}}.",
         configFields: [
-          { key: "delayHours", label: "Send before appointment", type: "number" as const, unit: "hours", defaultValue: 24 },
-          { key: "message", label: "Message", type: "textarea" as const, defaultValue: "Hi {{name}}, reminder for tomorrow at {{time}}." }
+          { key: "delayHours", label: "Send before appointment", type: "number", unit: "hours", defaultValue: 24 },
+          { key: "message", label: "Message", type: "textarea", defaultValue: "Hi {{name}}, reminder for tomorrow at {{time}}." }
         ],
-        planRequired: "starter" as const,
+        planRequired: "starter",
         recommended: true,
-        requiredSkill: "beginner" as const,
+        requiredSkill: "beginner",
         successRate: 0.85
       },
       {
         key: "appointment_confirmation",
         name: "Booking Confirmation",
-        category: "appointment" as const,
+        category: "appointment",
         icon: "CalendarCheck",
         description: "Immediately confirms a new booking with details",
         defaultMessage: "Hi {{name}}, your appointment at {{business}} is confirmed for {{date}} at {{time}}.",
         configFields: [
-          { key: "message", label: "Message", type: "textarea" as const, defaultValue: "Hi {{name}}, appointment confirmed for {{date}} at {{time}}." }
+          { key: "message", label: "Message", type: "textarea", defaultValue: "Hi {{name}}, appointment confirmed for {{date}} at {{time}}." }
         ],
-        planRequired: "starter" as const,
+        planRequired: "starter",
         recommended: true,
-        requiredSkill: "beginner" as const,
+        requiredSkill: "beginner",
         successRate: 0.90
       }
     ];
@@ -61,33 +74,33 @@ export function useDynamicAutomationTemplates() {
           {
             key: "appointment_reminder_2h",
             name: "2-Hour Reminder",
-            category: "appointment" as const,
+            category: "appointment",
             icon: "Clock",
             description: "Last-chance reminder 2 hours before appointment",
             defaultMessage: "Hey {{name}}! Your appointment at {{business}} is in 2 hours ({{time}}).",
             configFields: [
-              { key: "delayHours", label: "Send before appointment", type: "number" as const, unit: "hours", defaultValue: 2 },
-              { key: "message", label: "Message", type: "textarea" as const, defaultValue: "Hey {{name}}! Appointment in 2 hours at {{time}}." }
+              { key: "delayHours", label: "Send before appointment", type: "number", unit: "hours", defaultValue: 2 },
+              { key: "message", label: "Message", type: "textarea", defaultValue: "Hey {{name}}! Appointment in 2 hours at {{time}}." }
             ],
-            planRequired: "starter" as const,
+            planRequired: "starter",
             recommended: automationSuccessRate > 0.6,
-            requiredSkill: "intermediate" as const,
+            requiredSkill: "intermediate",
             successRate: 0.75
           },
           {
             key: "no_show_follow_up",
             name: "No-Show Check-In",
-            category: "no_show" as const,
+            category: "no_show",
             icon: "UserX",
             description: "Sends caring follow-up when client misses appointment",
             defaultMessage: "Hi {{name}}, we noticed you weren't able to make your appointment today. Everything okay?",
             configFields: [
-              { key: "delayMinutes", label: "Send after no-show", type: "number" as const, unit: "minutes", defaultValue: 60 },
-              { key: "message", label: "Message", type: "textarea" as const, defaultValue: "Hi {{name}}, noticed you missed your appointment. Everything okay?" }
+              { key: "delayMinutes", label: "Send after no-show", type: "number", unit: "minutes", defaultValue: 60 },
+              { key: "message", label: "Message", type: "textarea", defaultValue: "Hi {{name}}, noticed you missed your appointment. Everything okay?" }
             ],
-            planRequired: "starter" as const,
+            planRequired: "starter",
             recommended: userMetrics?.noShowRate > 0.1,
-            requiredSkill: "intermediate" as const,
+            requiredSkill: "intermediate",
             successRate: 0.60
           }
         );
@@ -100,33 +113,33 @@ export function useDynamicAutomationTemplates() {
         {
           key: "no_show_rebooking",
           name: "No-Show Rebook Offer",
-          category: "no_show" as const,
+          category: "no_show",
           icon: "RefreshCw",
           description: "Second touchpoint 3 days after no-show with rebook offer",
           defaultMessage: "Hi {{name}}, we still have availability if you'd like to reschedule your missed appointment.",
           configFields: [
-            { key: "delayDays", label: "Send after no-show", type: "number" as const, unit: "days", defaultValue: 3 },
-            { key: "message", label: "Message", type: "textarea" as const, defaultValue: "Hi {{name}}, still have availability to reschedule." }
+            { key: "delayDays", label: "Send after no-show", type: "number", unit: "days", defaultValue: 3 },
+            { key: "message", label: "Message", type: "textarea", defaultValue: "Hi {{name}}, still have availability to reschedule." }
           ],
-          planRequired: "growth" as const,
+          planRequired: "growth",
           recommended: userMetrics?.noShowRate > 0.15,
-          requiredSkill: "advanced" as const,
+          requiredSkill: "advanced",
           successRate: 0.45
         },
         {
           key: "cancellation_rebooking",
           name: "Cancellation Rebook Offer",
-          category: "cancellation" as const,
+          category: "cancellation",
           icon: "RotateCcw",
           description: "Offers rebooking options when client cancels",
           defaultMessage: "Hi {{name}}, we've cancelled your appointment. We'd love to find another time.",
           configFields: [
-            { key: "delayHours", label: "Send after cancellation", type: "number" as const, unit: "hours", defaultValue: 1 },
-            { key: "message", label: "Message", type: "textarea" as const, defaultValue: "Hi {{name}}, appointment cancelled. Let's find another time." }
+            { key: "delayHours", label: "Send after cancellation", type: "number", unit: "hours", defaultValue: 1 },
+            { key: "message", label: "Message", type: "textarea", defaultValue: "Hi {{name}}, appointment cancelled. Let's find another time." }
           ],
-          planRequired: "growth" as const,
+          planRequired: "growth",
           recommended: userMetrics?.cancellationRate > 0.05,
-          requiredSkill: "advanced" as const,
+          requiredSkill: "advanced",
           successRate: 0.55
         }
       );
@@ -138,43 +151,43 @@ export function useDynamicAutomationTemplates() {
         {
           key: "ai_optimized_reminder",
           name: "AI-Optimized Reminder",
-          category: "appointment" as const,
+          category: "appointment",
           icon: "Zap",
           description: "AI-powered reminder timing and content based on client behavior patterns",
           defaultMessage: "Hi {{name}}, {{ai_personalized_message}}",
           configFields: [
-            { key: "aiOptimization", label: "AI Optimization Level", type: "select" as const, 
+            { key: "aiOptimization", label: "AI Optimization Level", type: "select", 
               options: [
                 { value: "basic", label: "Basic timing optimization" },
                 { value: "advanced", label: "Advanced personalization" },
                 { value: "predictive", label: "Predictive scheduling" }
               ], defaultValue: "advanced" },
-            { key: "message", label: "Base Message", type: "textarea" as const, defaultValue: "Hi {{name}}, {{ai_personalized_message}}" }
+            { key: "message", label: "Base Message", type: "textarea", defaultValue: "Hi {{name}}, {{ai_personalized_message}}" }
           ],
-          planRequired: "scale" as const,
+          planRequired: "scale",
           recommended: automationPerformance?.successRate > 0.8,
-          requiredSkill: "expert" as const,
+          requiredSkill: "expert",
           successRate: 0.95
         },
         {
           key: "predictive_no_show_prevention",
           name: "Predictive No-Show Prevention",
-          category: "no_show" as const,
+          category: "no_show",
           icon: "AlertTriangle",
           description: "AI predicts no-show probability and sends targeted interventions",
           defaultMessage: "Hi {{name}}, {{risk_based_message}}",
           configFields: [
-            { key: "riskThreshold", label: "Risk Threshold", type: "number" as const, unit: "%", defaultValue: 30 },
-            { key: "interventionLevel", label: "Intervention Level", type: "select" as const,
+            { key: "riskThreshold", label: "Risk Threshold", type: "number", unit: "%", defaultValue: 30 },
+            { key: "interventionLevel", label: "Intervention Level", type: "select",
               options: [
                 { value: "gentle", label: "Gentle reminder" },
                 { value: "moderate", label: "Moderate intervention" },
                 { value: "strong", label: "Strong intervention" }
               ], defaultValue: "moderate" }
           ],
-          planRequired: "scale" as const,
+          planRequired: "scale",
           recommended: userMetrics?.noShowRate > 0.2,
-          requiredSkill: "expert" as const,
+          requiredSkill: "expert",
           successRate: 0.70
         }
       );
@@ -229,8 +242,8 @@ export function useDynamicAutomationTemplates() {
 
 // Dynamic automation recommendations based on user performance gaps
 export function useDynamicAutomationRecommendations() {
-  const { data: userMetrics } = trpc.analytics.userConversionMetrics.useQuery();
-  const { data: automationPerformance } = trpc.analytics.automationPerformance.useQuery();
+  const userMetrics: any = undefined; // endpoint not yet available
+  const automationPerformance: any = undefined; // endpoint not yet available
   const { context } = useProgressiveDisclosureContext();
   
   return React.useMemo(() => {
@@ -247,11 +260,11 @@ export function useDynamicAutomationRecommendations() {
     // High no-show rate? Recommend reminder automations
     if (noShowRate > 0.15) {
       recommendations.push({
-        type: "high_priority" as const,
+        type: "high_priority",
         title: "Reduce No-Shows with Automated Reminders",
         description: `Your no-show rate is ${(noShowRate * 100).toFixed(1)}%. Automated reminders can reduce this by 40-60%.`,
         automationKeys: ["appointment_reminder_24h", "appointment_reminder_2h"],
-        expectedImpact: "high" as const,
+        expectedImpact: "high",
         implementationEffort: "low" as const
       });
     }
@@ -259,11 +272,11 @@ export function useDynamicAutomationRecommendations() {
     // Low conversion rate? Recommend confirmation automations
     if (conversionRate < 0.4) {
       recommendations.push({
-        type: "medium_priority" as const,
+        type: "medium_priority",
         title: "Improve Conversion with Confirmation Automation",
         description: `Your conversion rate is ${(conversionRate * 100).toFixed(1)}%. Instant confirmations can improve this by 15-25%.`,
         automationKeys: ["appointment_confirmation", "appointment_confirmation_chase"],
-        expectedImpact: "medium" as const,
+        expectedImpact: "medium",
         implementationEffort: "low" as const
       });
     }
@@ -271,11 +284,11 @@ export function useDynamicAutomationRecommendations() {
     // High cancellation rate? Recommend rebooking automations
     if (cancellationRate > 0.1) {
       recommendations.push({
-        type: "medium_priority" as const,
+        type: "medium_priority",
         title: "Recover Cancellations with Automated Rebooking",
         description: `Your cancellation rate is ${(cancellationRate * 100).toFixed(1)}%. Automated rebooking offers can recover 30-50% of cancellations.`,
         automationKeys: ["cancellation_rebooking", "cancellation_same_day"],
-        expectedImpact: "medium" as const,
+        expectedImpact: "medium",
         implementationEffort: "medium" as const
       });
     }
@@ -283,11 +296,11 @@ export function useDynamicAutomationRecommendations() {
     // Poor automation performance? Recommend training and simpler automations
     if (automationSuccessRate < 0.5) {
       recommendations.push({
-        type: "learning_priority" as const,
+        type: "learning_priority",
         title: "Improve Automation Success Rate",
         description: `Your automation success rate is ${(automationSuccessRate * 100).toFixed(1)}%. Start with simpler automations and build up complexity.`,
         automationKeys: ["appointment_reminder_24h", "appointment_confirmation"],
-        expectedImpact: "high" as const,
+        expectedImpact: "high",
         implementationEffort: "low" as const
       });
     }
@@ -295,11 +308,11 @@ export function useDynamicAutomationRecommendations() {
     // Expert user with good performance? Recommend advanced automations
     if (context.userSkill.level === 'expert' && automationSuccessRate > 0.8) {
       recommendations.push({
-        type: "optimization_priority" as const,
+        type: "optimization_priority",
         title: "Optimize with AI-Powered Automations",
         description: "You're ready for advanced AI-powered automations that can predict and prevent issues before they occur.",
         automationKeys: ["ai_optimized_reminder", "predictive_no_show_prevention"],
-        expectedImpact: "high" as const,
+        expectedImpact: "high",
         implementationEffort: "high" as const
       });
     }
@@ -310,8 +323,8 @@ export function useDynamicAutomationRecommendations() {
 
 // Dynamic automation configuration based on user behavior
 export function useDynamicAutomationConfig() {
-  const { data: userBehavior } = trpc.analytics.userBehaviorPatterns.useQuery();
-  const { data: automationPerformance } = trpc.analytics.automationPerformance.useQuery();
+  const userBehavior: any = undefined; // endpoint not yet available
+  const automationPerformance: any = undefined; // endpoint not yet available
   const { context } = useProgressiveDisclosureContext();
   
   return React.useCallback((automationKey: string) => {
@@ -376,9 +389,9 @@ export function useDynamicAutomationConfig() {
 
 // Dynamic automation success prediction
 export function useDynamicAutomationSuccessPrediction() {
-  const { data: userMetrics } = trpc.analytics.userConversionMetrics.useQuery();
-  const { data: automationPerformance } = trpc.analytics.automationPerformance.useQuery();
-  const { data: historicalPerformance } = trpc.analytics.automationHistoricalPerformance.useQuery();
+  const userMetrics: any = undefined; // endpoint not yet available
+  const automationPerformance: any = undefined; // endpoint not yet available
+  const historicalPerformance: any = undefined; // endpoint not yet available
   const { context } = useProgressiveDisclosureContext();
   
   return React.useCallback((automationKey: string, targetAudience?: string) => {

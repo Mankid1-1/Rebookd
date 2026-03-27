@@ -135,6 +135,7 @@ function registerShutdownHandlers(server: any) {
 async function startServer() {
   await initSentry();
   const app = express();
+  app.set("trust proxy", 1);
   const server = createServer(app);
   // Register Stripe webhook route first (it needs raw body)
   registerStripeWebhook(app);

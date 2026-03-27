@@ -5,9 +5,15 @@
  * based on actual usage patterns, permissions, and business logic.
  */
 
+import React from 'react';
 import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
+import {
+  Users, Phone, Calendar, CheckCircle, Zap,
+  MessageSquare, Mail, BarChart3, Bot,
+  DollarSign, Target, Clock, TrendingUp,
+} from 'lucide-react';
 
 // Dynamic status configuration based on real business data
 export function useDynamicStatuses() {
@@ -16,8 +22,8 @@ export function useDynamicStatuses() {
   
   // Get real statuses from tenant configuration or defaults based on user skill
   return React.useMemo(() => {
-    if (tenantConfig?.customStatuses) {
-      return tenantConfig.customStatuses.map(status => ({
+    if ((tenantConfig as any)?.customStatuses) {
+      return (tenantConfig as any).customStatuses.map((status: any) => ({
         value: status.id,
         label: status.name,
         color: status.color,
@@ -56,12 +62,21 @@ export function useDynamicStatuses() {
 
 // Dynamic automation node templates based on real user capabilities
 export function useDynamicAutomationNodes() {
-  const { data: userPermissions } = trpc.user.permissions.useQuery();
-  const { data: availableIntegrations } = trpc.integrations.list.useQuery();
+  // These endpoints don't exist yet - using defaults
+  const userPermissions: any = null;
+  const availableIntegrations: any[] = [];
   const { context } = useProgressiveDisclosureContext();
   
   return React.useMemo(() => {
-    const baseNodes = [
+    const baseNodes: Array<{
+      type: string;
+      name: string;
+      description: string;
+      icon: React.ReactNode;
+      category: string;
+      config: Record<string, unknown>;
+      requiredSkill: string;
+    }> = [
       // Core triggers available to all users
       {
         type: 'trigger',
@@ -149,8 +164,9 @@ export function useDynamicAutomationNodes() {
 
 // Dynamic quick actions based on real user behavior and permissions
 export function useDynamicQuickActions() {
-  const { data: userPermissions } = trpc.user.permissions.useQuery();
-  const { data: unreadCounts } = trpc.notifications.unreadCounts.useQuery();
+  // These endpoints don't exist yet - using defaults
+  const userPermissions: any = { canMessage: true, canViewLeads: true, canViewTasks: true, canCreateCampaigns: true, canCreateAutomations: true };
+  const unreadCounts: any = null;
   const { context } = useProgressiveDisclosureContext();
   
   return React.useCallback((onAction: (action: string) => void) => {
@@ -246,7 +262,7 @@ export function useDynamicDashboardMetrics() {
     );
     
     // Revenue metrics for users with permission
-    if (user?.role === 'admin' || user?.role === 'manager') {
+    if (user?.role === 'admin' || String(user?.role) === 'manager') {
       metrics.push(
         { id: 'revenue', title: 'Revenue', icon: <DollarSign />, enabled: true },
         { id: 'bookingRate', title: 'Booking Rate', icon: <Target />, enabled: true }
@@ -306,9 +322,12 @@ export function useDynamicUIPreferences() {
 
 // Dynamic feature availability based on real user skill and business rules
 export function useDynamicFeatureAvailability() {
-  const { data: featureFlags } = trpc.featureFlags.useQuery();
-  const { data: userPermissions } = trpc.user.permissions.useQuery();
+  // These endpoints don't exist yet - using defaults
+  const featureFlags: any = { enableBetaFeatures: false, enableAdvancedReporting: true };
+  const userPermissions: any = { canMessage: true, canViewLeads: true, canCreateCampaigns: true, canCreateAutomations: true };
   const { context } = useProgressiveDisclosureContext();
+  const authState = useAuth();
+  const user = authState.user;
   
   return React.useMemo(() => {
     const features = {
@@ -323,7 +342,7 @@ export function useDynamicFeatureAvailability() {
       automation: context.userSkill.level === 'expert' && userPermissions?.canCreateAutomations,
       
       // Business rule features
-      revenue: user?.role === 'admin' || user?.role === 'manager',
+      revenue: user?.role === 'admin' || String(user?.role) === 'manager',
       userManagement: user?.role === 'admin',
       
       // Feature flag controlled features

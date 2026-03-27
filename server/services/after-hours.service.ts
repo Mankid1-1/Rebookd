@@ -1,6 +1,6 @@
 /**
  * After-Hours & Missed Opportunities Service
- * 
+ *
  * Implements after-hours auto replies, instant booking links
  * Captures 10-30% more leads 24/7
  */
@@ -11,6 +11,7 @@ import { sendSMS } from "../_core/sms";
 import { logger } from "../_core/logger";
 import type { Db } from "../_core/context";
 import { invokeLLM } from "../_core/llm";
+import crypto from "crypto";
 
 interface AfterHoursConfig {
   businessHours: {
@@ -55,7 +56,7 @@ export async function processAfterHoursLead(
 ): Promise<{ success: boolean; bookingLink?: string; isAfterHours: boolean }> {
   try {
     const isAfterHours = isOutsideBusinessHours();
-    
+
     // Check if lead already exists
     const [existingLead] = await db
       .select()
@@ -68,31 +69,44 @@ export async function processAfterHoursLead(
 
     if (existingLead) {
       logger.info('Lead already exists, updating contact', { leadId: existingLead.id });
-      return { success: true, existingLead: existingLead.id, isAfterHours };
+      return { success: true, isAfterHours };
     }
 
     // Create new lead
-    const [newLead] = await db
+    const { hashPhoneNumber } = await import("../_core/phone");
+    const phoneHash = hashPhoneNumber(leadData.phone);
+
+    await db
       .insert(leads)
       .values({
         tenantId,
         name: leadData.name,
         phone: leadData.phone,
-        phoneHash: sql`HASH(${leadData.phone})`,
+        phoneHash,
         email: leadData.email,
         source: leadData.source || 'after_hours',
-        status: 'after_hours_received',
+        status: 'new',
         createdAt: new Date(),
         updatedAt: new Date()
-      })
-      .returning();
+      });
+
+    // Get the newly created lead
+    const [newLead] = await db
+      .select()
+      .from(leads)
+      .where(and(eq(leads.tenantId, tenantId), eq(leads.phoneHash, phoneHash)))
+      .limit(1);
+
+    if (!newLead) {
+      return { success: false, isAfterHours };
+    }
 
     // Generate instant booking link
-    const bookingLink = await generateAfterHoursBookingLink(db, tenantId, newLead.id);
-    
+    const bookingLink = generateAfterHoursBookingLink(tenantId, newLead.id);
+
     // Send after-hours response
     const responseTime = isAfterHours ? DEFAULT_CONFIG.responseDelay * 60 * 1000 : 0;
-    
+
     if (isAfterHours) {
       // Schedule immediate response
       setTimeout(async () => {
@@ -116,7 +130,7 @@ export async function processAfterHoursLead(
       isAfterHours
     };
 
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to process after-hours lead', { error: error.message, leadData });
     return { success: false, isAfterHours: false };
   }
@@ -145,9 +159,9 @@ async function sendAfterHoursResponse(
 
     // Generate after-hours message
     const message = await generateAfterHoursMessage(lead, bookingLink, isAfterHours);
-    
+
     // Send SMS response
-    await sendSMS(lead.phone, message, tenantId);
+    await sendSMS(lead.phone, message, undefined, tenantId);
 
     // Log the response
     await db.insert(messages).values({
@@ -163,19 +177,19 @@ async function sendAfterHoursResponse(
     // Update lead status
     await db
       .update(leads)
-      .set({ 
-        status: isAfterHours ? 'after_hours_responded' : 'contacted',
+      .set({
+        status: 'contacted',
         updatedAt: new Date()
       })
       .where(and(eq(leads.id, leadId), eq(leads.tenantId, tenantId)));
 
-    logger.info('After-hours response sent', { 
-      leadId, 
+    logger.info('After-hours response sent', {
+      leadId,
       isAfterHours,
-      bookingLink 
+      bookingLink
     });
 
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to send after-hours response', { error: error.message, leadId });
   }
 }
@@ -183,19 +197,11 @@ async function sendAfterHoursResponse(
 /**
  * Generate after-hours booking link
  */
-async function generateAfterHoursBookingLink(
-  db: Db,
+function generateAfterHoursBookingLink(
   tenantId: number,
   leadId: number
-): Promise<string> {
-  const token = generateSecureToken();
-  const expiryTime = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-  
-  // Store booking token
-  await db
-    .insert(sql`INSERT INTO after_hours_booking_tokens (tenant_id, lead_id, token, expires_at, created_at) VALUES (${tenantId}, ${leadId}, ${token}, ${expiryTime}, NOW())`)
-    .run();
-
+): string {
+  const token = crypto.randomBytes(32).toString('hex');
   const baseUrl = process.env.APP_URL || 'https://app.rebooked.com';
   return `${baseUrl}/after-hours-book/${token}`;
 }
@@ -209,21 +215,23 @@ async function generateAfterHoursMessage(
   isAfterHours: boolean
 ): Promise<string> {
   try {
-    const response = await invokeLLM([
-      {
-        role: 'system',
-        content: `Generate a friendly after-hours SMS response. The lead is ${lead.name}. The business is currently closed. Include the booking link ${bookingLink}. Create urgency for after-hours booking. Keep it under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate an after-hours response message'
-      }
-    ]);
+    const response = await invokeLLM({
+      messages: [
+        {
+          role: 'system',
+          content: `Generate a friendly after-hours SMS response. The lead is ${lead.name}. The business is currently closed. Include the booking link ${bookingLink}. Create urgency for after-hours booking. Keep it under 160 characters.`
+        },
+        {
+          role: 'user',
+          content: 'Please generate an after-hours response message'
+        }
+      ]
+    });
 
-    return response.choices?.[0]?.message?.content || 
+    return (response.choices?.[0]?.message?.content as string) ||
       `Thanks for reaching out after hours! Book instantly: ${bookingLink} We'll confirm during business hours.`;
 
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to generate after-hours message', { error: error.message });
     return `Thanks for reaching out after hours! Book instantly: ${bookingLink} We'll confirm during business hours.`;
   }
@@ -235,25 +243,25 @@ async function generateAfterHoursMessage(
 function isOutsideBusinessHours(): boolean {
   const now = new Date();
   const businessHours = DEFAULT_CONFIG.businessHours;
-  
+
   // Get current time in business timezone
-  const localTime = new Date(now.toLocaleString("en-US", { 
-    timeZone: businessHours.timezone 
+  const localTime = new Date(now.toLocaleString("en-US", {
+    timeZone: businessHours.timezone
   }));
-  
+
   const currentHour = localTime.getHours();
   const currentDay = localTime.getDay();
-  
+
   // Check if weekend
-  const isWeekend = currentDay === 0 || currentDay === 6; // Sunday or Saturday
-  
+  const isWeekend = currentDay === 0 || currentDay === 6;
+
   // Check if outside business hours
   const [startHour, startMinute] = businessHours.start.split(':').map(Number);
   const [endHour, endMinute] = businessHours.end.split(':').map(Number);
   const currentTime = currentHour * 60 + localTime.getMinutes();
   const startTime = startHour * 60 + startMinute;
   const endTime = endHour * 60 + endMinute;
-  
+
   return isWeekend || currentTime < startTime || currentTime > endTime;
 }
 
@@ -271,8 +279,9 @@ export async function processAfterHoursQueue(
       .from(leads)
       .where(and(
         eq(leads.tenantId, tenantId),
-        eq(leads.status, 'after_hours_received'),
-        sql`created_at < DATE_SUB(NOW(), INTERVAL 1 HOUR)` // More than 1 hour ago
+        eq(leads.status, 'new'),
+        eq(leads.source, 'after_hours'),
+        sql`${leads.createdAt} < DATE_SUB(NOW(), INTERVAL 1 HOUR)`
       ))
       .orderBy(leads.createdAt)
       .limit(DEFAULT_CONFIG.maxQueueSize);
@@ -281,24 +290,24 @@ export async function processAfterHoursQueue(
 
     for (const lead of afterHoursLeads) {
       // Generate booking link
-      const bookingLink = await generateAfterHoursBookingLink(db, tenantId, lead.id);
-      
+      const bookingLink = generateAfterHoursBookingLink(tenantId, lead.id);
+
       // Send response
       await sendAfterHoursResponse(db, tenantId, lead.id, bookingLink, true);
-      
+
       processedLeads++;
     }
 
-    logger.info('After-hours queue processed', { 
+    logger.info('After-hours queue processed', {
       processedLeads,
-      queueSize: afterHoursLeads.length 
+      queueSize: afterHoursLeads.length
     });
 
     return { success: true, processedLeads };
 
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to process after-hours queue', { error: error.message });
-    return { success: false, error: 'Queue processing failed' };
+    return { success: false, processedLeads: 0, error: 'Queue processing failed' };
   }
 }
 
@@ -329,7 +338,7 @@ export async function triggerAfterHoursAutomation(
 
     logger.info('After-hours automation triggered', { tenantId });
 
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to trigger after-hours automation', { error: error.message, tenantId });
   }
 }
@@ -347,14 +356,13 @@ export async function getAfterHoursMetrics(
   const [metrics] = await db
     .select({
       totalLeads: sql<number>`COUNT(*)`,
-      afterHoursLeads: sql<number>`COUNT(CASE WHEN source = 'after_hours' THEN 1 END)`,
-      capturedLeads: sql<number>`COUNT(CASE WHEN status = 'after_hours_responded' THEN 1 END)`,
-      avgLeadValue: sql<number>`AVG(estimated_revenue)`
+      afterHoursLeads: sql<number>`COUNT(CASE WHEN ${leads.source} = 'after_hours' THEN 1 END)`,
+      capturedLeads: sql<number>`COUNT(CASE WHEN ${leads.source} = 'after_hours' AND ${leads.status} = 'contacted' THEN 1 END)`,
     })
-    .from(sql`leads l`)
+    .from(leads)
     .where(and(
-      eq(sql`l.tenant_id`, tenantId),
-      sql`l.created_at >= ${startDate}`
+      eq(leads.tenantId, tenantId),
+      gte(leads.createdAt, startDate)
     ))
     .limit(1);
 
@@ -362,7 +370,7 @@ export async function getAfterHoursMetrics(
   const afterHoursLeads = metrics?.afterHoursLeads || 0;
   const capturedLeads = metrics?.capturedLeads || 0;
   const captureRate = afterHoursLeads > 0 ? (capturedLeads / afterHoursLeads) * 100 : 0;
-  const revenueImpact = capturedLeads * (metrics?.avgLeadValue || 7500); // $75 average
+  const revenueImpact = capturedLeads * 7500; // $75 average
 
   return {
     totalLeads,
@@ -371,12 +379,4 @@ export async function getAfterHoursMetrics(
     captureRate,
     revenueImpact
   };
-}
-
-/**
- * Generate secure token for booking links
- */
-function generateSecureToken(): string {
-  const crypto = require('crypto');
-  return crypto.randomBytes(32).toString('hex');
 }

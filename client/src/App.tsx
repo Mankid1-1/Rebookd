@@ -38,6 +38,12 @@ const PaymentEnforcement = lazy(() => import("@/pages/PaymentEnforcement"));
 const AfterHours = lazy(() => import("@/pages/AfterHours"));
 const AdminAutomation = lazy(() => import("@/pages/AdminAutomation"));
 
+// New required pages
+const CalendarIntegration = lazy(() => import("@/pages/CalendarIntegration"));
+const WaitingList = lazy(() => import("@/pages/WaitingList"));
+const ReviewManagement = lazy(() => import("@/pages/ReviewManagement"));
+const Referrals = lazy(() => import("@/pages/Referrals"));
+
 function Router() {
   return (
     <Switch>
@@ -143,6 +149,26 @@ function Router() {
       <Route path="/admin-automation">
         <AuthGuard>
           <AdminAutomation />
+        </AuthGuard>
+      </Route>
+      <Route path="/calendar-integration">
+        <AuthGuard>
+          <CalendarIntegration />
+        </AuthGuard>
+      </Route>
+      <Route path="/waiting-list">
+        <AuthGuard>
+          <WaitingList />
+        </AuthGuard>
+      </Route>
+      <Route path="/review-management">
+        <AuthGuard>
+          <ReviewManagement />
+        </AuthGuard>
+      </Route>
+      <Route path="/referrals">
+        <AuthGuard>
+          <Referrals />
         </AuthGuard>
       </Route>
 

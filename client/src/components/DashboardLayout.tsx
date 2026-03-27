@@ -20,23 +20,24 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
+  SidebarSeparator,
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { getItem, setItem } from "@/utils/storage";
-import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
 import {
   BarChart3,
-  Bot,
   CreditCard,
+  Gift,
   LayoutDashboard,
   LogOut,
   MessageSquare,
   PanelLeft,
   Settings,
   Shield,
+  TrendingUp,
   Users,
   Zap,
   FileText,
@@ -44,120 +45,31 @@ import {
   Heart,
   Calendar,
   Moon,
+  Star,
+  Clock,
+  ListChecks,
 } from "lucide-react";
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import { CSSProperties, useEffect, useRef, useState, type LucideIcon } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 import { trpc } from "@/lib/trpc";
+import { WelcomeTour } from "@/components/WelcomeTour";
 
-// Dynamic menu items based on user role, permissions, and skill level
-const getDynamicMainMenuItems = (userRole?: string, userSkill?: any) => {
-  const baseItems = [
-    { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-    { icon: Users, label: "Leads", path: "/leads" },
-    { icon: MessageSquare, label: "Inbox", path: "/inbox" },
-  ];
-
-  // Add advanced items for intermediate+ users
-  if (userSkill?.level !== 'beginner') {
-    baseItems.push(
-      { icon: Calendar, label: "Automations", path: "/automations" },
-      { icon: FileText, label: "Templates", path: "/templates" }
-    );
-  }
-
-  // Add expert items for advanced users
-  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
-    baseItems.push(
-      { icon: Bot, label: "AI Tools", path: "/ai-tools" },
-      { icon: BarChart3, label: "Analytics", path: "/analytics" }
-    );
-  }
-
-  return baseItems;
-};
-
-// Dynamic high-impact features based on user skill and business type
-const getDynamicHighImpactMenuItems = (userSkill?: any, businessType?: string) => {
-  const baseFeatures = [
-    { icon: Zap, label: "Lead Capture", path: "/lead-capture" },
-    { icon: LayoutDashboard, label: "Booking Conversion", path: "/booking-conversion" },
-  ];
-
-  // Add advanced features for intermediate+ users
-  if (userSkill?.level !== 'beginner') {
-    baseFeatures.push(
-      { icon: Shield, label: "No-Show Recovery", path: "/no-show-recovery" },
-      { icon: Heart, label: "Retention Engine", path: "/retention" }
-    );
-  }
-
-  // Add expert features for advanced users
-  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
-    baseFeatures.push(
-      { icon: Bot, label: "AI Automation", path: "/ai-automation" },
-      { icon: Settings, label: "Admin Automation", path: "/admin-automation" }
-    );
-  }
-
-  // Business-specific features
-  if (businessType?.includes('medical') || businessType?.includes('clinic')) {
-    baseFeatures.push(
-      { icon: FileText, label: "Patient Forms", path: "/patient-forms" }
-    );
-  }
-
-  return baseFeatures;
-};
-
-const getDynamicSettingsMenuItems = (userRole?: string) => {
-  const baseSettings = [
-    { icon: Settings, label: "Settings", path: "/settings" },
-  ];
-
-  // Add billing for non-admin users
-  if (userRole !== 'admin') {
-    baseSettings.push({ icon: CreditCard, label: "Billing", path: "/billing" });
-  }
-
-  return baseSettings;
-};
-
-const getDynamicAdminMenuItems = (userRole?: string, userSkill?: any) => {
-  // Only show admin items to admin users
-  if (userRole !== 'admin') return [];
-
-  const baseAdminItems = [
-    { icon: Shield, label: "Tenants", path: "/admin/tenants" },
-  ];
-
-  // Add advanced admin items for expert admins
-  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
-    baseAdminItems.push(
-      { icon: Users, label: "Users", path: "/admin/users" },
-      { icon: BarChart3, label: "System Health", path: "/admin/health" }
-    );
-  }
-
-  return baseAdminItems;
-};  
+interface NavItem {
+  icon: LucideIcon;
+  label: string;
+  path: string;
+}
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
-const DEFAULT_WIDTH = 260;
+const DEFAULT_WIDTH = 240;
 const MIN_WIDTH = 200;
-const MAX_WIDTH = 400;
+const MAX_WIDTH = 360;
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const { context } = useProgressiveDisclosureContext();
   const { data: tenant } = trpc.tenant.get.useQuery();
-  
-  // Get dynamic menu items
-  const mainMenuItems = getDynamicMainMenuItems(user?.role, context.userSkill);
-  const highImpactMenuItems = getDynamicHighImpactMenuItems(context.userSkill, tenant?.industry);
-  const settingsMenuItems = getDynamicSettingsMenuItems(user?.role);
-  const adminMenuItems = getDynamicAdminMenuItems(user?.role, context.userSkill);
 
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     if (typeof window !== "undefined") {
@@ -166,7 +78,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
     return DEFAULT_WIDTH;
   });
-  const { loading, user } = useAuth();
 
   useEffect(() => {
     setItem(SIDEBAR_WIDTH_KEY, sidebarWidth);
@@ -226,7 +137,6 @@ function DashboardLayoutContent({
   const isMobile = useIsMobile();
   const isAdmin = user?.role === "admin";
 
-  // Get tenant info
   const { data: tenant } = trpc.tenant.get.useQuery(undefined, { retry: false });
 
   useEffect(() => {
@@ -257,31 +167,74 @@ function DashboardLayoutContent({
   }, [isResizing, setSidebarWidth]);
 
   const isActive = (path: string) => {
-    // Special case for leads sub-paths
     if (path === "/leads" && location.startsWith("/leads")) return true;
-    // Special case for feature routes that might have sub-paths
-    const featureRoutes = [
-      "/lead-capture",
-      "/booking-conversion", 
-      "/no-show-recovery",
-      "/cancellation-recovery",
-      "/retention-engine",
-      "/smart-scheduling",
-      "/payment-enforcement",
-      "/after-hours",
-      "/admin-automation"
-    ];
-    if (featureRoutes.includes(path) && location.startsWith(path)) return true;
-    // Default exact match
     return location === path;
   };
+
+  // --- Simple flat navigation ---
+  const mainNav: NavItem[] = [
+    { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+    { icon: Users, label: "Leads", path: "/leads" },
+    { icon: MessageSquare, label: "Inbox", path: "/inbox" },
+    { icon: Zap, label: "Automations", path: "/automations" },
+    { icon: FileText, label: "Templates", path: "/templates" },
+  ];
+
+  const revenueNav: NavItem[] = [
+    { icon: Zap, label: "Lead Capture", path: "/lead-capture" },
+    { icon: TrendingUp, label: "Booking Conversion", path: "/booking-conversion" },
+    { icon: Shield, label: "No-Show Recovery", path: "/no-show-recovery" },
+    { icon: XCircle, label: "Cancellation Recovery", path: "/cancellation-recovery" },
+    { icon: CreditCard, label: "Payment Enforcement", path: "/payment-enforcement" },
+  ];
+
+  const growthNav: NavItem[] = [
+    { icon: Heart, label: "Retention Engine", path: "/retention-engine" },
+    { icon: Clock, label: "Smart Scheduling", path: "/smart-scheduling" },
+    { icon: Calendar, label: "Calendar Sync", path: "/calendar-integration" },
+    { icon: ListChecks, label: "Waiting List", path: "/waiting-list" },
+    { icon: Moon, label: "After Hours", path: "/after-hours" },
+    { icon: Star, label: "Reviews", path: "/review-management" },
+    { icon: Gift, label: "Referrals", path: "/referrals" },
+  ];
+
+  const bottomNav: NavItem[] = [
+    { icon: BarChart3, label: "Analytics", path: "/analytics" },
+    { icon: Settings, label: "Settings", path: "/settings" },
+    { icon: CreditCard, label: "Billing", path: "/billing" },
+  ];
+
+  const adminNav: NavItem[] = [
+    { icon: Shield, label: "Tenants", path: "/admin/tenants" },
+    { icon: Users, label: "Users", path: "/admin/users" },
+    { icon: MessageSquare, label: "Messages", path: "/admin/messages" },
+    { icon: BarChart3, label: "System Health", path: "/admin/health" },
+  ];
+
+  const renderNavItems = (items: NavItem[]) =>
+    items.map((item) => {
+      const active = isActive(item.path);
+      return (
+        <SidebarMenuItem key={item.path}>
+          <SidebarMenuButton
+            isActive={active}
+            onClick={() => setLocation(item.path)}
+            tooltip={item.label}
+            className="h-8"
+          >
+            <item.icon className={`h-4 w-4 shrink-0 ${active ? "text-primary" : ""}`} />
+            <span className="truncate">{item.label}</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      );
+    });
 
   return (
     <>
       <div className="relative" ref={sidebarRef}>
         <Sidebar collapsible="icon" className="border-r border-sidebar-border">
           {/* Header */}
-          <SidebarHeader className="h-16 justify-center border-b border-sidebar-border">
+          <SidebarHeader className="h-14 justify-center border-b border-sidebar-border">
             <div className="flex items-center gap-3 px-2 w-full">
               <button
                 onClick={toggleSidebar}
@@ -296,11 +249,9 @@ function DashboardLayoutContent({
                     <Zap className="w-4 h-4 text-primary-foreground" />
                   </div>
                   <div className="min-w-0">
-                    <p className="font-bold text-sm tracking-tight truncate">
-                      Rebooked
-                    </p>
+                    <p className="font-bold text-sm tracking-tight truncate">Rebooked</p>
                     {tenant && (
-                      <p className="text-xs text-muted-foreground truncate">{tenant.name}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{tenant.name}</p>
                     )}
                   </div>
                 </div>
@@ -308,109 +259,75 @@ function DashboardLayoutContent({
             </div>
           </SidebarHeader>
 
-          {/* Main Nav */}
-          <SidebarContent className="gap-0 py-2">
-            <SidebarGroup>
-              {!isCollapsed && <SidebarGroupLabel className="text-xs text-muted-foreground/60 px-4 mb-1">Platform</SidebarGroupLabel>}
-              <SidebarMenu className="px-2">
-                {mainMenuItems.map((item) => {
-                  const active = isActive(item.path);
-                  return (
-                    <SidebarMenuItem key={item.label}>
-                      <SidebarMenuButton
-                        isActive={active}
-                        onClick={() => setLocation(item.path)}
-                        tooltip={item.label}
-                        className="h-9 transition-all"
-                      >
-                        <item.icon className={`h-4 w-4 ${active ? "text-primary" : ""}`} />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
+          <SidebarContent className="py-2 overflow-y-auto">
+            {/* Main */}
+            <SidebarGroup className="py-0 shrink-0">
+              <SidebarMenu className="px-2 space-y-0.5">
+                {renderNavItems(mainNav)}
               </SidebarMenu>
             </SidebarGroup>
 
-            <SidebarGroup className="mt-2">
-              {!isCollapsed && <SidebarGroupLabel className="text-xs text-muted-foreground/60 px-4 mb-1">High-Impact Features</SidebarGroupLabel>}
-              <SidebarMenu className="px-2">
-                {highImpactMenuItems.map((item) => {
-                  const active = location === item.path;
-                  return (
-                    <SidebarMenuItem key={item.label}>
-                      <SidebarMenuButton
-                        isActive={active}
-                        onClick={() => setLocation(item.path)}
-                        tooltip={item.label}
-                        className="h-9 transition-all"
-                      >
-                        <item.icon className={`h-4 w-4 ${active ? "text-primary" : ""}`} />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
+            <SidebarSeparator className="my-2 shrink-0" />
+
+            {/* Revenue Recovery */}
+            <SidebarGroup className="py-0 shrink-0">
+              {!isCollapsed && (
+                <SidebarGroupLabel className="text-[11px] uppercase tracking-wider text-muted-foreground/50 px-4 mb-0.5">
+                  Revenue Recovery
+                </SidebarGroupLabel>
+              )}
+              <SidebarMenu className="px-2 space-y-0.5">
+                {renderNavItems(revenueNav)}
               </SidebarMenu>
             </SidebarGroup>
 
-            <SidebarGroup className="mt-2">
-              {!isCollapsed && <SidebarGroupLabel className="text-xs text-muted-foreground/60 px-4 mb-1">Account</SidebarGroupLabel>}
-              <SidebarMenu className="px-2">
-                {settingsMenuItems.map((item) => {
-                  const active = location === item.path;
-                  return (
-                    <SidebarMenuItem key={item.label}>
-                      <SidebarMenuButton
-                        isActive={active}
-                        onClick={() => setLocation(item.path)}
-                        tooltip={item.label}
-                        className="h-9 transition-all"
-                      >
-                        <item.icon className={`h-4 w-4 ${active ? "text-primary" : ""}`} />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
+            <SidebarSeparator className="my-2 shrink-0" />
+
+            {/* Growth & Scheduling */}
+            <SidebarGroup className="py-0 shrink-0">
+              {!isCollapsed && (
+                <SidebarGroupLabel className="text-[11px] uppercase tracking-wider text-muted-foreground/50 px-4 mb-0.5">
+                  Growth & Tools
+                </SidebarGroupLabel>
+              )}
+              <SidebarMenu className="px-2 space-y-0.5">
+                {renderNavItems(growthNav)}
               </SidebarMenu>
             </SidebarGroup>
 
+            <SidebarSeparator className="my-2 shrink-0" />
+
+            {/* Account */}
+            <SidebarGroup className="py-0 shrink-0">
+              <SidebarMenu className="px-2 space-y-0.5">
+                {renderNavItems(bottomNav)}
+              </SidebarMenu>
+            </SidebarGroup>
+
+            {/* Admin */}
             {isAdmin && (
-              <SidebarGroup className="mt-2">
-                {!isCollapsed && (
-                  <SidebarGroupLabel className="text-xs text-muted-foreground/60 px-4 mb-1 flex items-center gap-1">
-                    <Shield className="w-3 h-3" /> Admin
-                  </SidebarGroupLabel>
-                )}
-                <SidebarMenu className="px-2">
-                  {adminMenuItems.map((item) => {
-                    const active = location === item.path;
-                    return (
-                      <SidebarMenuItem key={item.label}>
-                        <SidebarMenuButton
-                          isActive={active}
-                          onClick={() => setLocation(item.path)}
-                          tooltip={item.label}
-                          className="h-9 transition-all"
-                        >
-                          <item.icon className={`h-4 w-4 ${active ? "text-primary" : ""}`} />
-                          <span>{item.label}</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </SidebarMenu>
-              </SidebarGroup>
+              <>
+                <SidebarSeparator className="my-2 shrink-0" />
+                <SidebarGroup className="py-0 shrink-0">
+                  {!isCollapsed && (
+                    <SidebarGroupLabel className="text-[11px] uppercase tracking-wider text-muted-foreground/50 px-4 mb-0.5 flex items-center gap-1">
+                      <Shield className="w-3 h-3" /> Admin
+                    </SidebarGroupLabel>
+                  )}
+                  <SidebarMenu className="px-2 space-y-0.5">
+                    {renderNavItems(adminNav)}
+                  </SidebarMenu>
+                </SidebarGroup>
+              </>
             )}
           </SidebarContent>
 
           {/* Footer */}
-          <SidebarFooter className="p-3 border-t border-sidebar-border">
+          <SidebarFooter className="p-2 border-t border-sidebar-border">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-sidebar-accent transition-colors w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <Avatar className="h-8 w-8 border border-sidebar-border shrink-0">
+                  <Avatar className="h-7 w-7 border border-sidebar-border shrink-0">
                     <AvatarFallback className="text-xs font-semibold bg-primary/20 text-primary">
                       {user?.name?.charAt(0).toUpperCase() ?? "U"}
                     </AvatarFallback>
@@ -421,7 +338,7 @@ function DashboardLayoutContent({
                         <p className="text-sm font-medium truncate leading-none">{user?.name || "User"}</p>
                         {isAdmin && <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">Admin</Badge>}
                       </div>
-                      <p className="text-xs text-muted-foreground truncate mt-1">{user?.email || ""}</p>
+                      <p className="text-[11px] text-muted-foreground truncate mt-0.5">{user?.email || ""}</p>
                     </div>
                   )}
                 </button>
@@ -445,7 +362,6 @@ function DashboardLayoutContent({
           </SidebarFooter>
         </Sidebar>
 
-        {/* Resize handle */}
         {!isCollapsed && (
           <div
             className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/30 transition-colors"
@@ -463,12 +379,13 @@ function DashboardLayoutContent({
                 <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
                   <Zap className="w-3 h-3 text-primary-foreground" />
                 </div>
-                  <span className="font-bold text-sm">Rebooked</span>
+                <span className="font-bold text-sm">Rebooked</span>
               </div>
             </div>
           </div>
         )}
         <main className="flex-1 overflow-auto">{children}</main>
+        <WelcomeTour />
       </SidebarInset>
     </>
   );

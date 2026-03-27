@@ -147,10 +147,14 @@ class GracefulShutdown {
       }
 
       // Clear any caches
-      if (typeof clearSearchCache === 'function') {
+      try {
         const { clearSearchCache } = require('../services/lead-search-optimization.service');
-        clearSearchCache();
-        console.log('🧹 Search cache cleared');
+        if (typeof clearSearchCache === 'function') {
+          clearSearchCache();
+          console.log('🧹 Search cache cleared');
+        }
+      } catch {
+        // Search cache module not available
       }
 
       console.log('✅ Memory cleanup completed');

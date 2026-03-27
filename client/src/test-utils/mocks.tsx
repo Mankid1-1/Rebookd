@@ -558,25 +558,25 @@ export const testHelpers = {
 
   // Create mock function with call tracking
   createTrackedMock: () => {
-    const mock = vi.fn();
+    const mock = vi.fn() as any;
     mock.callCount = 0;
     mock.lastCall = null;
     mock.calls = [];
-    
+
     const trackedMock = (...args: any[]) => {
       mock.callCount++;
       mock.lastCall = args;
       mock.calls.push(args);
       return mock(...args);
     };
-    
+
     trackedMock.reset = () => {
       mock.mockReset();
       mock.callCount = 0;
       mock.lastCall = null;
       mock.calls = [];
     };
-    
+
     return trackedMock;
   },
 
@@ -742,7 +742,7 @@ export const setupGlobalMocks = () => {
     clip: vi.fn(),
   };
 
-  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(mockCanvasContext);
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(mockCanvasContext as any);
 };
 
 // Export all mocks and utilities

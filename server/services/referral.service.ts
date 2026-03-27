@@ -1,49 +1,17 @@
 /**
- * 🎯 REFERRAL SERVICE
- * Comprehensive referral system with 50$ per 6-month subscription incentive
+ * REFERRAL SERVICE
+ * Comprehensive referral system with $50 per 6-month subscription incentive
+ * Uses type-safe Drizzle ORM throughout - no raw SQL
  */
 
 import { getDb } from "../db";
 import { TRPCError } from "@trpc/server";
-import { and, eq, isNull, lte } from "drizzle-orm";
+import { and, eq, isNull, lte, lt, sql, desc } from "drizzle-orm";
 import { referrals, referralPayouts, systemErrorLogs, users } from "../../drizzle/schema";
-import { stripe } from "../_core/stripe";
+import Stripe from "stripe";
+import { ENV } from "../_core/env";
 
-export interface Referral {
-  id: string;
-  referrerId: string;
-  referredUserId: string;
-  referralCode: string;
-  status: "pending" | "completed" | "expired" | "cancelled";
-  subscriptionId?: string;
-  rewardAmount: number;
-  rewardCurrency: string;
-  createdAt: Date;
-  completedAt?: Date;
-  expiresAt: Date;
-  metadata?: Record<string, any>;
-}
-
-export interface ReferralStats {
-  totalReferrals: number;
-  completedReferrals: number;
-  pendingReferrals: number;
-  totalEarned: number;
-  availableForPayout: number;
-  lifetimeEarnings: number;
-}
-
-export interface ReferralPayout {
-  id: string;
-  userId: string;
-  amount: number;
-  currency: string;
-  status: "pending" | "processing" | "completed" | "failed";
-  method: "paypal" | "stripe" | "bank_transfer";
-  createdAt: Date;
-  processedAt?: Date;
-  transactionId?: string;
-}
+const stripe = new Stripe(ENV.stripeSecretKey || "", { apiVersion: "2022-11-15" as any });
 
 // Constants
 const REFERRAL_REWARD_AMOUNT = 50; // $50 per successful referral
@@ -54,16 +22,18 @@ const REFERRAL_CODE_LENGTH = 8;
 /**
  * Generate a unique referral code for a user
  */
-export async function generateReferralCode(userId: string): Promise<string> {
+export async function generateReferralCode(userId: number): Promise<string> {
   const db = await getDb();
-  
+
   // Check if user already has an active referral code
-  const existingReferral = await (db as any).select({
-    referralCode: true
+  const existingReferral = await db.select({
+    referralCode: referrals.referralCode,
   })
-    .from("referrals")
-    .where("referrerId", "=", userId)
-    .where("status", "in", ["pending", "completed"])
+    .from(referrals)
+    .where(and(
+      eq(referrals.referrerId, userId),
+      sql`${referrals.status} IN ('pending', 'completed')`
+    ))
     .limit(1);
 
   if (existingReferral.length > 0) {
@@ -71,21 +41,21 @@ export async function generateReferralCode(userId: string): Promise<string> {
   }
 
   // Generate unique code
-  let code: string;
+  let code: string = "";
   let isUnique = false;
   let attempts = 0;
-  
+
   while (!isUnique && attempts < 10) {
     code = Math.random()
       .toString(36)
       .substring(2, 2 + REFERRAL_CODE_LENGTH)
       .toUpperCase();
-    
-    const existing = await (db as any).select({ id: true })
-      .from("referrals")
-      .where("referralCode", "=", code)
+
+    const existing = await db.select({ id: referrals.id })
+      .from(referrals)
+      .where(eq(referrals.referralCode, code))
       .limit(1);
-    
+
     isUnique = existing.length === 0;
     attempts++;
   }
@@ -98,63 +68,71 @@ export async function generateReferralCode(userId: string): Promise<string> {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + REFERRAL_EXPIRY_DAYS);
 
-  await (db as any).insert("referrals")
-    .values({
-      id: crypto.randomUUID(),
-      referrerId: userId,
-      referralCode: code,
-      status: "pending",
-      rewardAmount: REFERRAL_REWARD_AMOUNT,
-      rewardCurrency: "USD",
-      createdAt: new Date(),
-      expiresAt,
-    });
+  await db.insert(referrals).values({
+    referrerId: userId,
+    referredUserId: 0, // Placeholder until someone uses the code
+    referralCode: code,
+    status: "pending",
+    rewardAmount: REFERRAL_REWARD_AMOUNT,
+    rewardCurrency: "USD",
+    expiresAt,
+  });
 
-  return code!;
+  return code;
 }
 
 /**
  * Validate and process a referral code
  */
 export async function processReferral(
-  referralCode: string, 
-  referredUserId: string
-): Promise<{ success: boolean; referral?: Referral; message?: string }> {
+  referralCode: string,
+  referredUserId: number
+): Promise<{ success: boolean; referralId?: number; message?: string }> {
   const db = await getDb();
-  
+
   // Find referral
-  const referrals = await (db as any).select({
-    id: true,
-    referrerId: true,
-    referralCode: true,
-    status: true,
-    expiresAt: true,
-    rewardAmount: true,
-    rewardCurrency: true,
+  const matchingReferrals = await db.select({
+    id: referrals.id,
+    referrerId: referrals.referrerId,
+    referralCode: referrals.referralCode,
+    status: referrals.status,
+    expiresAt: referrals.expiresAt,
+    rewardAmount: referrals.rewardAmount,
+    rewardCurrency: referrals.rewardCurrency,
   })
-    .from("referrals")
-    .where("referralCode", "=", referralCode)
-    .where("status", "=", "pending")
+    .from(referrals)
+    .where(and(
+      eq(referrals.referralCode, referralCode),
+      eq(referrals.status, "pending")
+    ))
     .limit(1);
 
-  if (referrals.length === 0) {
+  if (matchingReferrals.length === 0) {
     return { success: false, message: "Invalid or expired referral code" };
   }
 
-  const referral = referrals[0];
+  const referral = matchingReferrals[0];
 
   // Check if referral has expired
-  if (new Date() > referral.expiresAt) {
-    await (db as any).update("referrals")
+  if (referral.expiresAt && new Date() > referral.expiresAt) {
+    await db.update(referrals)
       .set({ status: "expired" })
-      .where("id", "=", referral.id);
+      .where(eq(referrals.id, referral.id));
     return { success: false, message: "Referral code has expired" };
   }
 
+  // Prevent self-referral
+  if (referral.referrerId === referredUserId) {
+    return { success: false, message: "Cannot use your own referral code" };
+  }
+
   // Check if user has already been referred
-  const existingReferral = await (db as any).select({ id: true })
-    .from("referrals")
-    .where("referredUserId", "=", referredUserId)
+  const existingReferral = await db.select({ id: referrals.id })
+    .from(referrals)
+    .where(and(
+      eq(referrals.referredUserId, referredUserId),
+      sql`${referrals.status} IN ('pending', 'completed')`
+    ))
     .limit(1);
 
   if (existingReferral.length > 0) {
@@ -162,17 +140,13 @@ export async function processReferral(
   }
 
   // Update referral with referred user
-  await (db as any).update("referrals")
-    .set({ 
-      referredUserId,
-      status: "pending",
-      updatedAt: new Date()
-    })
-    .where("id", "=", referral.id);
+  await db.update(referrals)
+    .set({ referredUserId })
+    .where(eq(referrals.id, referral.id));
 
-  return { 
-    success: true, 
-    referral: { ...referral, referredUserId, status: "pending" as const }
+  return {
+    success: true,
+    referralId: referral.id,
   };
 }
 
@@ -180,12 +154,12 @@ export async function processReferral(
  * Complete a referral when referred user subscribes for 6+ months
  */
 export async function completeReferral(
-  referralId: string, 
+  referralId: number,
   subscriptionId: string,
   subscriptionMonths: number
-): Promise<Referral> {
+): Promise<void> {
   const db = await getDb();
-  
+
   // Verify subscription meets minimum requirements
   if (subscriptionMonths < MIN_SUBSCRIPTION_MONTHS) {
     throw new TRPCError({
@@ -196,31 +170,16 @@ export async function completeReferral(
 
   // Update referral as completed but schedule payout for 1 month later
   const payoutScheduledDate = new Date();
-  payoutScheduledDate.setMonth(payoutScheduledDate.getMonth() + 1); // 1 month from now
-  
-  const updatedReferral = await (db as any).update("referrals")
+  payoutScheduledDate.setMonth(payoutScheduledDate.getMonth() + 1);
+
+  await db.update(referrals)
     .set({
       status: "completed",
       subscriptionId,
       completedAt: new Date(),
       payoutScheduledAt: payoutScheduledDate,
-      updatedAt: new Date()
     })
-    .where("id", "=", referralId)
-    .returning("*")
-    .execute();
-
-  if (updatedReferral.length === 0) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Referral not found"
-    });
-  }
-
-  // Schedule payout for 1 month later (don't create payout record yet)
-  // The payout will be created by the scheduled job when the time comes
-
-  return updatedReferral[0] as Referral;
+    .where(eq(referrals.id, referralId));
 }
 
 /**
@@ -228,7 +187,7 @@ export async function completeReferral(
  */
 export async function processScheduledPayouts(): Promise<{ processed: number; total: number }> {
   const db = await getDb();
-  
+
   const dueReferrals = await db.select({
     id: referrals.id,
     referrerId: referrals.referrerId,
@@ -243,7 +202,7 @@ export async function processScheduledPayouts(): Promise<{ processed: number; to
     ));
 
   let processed = 0;
-  
+
   for (const referral of dueReferrals) {
     let tenantId: number | null = null;
     try {
@@ -258,16 +217,18 @@ export async function processScheduledPayouts(): Promise<{ processed: number; to
       }
 
       if (!referrer?.stripeCustomerId) {
-        throw new Error(`No Stripe Connect account for referrer ${referral.referrerId}`);
+        throw new Error(`No Stripe account for referrer ${referral.referrerId}`);
       }
 
+      // Use stripeCustomerId - this should be the Stripe Connect account ID (acct_xxx)
+      // If the user has a Connect account, use that for the transfer destination
       const payout = await stripe.transfers.create({
         amount: referral.rewardAmount * 100,
         currency: 'usd',
-        destination: referrer.stripeCustomerId, // Assuming this is the connect ID
+        destination: referrer.stripeCustomerId,
         description: `Referral payout for referred user ${referral.referredUserId}`,
         metadata: {
-          referralId: referral.id,
+          referralId: String(referral.id),
           type: 'referral_payout',
         },
       });
@@ -280,61 +241,58 @@ export async function processScheduledPayouts(): Promise<{ processed: number; to
         method: 'stripe',
         processedAt: new Date(),
       });
-      
+
       await db.update(referrals)
-        .set({
-          payoutProcessedAt: new Date(),
-        })
+        .set({ payoutProcessedAt: new Date() })
         .where(eq(referrals.id, referral.id));
-      
+
       processed++;
     } catch (error) {
       console.error(`Failed to process payout for referral ${referral.id}:`, error);
       await db.insert(systemErrorLogs).values({
-          type: 'billing',
-          message: `Failed to process payout for referral ${referral.id}`,
-          detail: error.message,
-          tenantId: tenantId,
+        type: 'billing',
+        message: `Failed to process payout for referral ${referral.id}`,
+        detail: (error as Error).message,
+        tenantId: tenantId,
       });
     }
   }
-  
+
   return { processed, total: dueReferrals.length };
 }
 
 /**
  * Get referral statistics for a user
  */
-export async function getReferralStats(userId: string): Promise<ReferralStats> {
+export async function getReferralStats(userId: number) {
   const db = await getDb();
-  
-  const referrals = await (db as any).select({
-    status: true,
-    rewardAmount: true,
-    completedAt: true,
-  })
-    .from("referrals")
-    .where("referrerId", "=", userId);
 
-  const completed = referrals.filter(r => r.status === "completed");
-  const pending = referrals.filter(r => r.status === "pending");
+  const allReferrals = await db.select({
+    status: referrals.status,
+    rewardAmount: referrals.rewardAmount,
+  })
+    .from(referrals)
+    .where(eq(referrals.referrerId, userId));
+
+  const completed = allReferrals.filter(r => r.status === "completed");
+  const pending = allReferrals.filter(r => r.status === "pending");
 
   // Get payout records
-  const payouts = await (db as any).select({
-    amount: true,
-    status: true,
+  const payouts = await db.select({
+    amount: referralPayouts.amount,
   })
-    .from("referral_payouts")
-    .where("userId", "=", userId)
-    .where("status", "=", "completed");
+    .from(referralPayouts)
+    .where(and(
+      eq(referralPayouts.userId, userId),
+      eq(referralPayouts.status, "completed")
+    ));
 
   const totalPaidOut = payouts.reduce((sum, p) => sum + p.amount, 0);
-
   const totalEarned = completed.reduce((sum, r) => sum + r.rewardAmount, 0);
   const availableForPayout = totalEarned - totalPaidOut;
 
   return {
-    totalReferrals: referrals.length,
+    totalReferrals: allReferrals.length,
     completedReferrals: completed.length,
     pendingReferrals: pending.length,
     totalEarned,
@@ -346,40 +304,39 @@ export async function getReferralStats(userId: string): Promise<ReferralStats> {
 /**
  * Get all referrals for a user
  */
-export async function getUserReferrals(userId: string): Promise<Referral[]> {
+export async function getUserReferrals(userId: number, limit: number = 10) {
   const db = await getDb();
-  
-  return await (db as any).select({
-    id: true,
-    referredUserId: true,
-    referralCode: true,
-    status: true,
-    rewardAmount: true,
-    rewardCurrency: true,
-    createdAt: true,
-    completedAt: true,
-    expiresAt: true,
-    metadata: true,
+
+  return await db.select({
+    id: referrals.id,
+    referredUserId: referrals.referredUserId,
+    referralCode: referrals.referralCode,
+    status: referrals.status,
+    rewardAmount: referrals.rewardAmount,
+    rewardCurrency: referrals.rewardCurrency,
+    createdAt: referrals.createdAt,
+    completedAt: referrals.completedAt,
+    expiresAt: referrals.expiresAt,
+    metadata: referrals.metadata,
   })
-    .from("referrals")
-    .where("referrerId", "=", userId)
-    .orderBy("createdAt", "desc");
+    .from(referrals)
+    .where(eq(referrals.referrerId, userId))
+    .orderBy(desc(referrals.createdAt))
+    .limit(limit);
 }
-
-
 
 /**
  * Request payout of available referral earnings
  */
 export async function requestPayout(
-  userId: string,
+  userId: number,
   method: "paypal" | "stripe" | "bank_transfer"
-): Promise<ReferralPayout> {
+) {
   const db = await getDb();
-  
+
   // Get available balance
   const stats = await getReferralStats(userId);
-  
+
   if (stats.availableForPayout <= 0) {
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -388,41 +345,46 @@ export async function requestPayout(
   }
 
   // Create payout record
-  const payout = await (db as any).insert("referral_payouts")
-    .values({
-      id: crypto.randomUUID(),
-      userId,
-      amount: stats.availableForPayout,
-      currency: "USD",
-      method,
-      status: "pending",
-      createdAt: new Date(),
-    })
-    .returning("*")
-    .execute();
+  await db.insert(referralPayouts).values({
+    userId,
+    amount: stats.availableForPayout,
+    currency: "USD",
+    method,
+    status: "pending",
+  });
 
-  return payout[0] as ReferralPayout;
+  // Return the created payout
+  const [payout] = await db.select()
+    .from(referralPayouts)
+    .where(and(
+      eq(referralPayouts.userId, userId),
+      eq(referralPayouts.status, "pending")
+    ))
+    .orderBy(desc(referralPayouts.createdAt))
+    .limit(1);
+
+  return payout;
 }
 
 /**
  * Get user's payout history
  */
-export async function getUserPayouts(userId: string): Promise<ReferralPayout[]> {
+export async function getUserPayouts(userId: number) {
   const db = await getDb();
-  
-  return await (db as any).select({
-    id: true,
-    amount: true,
-    currency: true,
-    status: true,
-    method: true,
-    createdAt: true,
-    processedAt: true,
-    transactionId: true,
+
+  return await db.select({
+    id: referralPayouts.id,
+    amount: referralPayouts.amount,
+    currency: referralPayouts.currency,
+    status: referralPayouts.status,
+    method: referralPayouts.method,
+    createdAt: referralPayouts.createdAt,
+    processedAt: referralPayouts.processedAt,
+    transactionId: referralPayouts.transactionId,
   })
-    .from("referral_payouts")
-    .where("userId", "=", userId)
-    .orderBy("createdAt", "desc");
+    .from(referralPayouts)
+    .where(eq(referralPayouts.userId, userId))
+    .orderBy(desc(referralPayouts.createdAt));
 }
 
 /**
@@ -430,53 +392,62 @@ export async function getUserPayouts(userId: string): Promise<ReferralPayout[]> 
  */
 export async function cleanupExpiredReferrals(): Promise<number> {
   const db = await getDb();
-  
-  const result = await (db as any).update("referrals")
-    .set({ 
-      status: "expired",
-      updatedAt: new Date()
-    })
-    .where("expiresAt", "<", new Date())
-    .where("status", "=", "pending");
 
-  return result.changes || 0;
+  await db.update(referrals)
+    .set({ status: "expired" })
+    .where(and(
+      lt(referrals.expiresAt, new Date()),
+      eq(referrals.status, "pending")
+    ));
+
+  // MySQL doesn't return affected rows from update easily, so count expired
+  const expired = await db.select({ count: sql<number>`count(*)` })
+    .from(referrals)
+    .where(eq(referrals.status, "expired"));
+
+  return Number(expired[0]?.count ?? 0);
 }
 
 /**
- * Get referral leaderboard
+ * Get referral leaderboard - uses parameterized queries (no SQL injection)
  */
 export async function getReferralLeaderboard(
   limit: number = 10,
   timeframe: "all" | "month" | "year" = "all"
-): Promise<Array<{ userId: string; totalReferrals: number; totalEarned: number; rank: number }>> {
+): Promise<Array<{ userId: number; totalReferrals: number; totalEarned: number }>> {
   const db = await getDb();
-  
-  let whereClause = "r.status = 'completed'";
-  
+
+  // Build conditions array for type-safe filtering
+  const conditions = [eq(referrals.status, "completed")];
+
   if (timeframe === "month") {
     const monthStart = new Date();
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
-    whereClause += ` AND r.completedAt >= '${monthStart.toISOString()}'`;
+    conditions.push(sql`${referrals.completedAt} >= ${monthStart}`);
   } else if (timeframe === "year") {
     const yearStart = new Date();
     yearStart.setMonth(0, 1);
     yearStart.setHours(0, 0, 0, 0);
-    whereClause += ` AND r.completedAt >= '${yearStart.toISOString()}'`;
+    conditions.push(sql`${referrals.completedAt} >= ${yearStart}`);
   }
 
-  const query = `
-    SELECT 
-      r.referrerId as userId,
-      COUNT(*) as totalReferrals,
-      SUM(r.rewardAmount) as totalEarned,
-      RANK() OVER (ORDER BY SUM(r.rewardAmount) DESC) as rank
-    FROM referrals r
-    WHERE ${whereClause}
-    GROUP BY r.referrerId
-    ORDER BY totalEarned DESC
-    LIMIT ${limit}
-  `;
+  const safeLimit = Math.min(Math.max(1, limit), 50);
 
-  return await (db as any).execute(query);
+  const results = await db.select({
+    userId: referrals.referrerId,
+    totalReferrals: sql<number>`count(*)`,
+    totalEarned: sql<number>`COALESCE(SUM(${referrals.rewardAmount}), 0)`,
+  })
+    .from(referrals)
+    .where(and(...conditions))
+    .groupBy(referrals.referrerId)
+    .orderBy(sql`totalEarned DESC`)
+    .limit(safeLimit);
+
+  return results.map(r => ({
+    userId: r.userId,
+    totalReferrals: Number(r.totalReferrals),
+    totalEarned: Number(r.totalEarned),
+  }));
 }

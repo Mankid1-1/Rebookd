@@ -93,7 +93,7 @@ export function LeadConversation({ messages, outboundCount, inboundCount }: Lead
                             minute: "2-digit",
                           })}
                         </span>
-                        {msg.aiRewritten && (
+                        {(msg as any).aiRewritten && (
                           <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
                             <Bot className="w-2.5 h-2.5" /> AI
                           </span>

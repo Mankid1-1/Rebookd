@@ -15,7 +15,7 @@ function Input({
   const dialogComposition = useDialogComposition();
   
   // Store timeout reference to prevent memory leaks
-  const timeoutRef = React.useRef<NodeJS.Timeout>();
+  const timeoutRef = React.useRef<NodeJS.Timeout>(undefined);
 
   // Add composition event handlers to support input method editor (IME) for CJK languages.
   const {

@@ -11,7 +11,9 @@ async function seed() {
 
   const starterPriceId = process.env.STRIPE_PRICE_STARTER || null;
   const growthPriceId = process.env.STRIPE_PRICE_GROWTH || null;
+  const professionalPriceId = process.env.STRIPE_PRICE_PROFESSIONAL || null;
   const scalePriceId = process.env.STRIPE_PRICE_SCALE || null;
+  const flexPriceId = process.env.STRIPE_PRICE_FLEX || null;
 
   const items = [
     {
@@ -21,6 +23,7 @@ async function seed() {
       maxAutomations: 3,
       maxMessages: 500,
       maxSeats: 1,
+      revenueSharePercent: 0,
       features: ["AI rewrite", "Basic automations"],
       stripePriceId: starterPriceId,
     },
@@ -31,8 +34,22 @@ async function seed() {
       maxAutomations: 10,
       maxMessages: 2500,
       maxSeats: 3,
-      features: ["Everything in Starter", "Advanced automations", "Priority support"],
+      revenueSharePercent: 10,
+      features: ["Everything in Starter", "Advanced automations", "10% revenue share", "Priority support"],
       stripePriceId: growthPriceId,
+    },
+    {
+      name: "Professional",
+      slug: "professional",
+      priceMonthly: 19900,
+      maxAutomations: 9999,
+      maxMessages: 999999,
+      maxSeats: 5,
+      revenueSharePercent: 15,
+      promotionalSlots: 20,
+      hasPromotion: true,
+      features: ["Everything in Growth", "Unlimited automations", "15% revenue share", "ROI guarantee eligible", "Priority support"],
+      stripePriceId: professionalPriceId,
     },
     {
       name: "Scale",
@@ -41,8 +58,22 @@ async function seed() {
       maxAutomations: 9999,
       maxMessages: 999999,
       maxSeats: 10,
-      features: ["Enterprise support", "Custom integrations"],
+      revenueSharePercent: 15,
+      features: ["Enterprise support", "Custom integrations", "15% revenue share"],
       stripePriceId: scalePriceId,
+    },
+    {
+      name: "Flex",
+      slug: "flex",
+      priceMonthly: 9900,
+      maxAutomations: 9999,
+      maxMessages: 999999,
+      maxSeats: 3,
+      revenueSharePercent: 20,
+      promotionalSlots: 10,
+      hasPromotion: true,
+      features: ["All Professional features", "Reduced base fee", "20% revenue share", "ROI guarantee eligible", "First 10 customers only"],
+      stripePriceId: flexPriceId,
     },
   ];
 
@@ -51,7 +82,18 @@ async function seed() {
       await db
         .insert(plans)
         .values(p)
-        .onDuplicateKeyUpdate({ set: { name: p.name, priceMonthly: p.priceMonthly, maxAutomations: p.maxAutomations, maxMessages: p.maxMessages, maxSeats: p.maxSeats, features: p.features, stripePriceId: p.stripePriceId } });
+        .onDuplicateKeyUpdate({
+          set: {
+            name: p.name,
+            priceMonthly: p.priceMonthly,
+            maxAutomations: p.maxAutomations,
+            maxMessages: p.maxMessages,
+            maxSeats: p.maxSeats,
+            revenueSharePercent: p.revenueSharePercent,
+            features: p.features,
+            stripePriceId: p.stripePriceId,
+          },
+        });
       console.log(`Upserted plan: ${p.slug}`);
     } catch (err) {
       console.error(`Failed to upsert plan ${p.slug}:`, err);

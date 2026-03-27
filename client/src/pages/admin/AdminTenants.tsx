@@ -182,7 +182,7 @@ export default function AdminTenants() {
                       </TableCell>
                       <TableCell><span className="text-xs text-muted-foreground capitalize">{tenant.industry || "—"}</span></TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={`text-[10px] ${PLAN_STYLES[tenant.planSlug] ?? PLAN_STYLES.free}`}>
+                        <Badge variant="outline" className={`text-[10px] ${planStyles[tenant.planSlug] ?? planStyles.free}`}>
                           {(tenant.planSlug || "free").charAt(0).toUpperCase() + (tenant.planSlug || "free").slice(1)}
                         </Badge>
                       </TableCell>
