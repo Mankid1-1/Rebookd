@@ -578,13 +578,39 @@ export const appRouter = router({
       const user = ctx.user;
       if (!user.tenantId) return null; // Admin users without tenant see null
       const tenant = await TenantService.getTenantById(ctx.db, user.tenantId);
-      return tenant ?? null;
+      if (!tenant) return null;
+      // Merge settings JSON fields into the response for the Settings page
+      const s = tenant.settings ?? {};
+      return { ...tenant, email: s.email ?? null, phone: s.phone ?? null, website: s.website ?? null, address: s.address ?? null, city: s.city ?? null, stateRegion: s.stateRegion ?? null, zipCode: s.zipCode ?? null };
     }),
 
     update: tenantProcedure
-      .input(z.object({ name: z.string().optional(), timezone: z.string().optional(), industry: z.string().optional() }))
+      .input(z.object({
+        name: z.string().optional(),
+        timezone: z.string().optional(),
+        industry: z.string().optional(),
+        email: z.string().email().optional().or(z.literal("")),
+        phone: z.string().optional(),
+        website: z.string().optional(),
+        address: z.string().optional(),
+        city: z.string().optional(),
+        stateRegion: z.string().optional(),
+        zipCode: z.string().optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
-        await TenantService.updateTenant(ctx.db, ctx.tenantId, input);
+        const { email, phone, website, address, city, stateRegion, zipCode, ...coreFields } = input;
+        const settingsFields: Record<string, any> = {};
+        if (email !== undefined) settingsFields.email = email;
+        if (phone !== undefined) settingsFields.phone = phone;
+        if (website !== undefined) settingsFields.website = website;
+        if (address !== undefined) settingsFields.address = address;
+        if (city !== undefined) settingsFields.city = city;
+        if (stateRegion !== undefined) settingsFields.stateRegion = stateRegion;
+        if (zipCode !== undefined) settingsFields.zipCode = zipCode;
+        await TenantService.updateTenant(ctx.db, ctx.tenantId, {
+          ...coreFields,
+          ...(Object.keys(settingsFields).length > 0 ? { settings: settingsFields } : {}),
+        });
         return { success: true };
       }),
 
@@ -1184,7 +1210,7 @@ export const appRouter = router({
           const stripeSub = await stripe.subscriptions.retrieve(subRow.stripeId).catch(() => null);
           customerId = (stripeSub as any)?.customer;
         }
-        if (!customerId) throw new TRPCError({ code: "BAD_REQUEST", message: "No Stripe customer found" });
+        if (!customerId) return { url: null, error: "No active subscription found. Please subscribe to a plan first." };
         const portal = await stripe.billingPortal.sessions.create({
           customer: customerId,
           return_url: input.returnUrl || `${process.env.APP_URL || "http://localhost:3000"}/billing`,

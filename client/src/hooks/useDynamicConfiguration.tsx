@@ -5,9 +5,11 @@
  * based on actual usage patterns, permissions, and business logic.
  */
 
+import React, { useMemo, useCallback } from 'react';
 import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
+import { Users, Phone, Calendar, MessageSquare, Mail, Zap, Clock, TrendingUp } from 'lucide-react';
 
 // Dynamic status configuration based on real business data
 export function useDynamicStatuses() {
@@ -15,7 +17,7 @@ export function useDynamicStatuses() {
   const { context } = useProgressiveDisclosureContext();
   
   // Get real statuses from tenant configuration or defaults based on user skill
-  return React.useMemo(() => {
+  return useMemo(() => {
     if (tenantConfig?.customStatuses) {
       return tenantConfig.customStatuses.map(status => ({
         value: status.id,
@@ -60,7 +62,7 @@ export function useDynamicAutomationNodes() {
   const { data: availableIntegrations } = trpc.integrations.list.useQuery();
   const { context } = useProgressiveDisclosureContext();
   
-  return React.useMemo(() => {
+  return useMemo(() => {
     const baseNodes = [
       // Core triggers available to all users
       {
@@ -153,7 +155,7 @@ export function useDynamicQuickActions() {
   const { data: unreadCounts } = trpc.notifications.unreadCounts.useQuery();
   const { context } = useProgressiveDisclosureContext();
   
-  return React.useCallback((onAction: (action: string) => void) => {
+  return useCallback((onAction: (action: string) => void) => {
     const actions = [];
     
     // Base actions available to all users
@@ -236,7 +238,7 @@ export function useDynamicDashboardMetrics() {
   const { data: tenantConfig } = trpc.tenant.get.useQuery();
   const { context } = useProgressiveDisclosureContext();
   
-  return React.useMemo(() => {
+  return useMemo(() => {
     const metrics = [];
     
     // Base metrics for all users
@@ -277,7 +279,7 @@ export function useDynamicDashboardMetrics() {
 export function useDynamicUIPreferences() {
   const { context } = useProgressiveDisclosureContext();
   
-  return React.useMemo(() => {
+  return useMemo(() => {
     const preferences = {
       // Density based on user efficiency
       density: context.userSkill.behavior.efficiencyScore > 70 ? 'compact' : 
@@ -310,7 +312,7 @@ export function useDynamicFeatureAvailability() {
   const { data: userPermissions } = trpc.user.permissions.useQuery();
   const { context } = useProgressiveDisclosureContext();
   
-  return React.useMemo(() => {
+  return useMemo(() => {
     const features = {
       // Core features always available
       dashboard: true,

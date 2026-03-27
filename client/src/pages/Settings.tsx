@@ -248,6 +248,9 @@ export default function Settings() {
       setTimezone(tenant.timezone ?? "");
       setIndustry(tenant.industry ?? "");
       setCity((tenant as any).city ?? "");
+      setStateRegion((tenant as any).stateRegion ?? "");
+      setZipCode((tenant as any).zipCode ?? "");
+      setAddress((tenant as any).address ?? "");
       setBusinessEmail((tenant as any).email ?? "");
       setBusinessPhone((tenant as any).phone ?? "");
       setWebsite((tenant as any).website ?? "");
@@ -323,8 +326,15 @@ export default function Settings() {
       name: name.trim(),
       timezone: timezone || undefined,
       industry: industry || undefined,
+      email: businessEmail || undefined,
+      phone: businessPhone || undefined,
+      website: website || undefined,
+      address: address || undefined,
+      city: city || undefined,
+      stateRegion: stateRegion || undefined,
+      zipCode: zipCode || undefined,
     });
-  }, [name, timezone, industry, businessEmail, website, updateTenant]);
+  }, [name, timezone, industry, businessEmail, businessPhone, website, address, city, stateRegion, zipCode, updateTenant]);
 
   const handlePasswordChange = useCallback(() => {
     const errors: Record<string, string> = {};

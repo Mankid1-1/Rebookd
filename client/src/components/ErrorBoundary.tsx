@@ -14,52 +14,57 @@ interface State {
   error: Error | null;
   errorInfo: ErrorInfo | null;
   retryCount: number;
+  previousPath: string;
 }
 
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null, errorInfo: null, retryCount: 0 };
+    this.state = { hasError: false, error: null, errorInfo: null, retryCount: 0, previousPath: '/dashboard' };
   }
 
-  static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error, errorInfo: null, retryCount: 0 };
+  static getDerivedStateFromError(error: Error): Partial<State> {
+    return { hasError: true, error, errorInfo: null };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    this.setState(prevState => ({ 
-      error, 
-      errorInfo, 
-      retryCount: prevState.retryCount + 1 
+    this.setState(prevState => ({
+      error,
+      errorInfo,
+      retryCount: prevState.retryCount + 1,
     }));
 
-    // Log error to monitoring service (redacted in production)
     if (process.env.NODE_ENV === 'development') {
       console.error('Error caught by boundary:', error, errorInfo);
     } else {
-      // In production, log only essential error info without full component stack
       console.error('Error caught by boundary:', error.message, error.name);
     }
 
-    // Call custom error handler if provided
     if (this.props.onError) {
       this.props.onError(error, errorInfo);
     }
   }
 
   handleRetry = () => {
-    this.setState({
-      hasError: false,
-      error: null,
-      errorInfo: null
-    });
+    // Reload the page for a clean retry rather than re-rendering the same broken tree
+    window.location.reload();
+  };
+
+  handleGoBack = () => {
+    // Go back to last working page, or fallback to dashboard
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.location.href = '/dashboard';
+    }
   };
 
   render() {
     if (this.state.hasError) {
       const maxRetries = 3;
-      const canRetry = this.state.retryCount <= maxRetries;
-      
+      const attemptsLeft = maxRetries - this.state.retryCount + 1;
+      const canRetry = attemptsLeft > 0;
+
       return this.props.fallback || (
         <div className="min-h-screen flex items-center justify-center bg-background p-4">
           <Card className="w-full max-w-md border-red-200">
@@ -71,10 +76,9 @@ class ErrorBoundary extends Component<Props, State> {
             </CardHeader>
             <CardContent className="text-center space-y-4">
               <p className="text-muted-foreground">
-                {canRetry 
+                {canRetry
                   ? "An unexpected error occurred. Please try again."
-                  : "A persistent error occurred. Please contact support if the problem continues."
-                }
+                  : "This page keeps failing. Going back to where you were."}
               </p>
 
               {process.env.NODE_ENV === 'development' && this.state.error && (
@@ -99,17 +103,13 @@ class ErrorBoundary extends Component<Props, State> {
               {canRetry ? (
                 <Button onClick={this.handleRetry} className="w-full">
                   <RotateCcw className="h-4 w-4 mr-2" />
-                  Try Again ({maxRetries - this.state.retryCount + 1} attempts left)
+                  Try Again ({attemptsLeft} attempt{attemptsLeft !== 1 ? 's' : ''} left)
                 </Button>
               ) : (
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">
-                    Maximum retry attempts reached. This appears to be a persistent issue.
-                  </p>
-                  <Button onClick={() => window.location.reload()} variant="outline" className="w-full">
-                    Reload Page
-                  </Button>
-                </div>
+                <Button onClick={this.handleGoBack} className="w-full">
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Go Back
+                </Button>
               )}
             </CardContent>
           </Card>
