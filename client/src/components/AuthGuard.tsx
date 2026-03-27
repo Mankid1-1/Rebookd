@@ -8,10 +8,11 @@ import { Loader2, Lock, Shield } from "lucide-react";
 interface AuthGuardProps {
   children: React.ReactNode;
   adminOnly?: boolean;
+  tenantOnly?: boolean;
   fallback?: React.ReactNode;
 }
 
-export function AuthGuard({ children, adminOnly = false, fallback }: AuthGuardProps) {
+export function AuthGuard({ children, adminOnly = false, tenantOnly = false, fallback }: AuthGuardProps) {
   const authState = useAuth({ redirectOnUnauthenticated: false });
   const user = authState.user;
   const isLoading = authState.loading;
@@ -33,7 +34,12 @@ export function AuthGuard({ children, adminOnly = false, fallback }: AuthGuardPr
       navigate("/dashboard");
       return;
     }
-  }, [user, isLoading, adminOnly, navigate, redirecting]);
+
+    if (!isLoading && user && tenantOnly && user.role === "admin") {
+      navigate("/admin/tenants");
+      return;
+    }
+  }, [user, isLoading, adminOnly, tenantOnly, navigate, redirecting]);
 
   if (isLoading) {
     return (
@@ -84,6 +90,28 @@ export function AuthGuard({ children, adminOnly = false, fallback }: AuthGuardPr
             aria-label="Go to login page"
           >
             Go to Login
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (tenantOnly && user.role === "admin") {
+    return fallback || (
+      <div className="flex items-center justify-center min-h-screen p-4">
+        <div className="max-w-md w-full space-y-4">
+          <Alert>
+            <Shield className="h-4 w-4" />
+            <AlertDescription>
+              This page is for tenant users only. Admin accounts manage the platform from the admin panel.
+            </AlertDescription>
+          </Alert>
+          <Button
+            onClick={() => navigate("/admin/tenants")}
+            className="w-full"
+            aria-label="Go to admin panel"
+          >
+            Go to Admin Panel
           </Button>
         </div>
       </div>

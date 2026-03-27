@@ -6,6 +6,8 @@
  */
 
 import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
+export { useProgressiveDisclosureContext };
+export function trackFeatureUsage(featureId: string) { /* re-exported via context */ }
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
 

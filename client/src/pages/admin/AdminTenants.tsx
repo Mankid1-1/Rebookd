@@ -18,25 +18,32 @@ const getDynamicPlanStyles = () => {
   const isDarkMode = document.documentElement.classList.contains('dark');
   return {
     free: isDarkMode ? "bg-slate-500/25 text-slate-300 border-slate-500/40" : "bg-slate-500/15 text-slate-400 border-slate-500/30",
-    starter: isDarkMode ? "bg-green-500/25 text-green-300 border-green-500/40" : "bg-green-500/15 text-green-400 border-green-500/30",
-    growth: isDarkMode ? "bg-blue-500/25 text-blue-300 border-blue-500/40" : "bg-blue-500/15 text-blue-400 border-blue-500/30",
-    scale: isDarkMode ? "bg-purple-500/25 text-purple-300 border-purple-500/40" : "bg-purple-500/15 text-purple-400 border-purple-500/30",
+    rebooked: isDarkMode ? "bg-green-500/25 text-green-300 border-green-500/40" : "bg-green-500/15 text-green-400 border-green-500/30",
+    flex: isDarkMode ? "bg-blue-500/25 text-blue-300 border-blue-500/40" : "bg-blue-500/15 text-blue-400 border-blue-500/30",
+    trialing: isDarkMode ? "bg-yellow-500/25 text-yellow-300 border-yellow-500/40" : "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
   };
 };
 
 // Dynamic plan prices from real API data
 const getDynamicPlanPrices = (plans?: any[]) => {
   if (!plans || plans.length === 0) {
-    // Fallback prices if no plans data available
-    return { starter: 49, growth: 99, scale: 199 };
+    return { rebooked: 199, flex: 0 };
   }
-  
+
   const prices: Record<string, number> = {};
   plans.forEach(plan => {
-    prices[plan.slug] = plan.price;
+    prices[plan.slug] = plan.priceMonthly ?? plan.price ?? 0;
   });
-  
+
   return prices;
+};
+
+// Build a planId→slug lookup from plans data
+const buildPlanLookup = (plans?: any[]): Record<number, string> => {
+  if (!plans || plans.length === 0) return {};
+  const lookup: Record<number, string> = {};
+  plans.forEach(plan => { lookup[plan.id] = plan.slug; });
+  return lookup;
 };
 
 export default function AdminTenants() {
@@ -129,10 +136,9 @@ export default function AdminTenants() {
                 <SelectTrigger className="w-36"><SelectValue placeholder="All plans" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All plans</SelectItem>
-                  <SelectItem value="free">Free</SelectItem>
-                  <SelectItem value="starter">Starter</SelectItem>
-                  <SelectItem value="growth">Growth</SelectItem>
-                  <SelectItem value="scale">Scale</SelectItem>
+                  <SelectItem value="rebooked">Rebooked ($199)</SelectItem>
+                  <SelectItem value="flex">Flex</SelectItem>
+                  <SelectItem value="trialing">Trial</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -182,8 +188,8 @@ export default function AdminTenants() {
                       </TableCell>
                       <TableCell><span className="text-xs text-muted-foreground capitalize">{tenant.industry || "—"}</span></TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={`text-[10px] ${PLAN_STYLES[tenant.planSlug] ?? PLAN_STYLES.free}`}>
-                          {(tenant.planSlug || "free").charAt(0).toUpperCase() + (tenant.planSlug || "free").slice(1)}
+                        <Badge variant="outline" className={`text-[10px] ${planStyles[tenant.planSlug] ?? planStyles.free}`}>
+                          {tenant.subscriptionStatus === "trialing" ? "Trial" : (tenant.planSlug === "rebooked" ? "Rebooked $199" : tenant.planSlug === "flex" ? "Flex" : "Free")}
                         </Badge>
                       </TableCell>
                       <TableCell>

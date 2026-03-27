@@ -18,20 +18,14 @@ vi.mock("recharts", () => ({
   Bar: () => <div data-testid="bar-chart" />,
 }));
 
-// Mock lucide-react icons
-vi.mock("lucide-react", () => ({
-  TrendingUp: () => <div data-testid="trending-up-icon" />,
-  TrendingDown: () => <div data-testid="trending-down-icon" />,
-  DollarSign: () => <div data-testid="dollar-sign-icon" />,
-  Users: () => <div data-testid="users-icon" />,
-  Target: () => <div data-testid="target-icon" />,
-  AlertCircle: () => <div data-testid="alert-circle-icon" />,
-  CheckCircle: () => <div data-testid="check-circle-icon" />,
-  ArrowUp: () => <div data-testid="arrow-up-icon" />,
-  ArrowDown: () => <div data-testid="arrow-down-icon" />,
-  Calendar: () => <div data-testid="calendar-icon" />,
-  PieChart: () => <div data-testid="pie-chart-icon" />,
-  BarChart3: () => <div data-testid="bar-chart-icon" />,
+// Mock lucide-react icons — use Proxy to auto-generate any icon component
+vi.mock("lucide-react", () => new Proxy({}, {
+  get: (_target, name) => {
+    if (typeof name !== "string") return undefined;
+    const IconComponent = (props: any) => <div data-testid={`${name}-icon`} {...props} />;
+    IconComponent.displayName = name as string;
+    return IconComponent;
+  },
 }));
 
 const mockRevenueMetrics = {

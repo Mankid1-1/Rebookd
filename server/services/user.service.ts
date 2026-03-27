@@ -39,6 +39,7 @@ export async function createUser(
     loginMethod?: string;
     passwordHash?: string;
     role?: "user" | "admin";
+    accountType?: "business" | "referral";
     active?: boolean;
     lastSignedIn?: Date;
   },

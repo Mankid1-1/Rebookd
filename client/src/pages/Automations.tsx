@@ -25,6 +25,7 @@ import {
   trackFeatureUsage
 } from "@/hooks/useDynamicAutomation";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useLocale } from "@/contexts/LocaleContext";
 
 // Dynamic automation catalogue based on user skill and business type
 const getDynamicAutomationCatalogue = (userSkill?: any, businessType?: string) => {
@@ -805,6 +806,7 @@ function AutomationRow({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Automations() {
+  const { t } = useLocale();
   const { context, trackFeatureUsage } = useProgressiveDisclosureContext();
   const { user } = useAuth();
   const { data: tenant } = trpc.tenant.get.useQuery();
@@ -880,7 +882,7 @@ export default function Automations() {
       <div className="p-6 space-y-5 max-w-4xl mx-auto">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Automations</h1>
+            <h1 className="text-2xl font-bold">{t('automationsPage.title')}</h1>
             <p className="text-muted-foreground text-sm mt-1">
               {enabledCount} active · {configuredCount} configured · {CATALOGUE.length} total
             </p>

@@ -102,4 +102,50 @@ export const automationTemplates = [
       { type: "sms", message: "Hi {{name}}, thanks for reaching out! Reply with a time that works and we'll book you." },
     ],
   },
+  {
+    key: "birthday_promo",
+    name: "Birthday Promo",
+    category: "loyalty",
+    trigger: "lead.birthday",
+    steps: [
+      { type: "sms", message: "Happy birthday {{first_name}}! 🎂 As a gift from {{business}}, enjoy a special birthday offer. Reply BIRTHDAY to claim yours." },
+    ],
+  },
+  {
+    key: "loyalty_milestone",
+    name: "Loyalty Milestone",
+    category: "loyalty",
+    trigger: "appointment.completed",
+    steps: [
+      { type: "sms", message: "Congrats {{first_name}}! You've hit a loyalty milestone at {{business}}. We have a special thank-you reward waiting for you. Reply REWARD to claim it." },
+    ],
+  },
+  {
+    key: "review_request",
+    name: "Post-Appointment Review Request",
+    category: "follow_up",
+    trigger: "appointment.completed",
+    steps: [
+      { type: "delay", value: 7200 },
+      { type: "sms", message: "Thanks for visiting {{business}} today, {{first_name}}! If you had a great experience, we'd love a quick review: {{review_link}}. It means the world to us!" },
+    ],
+  },
+  {
+    key: "appointment_reminder_2h",
+    name: "2-Hour Appointment Reminder",
+    category: "appointment",
+    trigger: "appointment.reminder",
+    steps: [
+      { type: "sms", message: "Quick reminder {{first_name}} — your appointment at {{business}} is in 2 hours ({{time}}). See you soon! Reply RESCHEDULE if you need to change." },
+    ],
+  },
+  {
+    key: "cancellation_flurry",
+    name: "Cancellation Flurry (Waiting List)",
+    category: "cancellation",
+    trigger: "appointment.cancelled",
+    steps: [
+      { type: "sms", message: "Great news {{first_name}}! A spot just opened at {{business}} on {{date}} at {{time}}. Want it? Reply YES to grab it before someone else does!" },
+    ],
+  },
 ];

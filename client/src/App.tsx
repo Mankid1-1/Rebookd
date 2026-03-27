@@ -3,7 +3,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { CookieConsent } from "./components/CookieConsent";
+import { LocaleOnboardingModal } from "./components/LanguageSelector";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { LocaleProvider } from "./contexts/LocaleContext";
 import { lazy, Suspense } from "react";
 import { AuthGuard } from "./components/AuthGuard";
 
@@ -37,12 +40,29 @@ const SmartScheduling = lazy(() => import("@/pages/SmartScheduling"));
 const PaymentEnforcement = lazy(() => import("@/pages/PaymentEnforcement"));
 const AfterHours = lazy(() => import("@/pages/AfterHours"));
 const AdminAutomation = lazy(() => import("@/pages/AdminAutomation"));
+const Referral = lazy(() => import("./pages/Referral"));
+const CalendarIntegration = lazy(() => import("./pages/CalendarIntegration"));
+const WaitingList = lazy(() => import("./pages/WaitingList"));
+const ReviewManagement = lazy(() => import("./pages/ReviewManagement"));
+const Rescheduling = lazy(() => import("./pages/Rescheduling"));
+
+// Legal / Public pages - lazy loaded
+const Privacy = lazy(() => import("./pages/Privacy"));
+const Terms = lazy(() => import("./pages/Terms"));
+const TCPACompliance = lazy(() => import("./pages/TCPACompliance"));
+const Support = lazy(() => import("./pages/Support"));
 
 function Router() {
   return (
     <Switch>
       {/* Public */}
       <Route path="/" component={Home} />
+
+      {/* Public pages */}
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/terms" component={Terms} />
+      <Route path="/tcpa" component={TCPACompliance} />
+      <Route path="/support" component={Support} />
 
       {/* Onboarding */}
       <Route path="/onboarding" component={Onboarding} />
@@ -69,12 +89,12 @@ function Router() {
         </AuthGuard>
       </Route>
       <Route path="/automations">
-        <AuthGuard>
+        <AuthGuard tenantOnly>
           <Automations />
         </AuthGuard>
       </Route>
       <Route path="/templates">
-        <AuthGuard>
+        <AuthGuard tenantOnly>
           <Templates />
         </AuthGuard>
       </Route>
@@ -94,59 +114,89 @@ function Router() {
         </AuthGuard>
       </Route>
       <Route path="/stripe-connect">
-        <AuthGuard>
+        <AuthGuard tenantOnly>
           <StripeConnect />
         </AuthGuard>
       </Route>
 
-      {/* High-Impact Feature Routes - Protected */}
+      {/* High-Impact Feature Routes - Tenant Only */}
       <Route path="/lead-capture">
-        <AuthGuard>
+        <AuthGuard tenantOnly>
           <LeadCapture />
         </AuthGuard>
       </Route>
       <Route path="/booking-conversion">
-        <AuthGuard>
+        <AuthGuard tenantOnly>
           <BookingConversion />
         </AuthGuard>
       </Route>
       <Route path="/no-show-recovery">
-        <AuthGuard>
+        <AuthGuard tenantOnly>
           <NoShowRecovery />
         </AuthGuard>
       </Route>
       <Route path="/cancellation-recovery">
-        <AuthGuard>
+        <AuthGuard tenantOnly>
           <CancellationRecovery />
         </AuthGuard>
       </Route>
       <Route path="/retention-engine">
-        <AuthGuard>
+        <AuthGuard tenantOnly>
           <RetentionEngine />
         </AuthGuard>
       </Route>
       <Route path="/smart-scheduling">
-        <AuthGuard>
+        <AuthGuard tenantOnly>
           <SmartScheduling />
         </AuthGuard>
       </Route>
       <Route path="/payment-enforcement">
-        <AuthGuard>
+        <AuthGuard tenantOnly>
           <PaymentEnforcement />
         </AuthGuard>
       </Route>
       <Route path="/after-hours">
-        <AuthGuard>
+        <AuthGuard tenantOnly>
           <AfterHours />
         </AuthGuard>
       </Route>
       <Route path="/admin-automation">
-        <AuthGuard>
+        <AuthGuard tenantOnly>
           <AdminAutomation />
+        </AuthGuard>
+      </Route>
+      <Route path="/referral">
+        <AuthGuard tenantOnly>
+          <Referral />
+        </AuthGuard>
+      </Route>
+      <Route path="/calendar-integration">
+        <AuthGuard tenantOnly>
+          <CalendarIntegration />
+        </AuthGuard>
+      </Route>
+      <Route path="/waiting-list">
+        <AuthGuard tenantOnly>
+          <WaitingList />
+        </AuthGuard>
+      </Route>
+      <Route path="/review-management">
+        <AuthGuard tenantOnly>
+          <ReviewManagement />
+        </AuthGuard>
+      </Route>
+      <Route path="/rescheduling">
+        <AuthGuard tenantOnly>
+          <Rescheduling />
         </AuthGuard>
       </Route>
 
       {/* Admin - Admin Only Routes */}
+      <Route path="/admin">
+        <AuthGuard adminOnly>
+          <AdminTenants />
+        </AuthGuard>
+      </Route>
       <Route path="/admin/tenants">
         <AuthGuard adminOnly>
           <AdminTenants />
@@ -179,19 +229,23 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
-        <TooltipProvider>
-          <Toaster richColors position="top-right" />
-          <Suspense fallback={
-            <div className="flex items-center justify-center min-h-screen bg-background">
-              <div className="flex flex-col items-center space-y-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                <div className="text-muted-foreground">Loading Rebooked...</div>
+        <LocaleProvider>
+          <TooltipProvider>
+            <Toaster richColors position="top-right" />
+            <Suspense fallback={
+              <div className="flex items-center justify-center min-h-screen bg-background">
+                <div className="flex flex-col items-center space-y-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  <div className="text-muted-foreground">Loading Rebooked...</div>
+                </div>
               </div>
-            </div>
-          }>
-            <Router />
-          </Suspense>
-        </TooltipProvider>
+            }>
+              <Router />
+              <LocaleOnboardingModal />
+              <CookieConsent />
+            </Suspense>
+          </TooltipProvider>
+        </LocaleProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

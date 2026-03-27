@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useState, useEffect } from "react";
+import { useLocale } from "@/contexts/LocaleContext";
 import { AddLeadDialog } from "@/components/leads/AddLeadDialog";
 import { LeadsFilter } from "@/components/leads/LeadsFilter";
 import { LeadsTable } from "@/components/leads/LeadsTable";
@@ -25,6 +26,7 @@ import {
 } from "lucide-react";
 
 export default function Leads() {
+  const { t } = useLocale();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -102,7 +104,7 @@ export default function Leads() {
           <div className="space-y-1">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                Leads
+                {t('sidebar.leads')}
               </h1>
               <HelpTooltip 
                 content="Manage all your potential customers and track their journey through your sales pipeline"
@@ -120,7 +122,7 @@ export default function Leads() {
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm">
               <Download className="h-4 w-4 mr-2" />
-              Export
+              {t('common.export')}
             </Button>
             <AddLeadDialog />
           </div>
