@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { eq, and, gte, lte, sql, isNotNull, isNull } from "drizzle-orm";
-import { messages, leads, automations } from "../../drizzle/schema";
-import { tenantProcedure, router } from "../_core/trpc";
+import { eq, and, gte, lte, sql, isNotNull, isNull, desc } from "drizzle-orm";
+import { messages, leads, automations, recoveryEvents } from "../../drizzle/schema";
+import { tenantProcedure, adminProcedure, router } from "../_core/trpc";
 import * as AnalyticsService from "../services/analytics.service";
 import * as LeadService from "../services/lead.service";
 import * as TenantService from "../services/tenant.service";
@@ -229,6 +229,86 @@ export const analyticsRouter = router({
     const received = Number(inboundRows[0]?.c ?? 0);
     return { reviewsRequested: requested, reviewsReceived: Math.min(received, requested), averageRating: 4.7, responseRate: requested > 0 ? Math.min(100, Math.round((received / requested) * 100)) : 0, period: "30d" };
   }),
+
+  // ─── Stage 12: Revenue Attribution by Automation ─────────────────
+  revenueByAutomation: tenantProcedure
+    .input(z.object({
+      days: z.number().int().min(1).max(365).default(30),
+    }).optional())
+    .query(async ({ ctx, input }) => {
+      const daysAgo = new Date(Date.now() - (input?.days ?? 30) * 24 * 60 * 60 * 1000);
+      const tid = ctx.tenantId;
+
+      // Get automation-level revenue from recovery events
+      const rows = await ctx.db
+        .select({
+          automationId: recoveryEvents.automationId,
+          automationName: automations.name,
+          totalEvents: sql<number>`COUNT(*)`,
+          conversions: sql<number>`SUM(CASE WHEN ${recoveryEvents.status} IN ('converted', 'realized', 'manual_realized') THEN 1 ELSE 0 END)`,
+          totalRevenue: sql<number>`COALESCE(SUM(${recoveryEvents.realizedRevenue}), 0)`,
+          estimatedRevenue: sql<number>`COALESCE(SUM(${recoveryEvents.estimatedRevenue}), 0)`,
+        })
+        .from(recoveryEvents)
+        .innerJoin(automations, eq(recoveryEvents.automationId, automations.id))
+        .where(
+          and(
+            eq(recoveryEvents.tenantId, tid),
+            gte(recoveryEvents.sentAt, daysAgo),
+            isNotNull(recoveryEvents.automationId),
+          )
+        )
+        .groupBy(recoveryEvents.automationId, automations.name)
+        .orderBy(desc(sql`totalRevenue`));
+
+      return {
+        automations: rows.map((r) => ({
+          automationId: r.automationId,
+          name: r.automationName,
+          totalEvents: Number(r.totalEvents),
+          conversions: Number(r.conversions),
+          conversionRate: Number(r.totalEvents) > 0 ? Math.round((Number(r.conversions) / Number(r.totalEvents)) * 100) : 0,
+          realizedRevenue: Number(r.totalRevenue),
+          estimatedRevenue: Number(r.estimatedRevenue),
+        })),
+        period: `${input?.days ?? 30}d`,
+      };
+    }),
+
+  // ─── Stage 12: ROI Summary ─────────────────────────────────────
+  roiSummary: tenantProcedure
+    .input(z.object({ days: z.number().int().min(1).max(365).default(30) }).optional())
+    .query(async ({ ctx, input }) => {
+      const ROIService = await import("../services/roi-guarantee.service");
+      const BillingService = await import("../services/billing.service");
+
+      const [guarantee, revenueShare] = await Promise.all([
+        ROIService.getGuaranteeStatus(ctx.db, ctx.tenantId),
+        BillingService.calculateRevenueShare(ctx.db, ctx.tenantId),
+      ]);
+
+      return {
+        guarantee,
+        revenueShare,
+      };
+    }),
+
+  // ─── Stage 13: Send Time Optimization ────────────────────────────
+  optimalSendTime: tenantProcedure.query(async ({ ctx }) => {
+    const SendTimeService = await import("../services/send-time-optimization.service");
+    return SendTimeService.getOptimalSendTime(ctx.db, ctx.tenantId);
+  }),
+
+  // ─── Stage 13: Lead Scoring ─────────────────────────────────────
+  leadScores: tenantProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(200).default(50), minScore: z.number().int().min(0).max(100).default(0) }).optional())
+    .query(async ({ ctx, input }) => {
+      const LeadScoringService = await import("../services/lead-scoring.service");
+      return LeadScoringService.scoreAllLeads(ctx.db, ctx.tenantId, {
+        limit: input?.limit ?? 50,
+        minScore: input?.minScore ?? 0,
+      });
+    }),
 
   reschedulingMetrics: tenantProcedure.query(async ({ ctx }) => {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);

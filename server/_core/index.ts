@@ -193,6 +193,56 @@ async function startServer() {
     });
   });
 
+  app.get("/health/detailed", async (_req, res) => {
+    const checks: Record<string, { status: string; latencyMs?: number; error?: string }> = {};
+
+    // DB check with latency
+    const dbStart = Date.now();
+    const dbOk = await pingDb();
+    checks.database = { status: dbOk ? "healthy" : "unhealthy", latencyMs: Date.now() - dbStart };
+
+    // Worker heartbeat
+    let workerHealthy = false;
+    try {
+      const heartbeat = JSON.parse(readFileSync(WORKER_HEARTBEAT_FILE, "utf8"));
+      const ts = Date.parse(heartbeat.ts || heartbeat.lastSuccessAt || "");
+      workerHealthy = Number.isFinite(ts) && Date.now() - ts <= WORKER_STALE_MS && heartbeat.status !== "error";
+      checks.worker = { status: workerHealthy ? "healthy" : "stale" };
+    } catch {
+      checks.worker = { status: "unreachable", error: "No heartbeat file" };
+    }
+
+    // Stripe connectivity
+    try {
+      const stripeStart = Date.now();
+      const { default: Stripe } = await import("stripe");
+      const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY || "", { apiVersion: "2022-11-15" });
+      await stripeClient.balance.retrieve();
+      checks.stripe = { status: "healthy", latencyMs: Date.now() - stripeStart };
+    } catch (err) {
+      checks.stripe = { status: "unhealthy", error: err instanceof Error ? err.message : "Unknown" };
+    }
+
+    // Memory
+    const memUsage = process.memoryUsage();
+    const memPressure = memUsage.heapUsed / memUsage.heapTotal;
+    checks.memory = { status: memPressure > 0.9 ? "warning" : "healthy" };
+
+    const allHealthy = Object.values(checks).every((c) => c.status === "healthy");
+    res.status(allHealthy ? 200 : 503).json({
+      status: allHealthy ? "healthy" : "degraded",
+      checks,
+      uptime: Math.floor(process.uptime()),
+      memory: {
+        rss: Math.round(memUsage.rss / 1024 / 1024),
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+        heapPressure: Math.round(memPressure * 100),
+      },
+      ts: new Date().toISOString(),
+    });
+  });
+
   app.get("/ready", async (_req, res) => {
     const dbOk = await pingDb();
     let workerHealthy = false;

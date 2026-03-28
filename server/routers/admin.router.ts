@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { eq, and, sql, gte, lte, desc, isNull } from "drizzle-orm";
 import { paginationSchema } from "../../shared/schemas/leads";
+import { tenants, subscriptions, users, leads, automations } from "../../drizzle/schema";
 import type { Db } from "../_core/context";
 import { adminProcedure, router } from "../_core/trpc";
 import * as TenantService from "../services/tenant.service";
@@ -111,5 +113,71 @@ export const adminRouter = router({
         await auditAdminRead(ctx, "admin.email.send", { to: input.to, subject: input.subject });
         return EmailService.sendEmail(input);
       }),
+  }),
+
+  // ─── Churn Prevention: At-risk tenants ───────────────────────────
+  churnRisk: adminProcedure.query(async ({ ctx }) => {
+    await auditAdminRead(ctx, "admin.churnRisk.list");
+
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    // Get all active tenants with their activity signals
+    const tenantRows = await ctx.db
+      .select({
+        tenantId: tenants.id,
+        tenantName: tenants.businessName,
+        createdAt: tenants.createdAt,
+      })
+      .from(tenants);
+
+    const atRiskTenants = await Promise.all(
+      tenantRows.map(async (t) => {
+        // Count recent logins (users with recent activity)
+        const [loginActivity] = await ctx.db
+          .select({ c: sql<number>`COUNT(*)` })
+          .from(users)
+          .where(and(eq(users.tenantId, t.tenantId), gte(users.lastLoginAt, thirtyDaysAgo)));
+
+        // Count active automations
+        const [autoActivity] = await ctx.db
+          .select({ c: sql<number>`COUNT(*)` })
+          .from(automations)
+          .where(and(eq(automations.tenantId, t.tenantId), eq(automations.enabled, true), isNull(automations.deletedAt)));
+
+        // Count recent messages
+        const [msgActivity] = await ctx.db
+          .select({ c: sql<number>`COUNT(*)` })
+          .from(leads)
+          .where(and(eq(leads.tenantId, t.tenantId), gte(leads.lastMessageAt, sevenDaysAgo)));
+
+        const recentLogins = Number(loginActivity?.c ?? 0);
+        const activeAutomations = Number(autoActivity?.c ?? 0);
+        const recentMessages = Number(msgActivity?.c ?? 0);
+
+        // Risk scoring: higher = more at risk
+        let riskScore = 0;
+        if (recentLogins === 0) riskScore += 40; // No logins in 30 days
+        if (activeAutomations === 0) riskScore += 30; // No active automations
+        if (recentMessages === 0) riskScore += 30; // No messages in 7 days
+
+        return {
+          tenantId: t.tenantId,
+          tenantName: t.tenantName,
+          riskScore,
+          riskLevel: riskScore >= 70 ? "high" as const : riskScore >= 40 ? "medium" as const : "low" as const,
+          signals: {
+            recentLogins,
+            activeAutomations,
+            recentMessages,
+          },
+        };
+      })
+    );
+
+    // Return sorted by risk (highest first), filter out low risk
+    return atRiskTenants
+      .filter((t) => t.riskScore >= 40)
+      .sort((a, b) => b.riskScore - a.riskScore);
   }),
 });

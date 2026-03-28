@@ -55,6 +55,31 @@ export async function getDb() {
   return _db;
 }
 
+/**
+ * Run a callback inside a MySQL transaction.
+ * Automatically commits on success, rolls back on error.
+ */
+export async function withTransaction<T>(
+  fn: (db: ReturnType<typeof drizzle<typeof schema>>) => Promise<T>,
+): Promise<T> {
+  if (!_pool) await getDb();
+  if (!_pool) throw new Error("Database pool not initialized");
+
+  const conn = await _pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const txDb = drizzle(conn, { schema, mode: "default" }) as ReturnType<typeof drizzle<typeof schema>>;
+    const result = await fn(txDb);
+    await conn.commit();
+    return result;
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+}
+
 /** Ping the DB — used by the health check endpoint. */
 export async function pingDb(): Promise<boolean> {
   try {
