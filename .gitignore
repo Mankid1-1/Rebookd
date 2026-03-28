@@ -12,6 +12,7 @@ build/
 .env.local
 .env.development.local
 .env.test.local
+.env.production
 .env.production.local
 
 # IDE and editor files
@@ -77,6 +78,11 @@ coverage/
 # Temp
 tmp/
 temp/
+.tmp.driveupload/
+
+# Large files / archives
+*.zip
+dist-build/
 
 # Database
 *.db

@@ -123,13 +123,6 @@ const getDynamicColors = () => {
   };
 };
 
-const SEVERITY_CLASS_MAP: Record<string, string> = {
-  low: "text-green-500 border-green-500/30",
-  medium: "text-yellow-500 border-yellow-500/30",
-  high: "text-red-500 border-red-500/30",
-  critical: "text-red-700 border-red-700/30",
-};
-
 export function RevenueLeakageDashboard({ 
   leakageReport, 
   isLoading = false, 
@@ -307,7 +300,7 @@ export function RevenueLeakageDashboard({
                     dataKey="value"
                   >
                     {Object.entries(leakageReport.leakageByType).map(([type]) => (
-                      <Cell key={type} fill={colors.leakage[type as keyof typeof colors.leakage] || "#6b7280"} />
+                      <Cell key={type} fill={LEAKAGE_COLORS[type] || "#6b7280"} />
                     ))}
                   </Pie>
                   <Tooltip
@@ -328,7 +321,7 @@ export function RevenueLeakageDashboard({
                     <div className="flex items-center gap-2">
                       <div 
                         className="w-3 h-3 rounded-full" 
-                        style={{ backgroundColor: colors.leakage[type as keyof typeof colors.leakage] || "#6b7280" }} 
+                        style={{ backgroundColor: LEAKAGE_COLORS[type] || "#6b7280" }} 
                       />
                       <span className="capitalize">{getLeakageTypeLabel(type)}</span>
                     </div>
@@ -411,7 +404,7 @@ export function RevenueLeakageDashboard({
                   <div>
                     <div className="flex items-center gap-2">
                       <h4 className="font-medium">{getLeakageTypeLabel(source.type)}</h4>
-                      <Badge variant="outline" className={SEVERITY_CLASS_MAP[source.severity]}>
+                      <Badge variant="outline" className={SEVERITY_COLORS[source.severity]}>
                         {source.severity.toUpperCase()}
                       </Badge>
                     </div>
@@ -429,7 +422,7 @@ export function RevenueLeakageDashboard({
                     size="sm" 
                     variant="outline" 
                     className="mt-2"
-                    onClick={() => onRecoveryAction?.("targeted_recovery", [Number(source.id) || 0])}
+                    onClick={() => onRecoveryAction?.("targeted_recovery", [source.id])}
                   >
                     <Play className="w-3 h-3 mr-1" />
                     Recover
@@ -519,7 +512,7 @@ export function RevenueLeakageDashboard({
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <h4 className="font-medium">{rec.title}</h4>
-                      <Badge variant="outline" className={SEVERITY_CLASS_MAP[rec.priority]}>
+                      <Badge variant="outline" className={SEVERITY_COLORS[rec.priority]}>
                         {rec.priority.toUpperCase()}
                       </Badge>
                       <Badge variant="outline">

@@ -11,14 +11,17 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import {
-  useDynamicLeakageDetection,
+import { 
+  useDynamicLeakageDetection, 
   useDynamicRecoveryStrategies,
   useDynamicRecoveryProbability,
   useDynamicActionPrioritization,
   useDynamicRevenueImpact,
+  useProgressiveDisclosureContext,
+  trackFeatureUsage,
+  trackSessionStart,
+  trackSessionEnd
 } from '@/hooks/useDynamicRevenueRecovery';
-import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
 import { trpc } from '@/lib/trpc';
 import { TrendingUp, Users, Target, Zap, AlertTriangle, CheckCircle } from 'lucide-react';
 
@@ -33,14 +36,20 @@ export function AdaptiveRevenueRecovery() {
   const getRevenueImpact = useDynamicRevenueImpact();
   const { context, trackFeatureUsage: trackFeature } = useProgressiveDisclosureContext();
   
-  // User performance data - endpoints not yet available
-  const userMetrics: any = undefined;
-  const automationPerformance: any = undefined;
-  const recoveryHistory: any = undefined;
-
+  // User performance data
+  const { data: userMetrics } = trpc.analytics.userConversionMetrics.useQuery();
+  const { data: automationPerformance } = trpc.analytics.automationPerformance.useQuery();
+  const { data: recoveryHistory } = trpc.analytics.recoveryHistory.useQuery();
+  
   // Track session and feature usage
   useEffect(() => {
+    trackSessionStart();
     trackFeature('revenue_recovery_dashboard');
+    
+    return () => {
+      const sessionDuration = (Date.now() - sessionStartTime.current) / 1000 / 60;
+      trackSessionEnd(sessionDuration);
+    };
   }, []);
 
   // Simulated recovery action with real tracking
@@ -50,10 +59,9 @@ export function AdaptiveRevenueRecovery() {
       trackFeature(`recovery_action_${actionType}`);
       
       // Execute the recovery action
-      const result = await (trpc.analytics as any).executeRecoveryCampaign.mutateAsync({
-        actionType,
-        leadIds,
-        userId: context.userSkill.level
+      const result = await trpc.analytics.executeRecoveryAction.mutateAsync({
+        leadId: leadIds[0] ?? 0,
+        action: actionType,
       });
       
       // Track success/failure
@@ -168,7 +176,7 @@ export function AdaptiveRevenueRecovery() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant={(leakage.severity as string) === 'critical' ? 'destructive' : 'secondary'}>
+                  <Badge variant={leakage.severity === 'critical' ? 'destructive' : 'secondary'}>
                     {leakage.severity}
                   </Badge>
                   <div className="text-sm">

@@ -22,7 +22,7 @@ export const smsBodySchema = z
   .max(1600, "Message exceeds maximum SMS length (1600 chars)");
 
 export const createLeadSchema = z.object({
-  name: z.string().min(1, "Name is required").max(255),
+  name: z.string().nullish().transform(v => v?.trim() || "Unknown").pipe(z.string().max(255)),
   phone: phoneSchema,
   email: z.string().email("Invalid email").max(320).optional().or(z.literal("")),
   source: z.string().max(100).optional(),
@@ -51,10 +51,10 @@ export const sendMessageSchema = z.object({
   idempotencyKey: z.string().uuid("idempotencyKey must be a UUID").optional(),
 });
 
-// Login schema - must match server signup requirements (12+ chars, mixed case, digit, special)
+// Login schema
 export const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
-  password: z.string().min(12, "Password must be at least 12 characters"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
 // Pagination schema

@@ -8,29 +8,27 @@ import { z } from 'zod';
 import type { Db } from '../_core/context';
 
 // Schema definitions
-const dateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD format");
-
 const getDashboardStatsSchema = z.object({
   tenantId: z.number(),
   dateRange: z.object({
-    start: dateStringSchema,
-    end: dateStringSchema,
+    start: z.string(),
+    end: z.string(),
   }).optional(),
 });
 
 const getRevenueAnalyticsSchema = z.object({
   tenantId: z.number(),
   dateRange: z.object({
-    start: dateStringSchema,
-    end: dateStringSchema,
+    start: z.string(),
+    end: z.string(),
   }).optional(),
 });
 
 const getLeadAnalyticsSchema = z.object({
   tenantId: z.number(),
   dateRange: z.object({
-    start: dateStringSchema,
-    end: dateStringSchema,
+    start: z.string(),
+    end: z.string(),
   }).optional(),
 });
 

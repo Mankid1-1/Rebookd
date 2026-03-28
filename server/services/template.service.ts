@@ -42,7 +42,7 @@ export async function updateTemplate(
 ) {
   await db
     .update(templates)
-    .set({ ...data, updatedAt: new Date() })
+    .set({ name: data.name, body: data.body, tone: data.tone, updatedAt: new Date() })
     .where(and(eq(templates.id, templateId), eq(templates.tenantId, tenantId), isNull(templates.deletedAt)));
 }
 

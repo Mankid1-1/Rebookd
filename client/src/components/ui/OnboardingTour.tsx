@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./dialog";
 import { Badge } from "./badge";
 import { ArrowRight, Sparkles, Users, MessageSquare, BarChart3, Zap } from "lucide-react";
 import { getItem, setItem } from "@/utils/storage";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useProgressiveDisclosureContext } from "./ProgressiveDisclosure";
 
 interface TourStep {

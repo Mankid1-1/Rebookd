@@ -3,7 +3,7 @@
 
 import CryptoJS from 'crypto-js';
 
-const ENCRYPTION_KEY = (import.meta as any).env.VITE_STORAGE_ENCRYPTION_KEY || 'rebooked-client-storage-v2';
+const ENCRYPTION_KEY = import.meta.env.VITE_STORAGE_ENCRYPTION_KEY || 'rebooked-client-storage-key';
 
 interface StorageItem<T = any> {
   value: T;

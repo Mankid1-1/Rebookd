@@ -219,7 +219,7 @@ export function ProgressiveDisclosure({
                       "p-3 border rounded-lg cursor-pointer transition-colors",
                       currentLevel === level.id
                         ? 'bg-blue-50 border-blue-500'
-                        : 'hover:bg-muted/30'
+                        : 'hover:bg-gray-50'
                     )}
                     onClick={() => {
                       if (canProgressToLevel(level.id) || level.id === currentLevel) {

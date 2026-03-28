@@ -23,7 +23,11 @@ export const users = mysqlTable("users", {
   loginMethod: varchar("loginMethod", { length: 64 }),
   passwordHash: varchar("passwordHash", { length: 255 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  accountType: mysqlEnum("accountType", ["business", "referral"]).default("business").notNull(),
   tenantId: int("tenantId"),
+  tenantRole: mysqlEnum("tenantRole", ["owner", "employee"]),
+  skillLevel: mysqlEnum("skillLevel", ["basic", "intermediate", "advanced"]).default("basic"),
+  skillLevelSetAt: timestamp("skillLevelSetAt"),
   active: boolean("active").default(true).notNull(),
   stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -66,12 +70,34 @@ export const tenants = mysqlTable("tenants", {
   timezone: varchar("timezone", { length: 64 }).default("America/New_York").notNull(),
   industry: varchar("industry", { length: 100 }),
   active: boolean("active").default(true).notNull(),
+  settings: json("settings").$type<Record<string, any>>(),
+  locale: varchar("locale", { length: 10 }).default("en").notNull(),
+  currency: varchar("currency", { length: 3 }).default("USD").notNull(),
+  country: varchar("country", { length: 100 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type Tenant = typeof tenants.$inferSelect;
 export type InsertTenant = typeof tenants.$inferInsert;
+
+// ─── Tenant Invitations ─────────────────────────────────────────────────────
+
+export const tenantInvitations = mysqlTable("tenant_invitations", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  email: varchar("email", { length: 255 }).notNull(),
+  role: mysqlEnum("role", ["employee"]).default("employee"),
+  token: varchar("token", { length: 255 }).notNull().unique(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => ({
+  tenantIdIdx: index("tenant_invitations_tenant_id_idx").on(t.tenantId),
+  emailIdx: index("tenant_invitations_email_idx").on(t.email),
+}));
+
+export type TenantInvitation = typeof tenantInvitations.$inferSelect;
+export type InsertTenantInvitation = typeof tenantInvitations.$inferInsert;
 
 // ─── Plans & Subscriptions ────────────────────────────────────────────────────
 
@@ -105,14 +131,15 @@ export const subscriptions = mysqlTable("subscriptions", {
   currentPeriodStart: timestamp("currentPeriodStart"),
   currentPeriodEnd: timestamp("currentPeriodEnd"),
   isPromotional: boolean("isPromotional").default(false).notNull(),
+  customMonthlyPrice: int("customMonthlyPrice"), // Flex plan: custom price in cents, null = use plan default
   promotionalExpiresAt: timestamp("promotionalExpiresAt"),
   // ROI Guarantee fields
-  guaranteeCohort: mysqlEnum("guaranteeCohort", ["risk_free_20", "flex_10"]),
-  guaranteeStatus: mysqlEnum("guaranteeStatus", ["active", "satisfied", "refunded", "expired"]),
+  guaranteeCohort: varchar("guaranteeCohort", { length: 50 }),
+  guaranteeStatus: mysqlEnum("guaranteeStatus", ["pending", "active", "passed", "failed", "refunded"]),
   guaranteeStartedAt: timestamp("guaranteeStartedAt"),
   guaranteeExpiresAt: timestamp("guaranteeExpiresAt"),
   lastRoiCheckAt: timestamp("lastRoiCheckAt"),
-  lastRoiAmount: int("lastRoiAmount"), // in cents, client's net ROI
+  lastRoiAmount: int("lastRoiAmount"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -212,8 +239,9 @@ export const leads = mysqlTable("leads", {
   tcpaConsentText: text("tcpaConsentText"), // Store the exact consent language
   unsubscribedAt: timestamp("unsubscribedAt"),
   unsubscribeMethod: varchar("unsubscribeMethod", { length: 50 }), // "sms_stop", "manual", etc.
-  recoverySource: varchar("recoverySource", { length: 100 }), // "rebookd_automation", "manual", etc.
-  recoveredFromLeadId: int("recoveredFromLeadId"), // Links to original canceled/no-show lead
+  // Recovery attribution fields (added by migration 0007)
+  recoverySource: varchar("recoverySource", { length: 100 }),
+  recoveredFromLeadId: int("recoveredFromLeadId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (t) => ({
@@ -249,7 +277,6 @@ export const messages = mysqlTable("messages", {
   aiRewritten: boolean("aiRewritten").default(false).notNull(),
   tone: varchar("tone", { length: 50 }),
   automationId: int("automationId"),
-  recoveryEventId: int("recoveryEventId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (t) => ({
   tenantIdIdx: index("messages_tenant_id_idx").on(t.tenantId),
@@ -257,7 +284,6 @@ export const messages = mysqlTable("messages", {
   tenantLeadIdx: index("messages_tenant_lead_idx").on(t.tenantId, t.leadId),
   createdAtIdx: index("messages_created_at_idx").on(t.tenantId, t.createdAt),
   idempotencyKeyIdx: uniqueIndex("messages_idempotency_key_idx").on(t.tenantId, t.idempotencyKey),
-  recoveryEventIdx: index("messages_recovery_event_idx").on(t.recoveryEventId),
 }));
 
 export type Message = typeof messages.$inferSelect;
@@ -517,93 +543,47 @@ export const stripeSubscriptions = mysqlTable("stripe_subscriptions", {
 export type StripeSubscription = typeof stripeSubscriptions.$inferSelect;
 export type InsertStripeSubscription = typeof stripeSubscriptions.$inferInsert;
 
-// ─── Revenue Recovery Attribution ────────────────────────────────────────────
+// ─── Recovery Attribution ─────────────────────────────────────────────────────
 
-/**
- * Tracks every recovery event from trigger to payment.
- * Each SMS automation that targets a lead creates a recovery_event.
- * When the lead rebooks, the event is marked converted.
- * When payment is captured, the event is marked realized.
- */
 export const recoveryEvents = mysqlTable("recovery_events", {
   id: int("id").autoincrement().primaryKey(),
   tenantId: int("tenantId").notNull(),
   leadId: int("leadId").notNull(),
-  /** The automation that triggered this recovery attempt */
   automationId: int("automationId"),
-  /** The message that was sent for this recovery attempt */
   messageId: int("messageId"),
-  /** Original canceled/no-show appointment this recovery targets */
   originalAppointmentId: varchar("originalAppointmentId", { length: 255 }),
-  /** New appointment booked as a result of this recovery */
   recoveredAppointmentId: varchar("recoveredAppointmentId", { length: 255 }),
-  /** Leakage type: no_show, cancellation, followup_missed, etc. */
   leakageType: varchar("leakageType", { length: 100 }).notNull(),
-  /** Current status of the recovery attempt */
-  status: mysqlEnum("status", [
-    "sent",           // SMS sent, awaiting response
-    "responded",      // Customer responded but hasn't booked
-    "converted",      // Customer rebooked (potential revenue)
-    "realized",       // Payment captured in Stripe (actual revenue)
-    "manual_realized",// Manually marked as recovered (off-platform payment)
-    "failed",         // Recovery attempt failed / no response
-    "expired",        // Recovery window expired
-  ]).default("sent").notNull(),
-  /** Unique tracking token embedded in SMS for attribution */
+  status: mysqlEnum("status", ["sent", "responded", "converted", "realized", "manual_realized", "failed", "expired"]).default("sent").notNull(),
   trackingToken: varchar("trackingToken", { length: 64 }).notNull(),
-  /** Stripe Payment Intent ID when payment is captured */
   stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
-  /** Stripe Invoice ID for reconciliation */
   stripeInvoiceId: varchar("stripeInvoiceId", { length: 255 }),
-  /** Estimated revenue at time of booking */
   estimatedRevenue: int("estimatedRevenue").default(0).notNull(),
-  /** Actual realized revenue from Stripe (cents) */
   realizedRevenue: int("realizedRevenue").default(0).notNull(),
-  /** Attribution model used: first_touch, last_touch */
   attributionModel: varchar("attributionModel", { length: 50 }).default("last_touch").notNull(),
-  /** Whether this is the winning attribution (dedup flag) */
   isPrimaryAttribution: boolean("isPrimaryAttribution").default(false).notNull(),
-  /** Notes for manual reconciliation */
   notes: text("notes"),
-  /** When the recovery SMS was sent */
   sentAt: timestamp("sentAt").defaultNow().notNull(),
-  /** When the customer responded */
   respondedAt: timestamp("respondedAt"),
-  /** When the customer rebooked */
   convertedAt: timestamp("convertedAt"),
-  /** When payment was captured */
   realizedAt: timestamp("realizedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-}, (t) => ({
-  tenantIdx: index("recovery_events_tenant_idx").on(t.tenantId),
-  leadIdx: index("recovery_events_lead_idx").on(t.tenantId, t.leadId),
-  trackingTokenIdx: uniqueIndex("recovery_events_tracking_token_idx").on(t.trackingToken),
-  statusIdx: index("recovery_events_status_idx").on(t.tenantId, t.status),
-  automationIdx: index("recovery_events_automation_idx").on(t.tenantId, t.automationId),
-  realizedAtIdx: index("recovery_events_realized_at_idx").on(t.tenantId, t.realizedAt),
-}));
+});
 
 export type RecoveryEvent = typeof recoveryEvents.$inferSelect;
 export type InsertRecoveryEvent = typeof recoveryEvents.$inferInsert;
 
-// ─── Feature Configs ─────────────────────────────────────────────────────────
+// ─── Feature Configs ──────────────────────────────────────────────────────────
 
-/**
- * Per-tenant feature configuration storage.
- * Each row stores the JSON config for one feature (e.g. "lead_capture",
- * "booking_conversion") scoped to a tenant.
- */
 export const featureConfigs = mysqlTable("feature_configs", {
   id: int("id").autoincrement().primaryKey(),
   tenantId: int("tenantId").notNull(),
   feature: varchar("feature", { length: 100 }).notNull(),
-  config: json("config").$type<Record<string, unknown>>().notNull(),
+  config: json("config").$type<Record<string, unknown>>(),
+  enabled: boolean("enabled").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-}, (t) => ({
-  tenantFeatureIdx: uniqueIndex("feature_configs_tenant_feature_idx").on(t.tenantId, t.feature),
-}));
+});
 
 export type FeatureConfig = typeof featureConfigs.$inferSelect;
-export type InsertFeatureConfig = typeof featureConfigs.$inferInsert;

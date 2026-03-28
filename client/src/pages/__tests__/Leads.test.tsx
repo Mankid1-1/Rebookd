@@ -28,11 +28,11 @@ vi.mock("wouter", () => ({
   useLocation: () => ["/leads", vi.fn()],
 }));
 
-vi.mock("@/_core/hooks/useAuth", () => ({
+vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { id: 1, name: "Test User", role: "admin" }, loading: false }),
 }));
 
-vi.mock("@/components/DashboardLayout", () => ({
+vi.mock("@/components/layout/DashboardLayout", () => ({
   default: ({ children }: any) => React.createElement("div", null, children),
 }));
 

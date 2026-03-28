@@ -21,8 +21,8 @@ import {
 import { toast } from "sonner";
 
 // User skill levels and their characteristics
-export type UserSkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
-
+import type { UserSkillLevel } from "../../../../shared/interfaces";
+export type { UserSkillLevel } from "../../../../shared/interfaces";
 export interface UserSkillProfile {
   level: UserSkillLevel;
   experience: {
@@ -41,10 +41,15 @@ export interface UserSkillProfile {
     adaptationSpeed: 'slow' | 'moderate' | 'fast';
   };
   behavior: {
-    explorationScore: number; // 0-100, how much they explore features
-    efficiencyScore: number; // 0-100, how efficient they are
-    confidenceLevel: number; // 0-100, how confident they seem
-    adaptationWillingness: number; // 0-100, how open to changes
+    explorationScore: number;
+    efficiencyScore: number;
+    confidenceLevel: number;
+    adaptationWillingness: number;
+  };
+  goals?: {
+    primary: string;
+    secondary: string[];
+    progress: Record<string, number>;
   };
 }
 
@@ -235,37 +240,35 @@ export function ProgressiveDisclosureProvider({ children, userId = 'current-user
   );
 }
 
-// Hook to use the shared context — returns safe defaults when no provider exists
-const noop = () => {};
-const noopAsync = async () => {};
-const defaultUserSkill: UserSkillProfile = {
-  level: 'intermediate',
-  experience: { totalSessions: 0, sessionDuration: 0, featureUsage: {}, completedTutorials: [], errorRate: 0, helpSeekingFrequency: 0 },
-  preferences: { uiComplexity: 'balanced', learningMode: false, showHints: true, progressiveDisclosure: true, adaptationSpeed: 'moderate' },
-  behavior: { explorationScore: 50, efficiencyScore: 50, confidenceLevel: 50, adaptationWillingness: 50 },
-};
-
-const defaultContext: ReturnType<typeof useProgressiveDisclosure> = {
-  context: { userSkill: defaultUserSkill, currentComplexity: 'standard' as any, disclosedFeatures: new Set(), hiddenFeatures: new Set(), adaptiveHints: [], tutorials: {}, featureUsage: {}, errors: [] },
+// Safe default when used outside a provider
+const SAFE_DEFAULT_CONTEXT = {
+  context: {
+    userSkill: null,
+    currentComplexity: 'standard' as UIComplexity,
+    disclosedFeatures: new Set<string>(),
+    hiddenFeatures: new Set<string>(),
+    adaptiveHints: [] as AdaptiveHint[],
+  },
   isAnalyzing: false,
-  analyzeUserBehavior: noopAsync as any,
-  trackFeatureUsage: noop,
-  trackSessionStart: noop,
-  trackSessionEnd: noop,
-  trackError: noop,
-  trackHelpSeeking: noop,
-  completeTutorial: noop,
-  adjustComplexity: noop as any,
-  toggleFeature: noop as any,
-  dismissHint: noop as any,
-  onDisclose: noop,
-  onConceal: noop,
+  analyzeUserBehavior: async () => {},
+  trackFeatureUsage: (_featureId: string) => {},
+  trackSessionStart: () => {},
+  trackSessionEnd: () => {},
+  trackError: (_errorType: string) => {},
+  trackHelpSeeking: () => {},
+  completeTutorial: (_tutorialId: string) => {},
+  adjustComplexity: (_complexity: UIComplexity) => {},
+  toggleFeature: (_featureId: string, _visible: boolean) => {},
+  dismissHint: (_hintId: string) => {},
+  onDisclose: (_featureId: string) => {},
+  onConceal: (_featureId: string) => {},
 };
 
+// Hook to use the shared context — returns safe defaults if no provider
 export function useProgressiveDisclosureContext() {
   const context = useContext(ProgressiveDisclosureContext);
   if (!context) {
-    return defaultContext;
+    return SAFE_DEFAULT_CONTEXT;
   }
   return context;
 }
@@ -498,7 +501,17 @@ export function useProgressiveDisclosure(userId: string) {
             confidenceLevel: 0.3,
             adaptationWillingness: 0.3,
           },
-        } as UserSkillProfile;
+          goals: {
+            primary: 'lead_management',
+            secondary: ['communication'],
+            progress: {
+              leadsAdded: 0,
+              messagesSent: 0,
+              campaignsCreated: 0,
+              automationsBuilt: 0,
+            },
+          },
+        };
       }
 
       setUserSkill(profile);

@@ -22,7 +22,7 @@ vi.mock("../db", () => ({
   getDb: () => Promise.resolve(mockDb)
 }));
 
-vi.mock("../services/rateLimit.service", () => ({
+vi.mock("../services/rate-limit.service", () => ({
   assertSmsRateLimitAvailable: () => Promise.resolve(),
   assertSmsHourlyDailyLimits: () => Promise.resolve(),
 }));

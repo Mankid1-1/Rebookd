@@ -209,8 +209,8 @@ export function LeadInfoSidebar({ lead, outboundCount, inboundCount }: LeadInfoS
             { label: "Replies received", value: inboundCount },
             {
               label: "Last activity",
-              value: (lead as any).lastMessageAt
-                ? new Date((lead as any).lastMessageAt).toLocaleDateString([], { month: "short", day: "numeric" })
+              value: lead.lastMessageAt
+                ? new Date(lead.lastMessageAt).toLocaleDateString([], { month: "short", day: "numeric" })
                 : "Never",
             },
             {

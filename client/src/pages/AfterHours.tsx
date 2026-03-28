@@ -1,415 +1,428 @@
+import DashboardLayout from "@/components/layout/DashboardLayout";
 import { useState, useEffect } from "react";
-import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
+import { useFeatureConfig } from "@/hooks/useFeatureConfig";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Clock,
-  Moon,
-  Sun,
-  MessageSquare,
-  Users,
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  Clock, 
+  Moon, 
+  Sun, 
+  MessageSquare, 
+  Users, 
   Settings,
-  CalendarCheck,
+  Bell,
+  CheckCircle,
   TrendingUp,
-  Link2,
+  Activity,
+  Calendar,
+  Phone,
+  Target,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
-
-function MetricSkeleton() {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-center">
-          <Skeleton className="h-10 w-10 rounded-lg mr-3" />
-          <div className="space-y-2">
-            <Skeleton className="h-3 w-24" />
-            <Skeleton className="h-7 w-16" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+import "@/styles/components.css";
 
 export default function AfterHours() {
+  const [activeTab, setActiveTab] = useState("response");
   const [config, setConfig] = useState({
-    enabled: true,
-    autoReplyTemplate:
-      "Hi! Thanks for reaching out. We're currently closed but will get back to you first thing in the morning. In the meantime, you can book online:",
-    bookingLink: "",
+    afterHoursEnabled: true,
+    instantResponse: true,
+    bookingLinkExpiry: 24,
     businessHours: {
       start: "08:00",
       end: "18:00",
-      timezone: "America/New_York",
+      timezone: "America/New_York"
     },
+    responseDelay: 5 // 5 minutes
   });
 
-  const { data: dashData, isLoading } = trpc.analytics.dashboard.useQuery(undefined, {
-    refetchInterval: 30000,
-  });
-  const metrics = dashData?.metrics;
-
-  const { data: savedConfig } = trpc.featureConfig.get.useQuery(
-    { feature: "after_hours" },
-    { retry: false }
-  );
-  const saveConfig = trpc.featureConfig.save.useMutation({
-    onSuccess: () => toast.success("After-hours configuration saved"),
-    onError: (err) => toast.error(err.message),
+  const { data: metrics, isLoading } = trpc.analytics.afterHoursMetrics.useQuery(undefined, { refetchInterval: 30000 });
+  const { data: settings } = trpc.tenant.settings.useQuery(undefined, { retry: false });
+  const updateConfig = trpc.tenant.updateAfterHoursConfig.useMutation({
+    onSuccess: () => toast.success("After-hours configuration updated"),
+    onError: (err) => toast.error(err.message)
   });
 
   useEffect(() => {
-    if (savedConfig?.config) {
-      setConfig((prev) => ({ ...prev, ...(savedConfig.config as any) }));
+    if (settings?.afterHoursConfig) {
+      setConfig(settings.afterHoursConfig as any);
     }
-  }, [savedConfig]);
+  }, [settings]);
 
   const handleSaveConfig = () => {
-    saveConfig.mutate({ feature: "after_hours", config: config as any });
+    updateConfig.mutate(config);
   };
 
-  const conversionRate = metrics?.leadCount
-    ? Math.round((metrics.bookedCount / metrics.leadCount) * 100)
-    : 0;
+  const handleTestResponse = () => {
+    toast.info("Test response not yet implemented");
+  };
+
+  const handleProcessQueue = () => {
+    toast.info("Queue processing not yet implemented");
+  };
+
+  if (isLoading) return <DashboardLayout>Loading...</DashboardLayout>;
 
   const isAfterHours = () => {
     const now = new Date();
-    const { start, end, timezone } = config.businessHours;
-    const [startHour, startMinute] = start.split(":").map(Number);
-    const [endHour, endMinute] = end.split(":").map(Number);
-
-    const currentTimeInTimezone = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      hour: "2-digit",
-      minute: "2-digit",
+    const businessHours = config.businessHours;
+    const [startHour, startMinute] = businessHours.start.split(':').map(Number);
+    const [endHour, endMinute] = businessHours.end.split(':').map(Number);
+    
+    // Get current time in the configured timezone
+    const currentTimeInTimezone = new Intl.DateTimeFormat('en-US', {
+      timeZone: businessHours.timezone,
+      hour: '2-digit',
+      minute: '2-digit',
       hour12: false,
     }).format(now);
+    
+    const [currentHour, currentMinute] = currentTimeInTimezone.split(':').map(Number);
+    
+    // Get current day in the configured timezone
+    const currentDayInTimezone = new Date(now.toLocaleString('en-US', { timeZone: businessHours.timezone })).getDay();
 
-    const [currentHour, currentMinute] = currentTimeInTimezone.split(":").map(Number);
-
-    const currentDayInTimezone = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      weekday: "short",
-    }).format(now);
-
-    const isWeekend = currentDayInTimezone === "Sat" || currentDayInTimezone === "Sun";
-    const isBeforeStart =
-      currentHour < startHour || (currentHour === startHour && currentMinute < startMinute);
-    const isAfterEnd =
-      currentHour >= endHour || (currentHour === endHour && currentMinute >= endMinute);
-
+    // 0-6 format (Sunday = 0)
+    const currentDay = currentDayInTimezone;
+    
+    // Check if weekend
+    const isWeekend = currentDay === 0 || currentDay === 6; // Sunday or Saturday
+    
+    // Check if outside business hours
+    const isBeforeStart = currentHour < startHour || (currentHour === startHour && currentMinute < startMinute);
+    const isAfterEnd = currentHour >= endHour || (currentHour === endHour && currentMinute >= endMinute);
+    
     return isWeekend || isBeforeStart || isAfterEnd;
   };
-
-  const afterHoursActive = isAfterHours();
 
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold">After-Hours Management</h1>
-            <p className="text-muted-foreground mt-1">
-              Capture leads 24/7 with instant auto-replies when your business is closed
+            <p className="text-muted-foreground mt-2">
+              Capture leads 24/7 with instant responses and booking links when business is closed
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <div
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${
-                afterHoursActive ? "bg-red-500/10" : "bg-green-500/10"
-              }`}
-            >
-              {afterHoursActive ? (
-                <Moon className="h-4 w-4 text-red-400" />
-              ) : (
-                <Sun className="h-4 w-4 text-green-400" />
-              )}
+          <div className="flex items-center gap-2">
+            <div className={`flex items-center gap-2 px-3 py-1 rounded-lg ${isAfterHours() ? 'bg-red-100' : 'bg-green-100'}`}>
+              {isAfterHours() ? <Moon className="h-4 w-4 text-red-600" /> : <Sun className="h-4 w-4 text-green-600" />}
               <span className="text-sm font-medium">
-                {afterHoursActive ? "After Hours" : "Business Hours"}
+                {isAfterHours() ? 'After Hours' : 'Business Hours'}
               </span>
             </div>
-            <Button onClick={handleSaveConfig} disabled={saveConfig.isPending}>
+            <Button onClick={handleTestResponse} variant="outline" disabled>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Test Response (Coming Soon)
+            </Button>
+            <Button onClick={handleProcessQueue} variant="outline" disabled>
+              <Bell className="h-4 w-4 mr-2" />
+              Process Queue (Coming Soon)
+            </Button>
+            <Button onClick={handleSaveConfig}>
               <Settings className="h-4 w-4 mr-2" />
-              {saveConfig.isPending ? "Saving..." : "Save Configuration"}
+              Save Configuration
             </Button>
           </div>
         </div>
 
-        {/* Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {isLoading ? (
-            <>
-              <MetricSkeleton />
-              <MetricSkeleton />
-              <MetricSkeleton />
-              <MetricSkeleton />
-            </>
-          ) : (
-            <>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
-                      <Users className="h-6 w-6 text-blue-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">After-Hours Leads</p>
-                      <p className="text-2xl font-bold">{metrics?.leadCount ?? 0}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-purple-500/10 rounded-lg mr-3">
-                      <MessageSquare className="h-6 w-6 text-purple-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Auto-Replies Sent</p>
-                      <p className="text-2xl font-bold">{metrics?.messageCount ?? 0}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-green-500/10 rounded-lg mr-3">
-                      <CalendarCheck className="h-6 w-6 text-green-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Converted</p>
-                      <p className="text-2xl font-bold">{metrics?.bookedCount ?? 0}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-orange-500/10 rounded-lg mr-3">
-                      <TrendingUp className="h-6 w-6 text-orange-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Response Rate</p>
-                      <p className="text-2xl font-bold">{conversionRate}%</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          )}
-        </div>
-
-        {/* Configuration + Status */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Configuration */}
+        {/* Metrics Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5 text-muted-foreground" />
-                Configuration
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="flex items-center justify-between">
+            <CardContent className="p-4">
+              <div className="flex items-center">
+                <div className="p-2 bg-blue-100 rounded-lg mr-3">
+                  <Users className="h-6 w-6 text-blue-600" />
+                </div>
                 <div>
-                  <Label htmlFor="after-hours-enabled">After-Hours Auto-Reply</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Automatically respond to leads outside business hours
-                  </p>
+                  <p className="text-sm font-medium text-muted-foreground">Total Leads</p>
+                  <p className="text-2xl font-bold">{metrics?.totalLeads || 0}</p>
                 </div>
-                <Switch
-                  id="after-hours-enabled"
-                  checked={config.enabled}
-                  onCheckedChange={(checked) =>
-                    setConfig((prev) => ({ ...prev, enabled: checked }))
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Auto-Reply Message Template</Label>
-                <Textarea
-                  value={config.autoReplyTemplate}
-                  onChange={(e) =>
-                    setConfig((prev) => ({ ...prev, autoReplyTemplate: e.target.value }))
-                  }
-                  rows={4}
-                  placeholder="Enter the message to send when you're closed..."
-                />
-                <p className="text-xs text-muted-foreground">
-                  This message is sent automatically to leads who contact you after hours
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1.5">
-                  <Link2 className="h-3.5 w-3.5" />
-                  Booking Link
-                </Label>
-                <Input
-                  value={config.bookingLink}
-                  onChange={(e) =>
-                    setConfig((prev) => ({ ...prev, bookingLink: e.target.value }))
-                  }
-                  placeholder="https://calendly.com/your-business"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Include in auto-replies so leads can self-book
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="business-start">Opens At</Label>
-                  <Input
-                    id="business-start"
-                    type="time"
-                    value={config.businessHours.start}
-                    onChange={(e) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        businessHours: { ...prev.businessHours, start: e.target.value },
-                      }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="business-end">Closes At</Label>
-                  <Input
-                    id="business-end"
-                    type="time"
-                    value={config.businessHours.end}
-                    onChange={(e) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        businessHours: { ...prev.businessHours, end: e.target.value },
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="timezone">Timezone</Label>
-                <Input
-                  id="timezone"
-                  value={config.businessHours.timezone}
-                  onChange={(e) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      businessHours: { ...prev.businessHours, timezone: e.target.value },
-                    }))
-                  }
-                  placeholder="America/New_York"
-                />
               </div>
             </CardContent>
           </Card>
-
-          {/* Status Panel */}
+          
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-muted-foreground" />
-                Current Status
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Live status indicator */}
-              <div
-                className={`p-4 rounded-lg text-center ${
-                  afterHoursActive ? "bg-red-500/10" : "bg-green-500/10"
-                }`}
-              >
-                {afterHoursActive ? (
-                  <Moon className="h-10 w-10 text-red-400 mx-auto mb-2" />
-                ) : (
-                  <Sun className="h-10 w-10 text-green-400 mx-auto mb-2" />
-                )}
-                <p className="text-lg font-semibold">
-                  {afterHoursActive ? "Currently Closed" : "Currently Open"}
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Business hours: {config.businessHours.start} - {config.businessHours.end}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {config.businessHours.timezone}
-                </p>
-              </div>
-
-              {/* Business hours summary */}
-              <div className="p-4 bg-muted rounded-lg space-y-2">
-                <h4 className="text-sm font-medium">Schedule</h4>
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <p>Monday - Friday: {config.businessHours.start} - {config.businessHours.end}</p>
-                  <p>Saturday - Sunday: Closed</p>
+            <CardContent className="p-4">
+              <div className="flex items-center">
+                <div className="p-2 bg-purple-100 rounded-lg mr-3">
+                  <Moon className="h-6 w-6 text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">After-Hours Leads</p>
+                  <p className="text-2xl font-bold">{metrics?.afterHoursLeads || 0}</p>
                 </div>
               </div>
-
-              {/* Activity empty state or summary */}
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium">After-Hours Activity</h4>
-                {!metrics?.messageCount ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <div className="p-3 bg-muted rounded-full mb-3">
-                      <MessageSquare className="h-6 w-6 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm font-medium text-muted-foreground">No activity yet</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Auto-replies will appear here once leads contact you after hours
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="text-center p-3 bg-muted rounded-lg">
-                      <p className="text-2xl font-bold">{metrics.messageCount}</p>
-                      <p className="text-xs text-muted-foreground">Messages Sent</p>
-                    </div>
-                    <div className="text-center p-3 bg-muted rounded-lg">
-                      <p className="text-2xl font-bold">{metrics.bookedCount}</p>
-                      <p className="text-xs text-muted-foreground">Converted</p>
-                    </div>
-                  </div>
-                )}
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center">
+                <div className="p-2 bg-green-100 rounded-lg mr-3">
+                  <TrendingUp className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Captured Leads</p>
+                  <p className="text-2xl font-bold">{metrics?.capturedLeads || 0}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center">
+                <div className="p-2 bg-orange-100 rounded-lg mr-3">
+                  <Calendar className="h-6 w-6 text-orange-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Capture Rate</p>
+                  <p className="text-2xl font-bold">{metrics?.captureRate || 0}%</p>
+                </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Performance Summary */}
+        {/* Configuration Tabs */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Configuration</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="response">Response</TabsTrigger>
+                  <TabsTrigger value="business">Business Hours</TabsTrigger>
+                  <TabsTrigger value="queue">Queue</TabsTrigger>
+                  <TabsTrigger value="advanced">Advanced</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="response" className="space-y-6 mt-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="after-hours-enabled">After-Hours Response</Label>
+                      <Switch
+                        id="after-hours-enabled"
+                        checked={config.afterHoursEnabled}
+                        onCheckedChange={(checked) => 
+                          setConfig(prev => ({ ...prev, afterHoursEnabled: checked }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="instant-response">Instant Response</Label>
+                      <Switch
+                        id="instant-response"
+                        checked={config.instantResponse}
+                        onCheckedChange={(checked) => 
+                          setConfig(prev => ({ ...prev, instantResponse: checked }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="response-delay">Response Delay (minutes)</Label>
+                      <Input
+                        id="response-delay"
+                        type="number"
+                        value={config.responseDelay}
+                        onChange={(e) => 
+                          setConfig(prev => ({ ...prev, responseDelay: parseInt(e.target.value) || 5 }))
+                        }
+                        min={1}
+                        max={60}
+                      />
+                    </div>
+                    <div className="p-4 bg-blue-50 rounded-lg">
+                      <h4 className="font-medium mb-2">Response Features</h4>
+                      <ul className="space-y-2 text-sm">
+                        <li>• 24/7 lead capture</li>
+                        <li>• Instant booking links</li>
+                        <li>• Business hours detection</li>
+                        <li>• Queue management</li>
+                      </ul>
+                    </div>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="business" className="space-y-6 mt-6">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="business-start">Business Hours Start</Label>
+                      <Input
+                        id="business-start"
+                        type="time"
+                        value={config.businessHours.start}
+                        onChange={(e) => 
+                          setConfig(prev => ({ 
+                            ...prev, 
+                            businessHours: { ...prev.businessHours, start: e.target.value }
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="business-end">Business Hours End</Label>
+                      <Input
+                        id="business-end"
+                        type="time"
+                        value={config.businessHours.end}
+                        onChange={(e) => 
+                          setConfig(prev => ({ 
+                            ...prev, 
+                            businessHours: { ...prev.businessHours, end: e.target.value }
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="timezone">Timezone</Label>
+                      <Input
+                        id="timezone"
+                        value={config.businessHours.timezone}
+                        onChange={(e) => 
+                          setConfig(prev => ({ 
+                            ...prev, 
+                            businessHours: { ...prev.businessHours, timezone: e.target.value }
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="p-4 bg-green-50 rounded-lg">
+                      <h4 className="font-medium mb-2">Business Hours</h4>
+                      <ul className="space-y-2 text-sm">
+                        <li>• Monday - Friday: {config.businessHours.start} - {config.businessHours.end}</li>
+                        <li>• Saturday - Sunday: Closed</li>
+                        <li>• Automatic timezone detection</li>
+                        <li>• Holiday configuration</li>
+                      </ul>
+                    </div>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="queue" className="space-y-6 mt-6">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="booking-link-expiry">Booking Link Expiry (hours)</Label>
+                      <Input
+                        id="booking-link-expiry"
+                        type="number"
+                        value={config.bookingLinkExpiry}
+                        onChange={(e) => 
+                          setConfig(prev => ({ ...prev, bookingLinkExpiry: parseInt(e.target.value) || 24 }))
+                        }
+                        min={1}
+                        max={168}
+                      />
+                    </div>
+                    <div className="p-4 bg-purple-50 rounded-lg">
+                      <h4 className="font-medium mb-2">Queue Management</h4>
+                      <ul className="space-y-2 text-sm">
+                        <li>• Automatic queue processing</li>
+                        <li>• Priority-based ordering</li>
+                        <li>• Batch notification sending</li>
+                        <li>• Real-time queue monitoring</li>
+                      </ul>
+                    </div>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="advanced" className="space-y-6 mt-6">
+                  <div className="space-y-4">
+                    <div className="p-4 bg-orange-50 rounded-lg">
+                      <h4 className="font-medium mb-2">Advanced Options</h4>
+                      <ul className="space-y-2 text-sm">
+                        <li>• Custom response templates</li>
+                        <li>• Multi-language support</li>
+                        <li>• Integration with CRM</li>
+                        <li>• Advanced analytics</li>
+                      </ul>
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Queue Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="text-center p-3 bg-muted rounded-lg">
+                    <p className="text-2xl font-bold">{metrics?.queueSize || 0}</p>
+                    <p className="text-sm text-muted-foreground">Queue Size</p>
+                  </div>
+                  <div className="text-center p-3 bg-muted rounded-lg">
+                    <p className="text-2xl font-bold">{metrics?.processedLeads || 0}</p>
+                    <p className="text-sm text-muted-foreground">Processed Leads</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  <h4 className="font-medium mb-2">Recent Queue Activity</h4>
+                  <div className="text-center p-4 text-muted-foreground">
+                    <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No recent activity</p>
+                    <p className="text-xs">Activity will appear here when leads are processed</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Capture Performance */}
         <Card>
           <CardHeader>
             <CardTitle>Capture Performance</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="text-center p-4 bg-blue-500/10 rounded-lg">
-                <Users className="h-8 w-8 text-blue-400 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-blue-400">{metrics?.leadCount ?? 0}</p>
-                <p className="text-sm text-muted-foreground">Total Leads</p>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="text-center p-3 bg-blue-50 rounded-lg">
+                  <p className="text-2xl font-bold text-blue-600">{metrics?.totalLeads || 0}</p>
+                  <p className="text-sm text-muted-foreground">Total Leads</p>
+                </div>
+                <div className="text-center p-3 bg-purple-50 rounded-lg">
+                  <p className="text-2xl font-bold text-purple-600">{metrics?.afterHoursLeads || 0}</p>
+                  <p className="text-sm text-muted-foreground">After-Hours Leads</p>
+                </div>
+                <div className="text-center p-3 bg-green-50 rounded-lg">
+                  <p className="text-2xl font-bold text-green-600">{metrics?.captureRate || 0}%</p>
+                  <p className="text-sm text-muted-foreground">Capture Rate</p>
+                </div>
               </div>
-              <div className="text-center p-4 bg-purple-500/10 rounded-lg">
-                <MessageSquare className="h-8 w-8 text-purple-400 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-purple-400">{metrics?.messageCount ?? 0}</p>
-                <p className="text-sm text-muted-foreground">Auto-Replies</p>
-              </div>
-              <div className="text-center p-4 bg-green-500/10 rounded-lg">
-                <TrendingUp className="h-8 w-8 text-green-400 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-green-400">{conversionRate}%</p>
-                <p className="text-sm text-muted-foreground">Response Rate</p>
+              
+              <div className="mt-6 p-4 bg-muted rounded-lg">
+                <h4 className="font-medium mb-2">24/7 Performance</h4>
+                <div className="flex items-center space-x-2">
+                  <div className="flex-1">
+                    <div className="text-sm text-muted-foreground mb-1">After-Hours Coverage</div>
+                    <div className="w-full bg-gray-200 rounded-full h-2 relative">
+                      <div 
+                        className="h-2 bg-green-500 rounded-full" 
+                        style={{ width: `${Math.min(100, Math.max(0, metrics?.captureRate || 0))}%` }} 
+                      />
+                    </div>
+                  </div>
+                  <span className="text-sm font-medium">{metrics?.captureRate || 0}%</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Target: 30% coverage | Current: {metrics?.captureRate || 0}%
+                </p>
               </div>
             </div>
           </CardContent>

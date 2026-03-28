@@ -7,7 +7,7 @@
 import React from 'react';
 import StripeConnectProvider, { useStripeConnect } from '../components/stripe-connect/StripeConnectProvider';
 import ConnectDashboard from '../components/stripe-connect/ConnectDashboard';
-import DashboardLayout from '@/components/DashboardLayout';
+import DashboardLayout from '@/components/layout/DashboardLayout';
 
 const StripeConnect: React.FC = () => {
   return (

@@ -16,13 +16,17 @@ import * as SystemService from "../services/system.service";
 import { logger } from "./logger";
 import { initSentry, captureException } from "./sentry";
 import { ensureCorrelationId, runWithCorrelationId } from "./requestContext";
+import { registerSecurityMiddleware } from "./security";
 import { readFileSync } from "fs";
 
 // Graceful shutdown state
 let isShuttingDown = false;
 const shutdownTimeoutMs = 30000; // 30 seconds timeout
 
-const corsOrigins = process.env.CORS_ORIGIN?.split(",").map((s) => s.trim()).filter(Boolean) ?? [];
+const corsOrigins = [
+  ...process.env.CORS_ORIGIN?.split(",").map((s) => s.trim()).filter(Boolean) ?? [],
+  ...process.env.ALLOWED_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) ?? [],
+].filter((v, i, a) => a.indexOf(v) === i);
 
 const WORKER_HEARTBEAT_FILE = process.env.WORKER_HEARTBEAT_FILE || "/tmp/worker-heartbeat.json";
 const WORKER_STALE_MS = 2 * 60_000;
@@ -135,7 +139,8 @@ function registerShutdownHandlers(server: any) {
 async function startServer() {
   await initSentry();
   const app = express();
-  app.set("trust proxy", 1);
+  // Trust reverse proxy (nginx → Apache → PHP proxy → Node)
+  app.set('trust proxy', 1);
   const server = createServer(app);
   // Register Stripe webhook route first (it needs raw body)
   registerStripeWebhook(app);
@@ -160,6 +165,10 @@ async function startServer() {
   };
   app.use(express.json({ limit: "2mb", verify: rawBodySaver }));
   app.use(express.urlencoded({ limit: "2mb", extended: true, verify: rawBodySaver }));
+
+  // Security hardening: headers, sanitization, rate limiting, audit logging, CORS
+  registerSecurityMiddleware(app);
+
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   // Inbound SMS webhooks (Telnyx + Twilio, STOP compliance)
@@ -168,11 +177,68 @@ async function startServer() {
   // ─── Health check ─────────────────────────────────────────────────────────
   app.get("/health", async (_req, res) => {
     const dbOk = await pingDb();
+    const memUsage = process.memoryUsage();
     const status = dbOk ? 200 : 503;
     res.status(status).json({
       status: dbOk ? "ok" : "degraded",
       db: dbOk ? "connected" : "unreachable",
       uptime: Math.floor(process.uptime()),
+      memory: {
+        rss: Math.round(memUsage.rss / 1024 / 1024),
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+      },
+      version: process.env.npm_package_version || "2.0.0",
+      ts: new Date().toISOString(),
+    });
+  });
+
+  app.get("/health/detailed", async (_req, res) => {
+    const checks: Record<string, { status: string; latencyMs?: number; error?: string }> = {};
+
+    // DB check with latency
+    const dbStart = Date.now();
+    const dbOk = await pingDb();
+    checks.database = { status: dbOk ? "healthy" : "unhealthy", latencyMs: Date.now() - dbStart };
+
+    // Worker heartbeat
+    let workerHealthy = false;
+    try {
+      const heartbeat = JSON.parse(readFileSync(WORKER_HEARTBEAT_FILE, "utf8"));
+      const ts = Date.parse(heartbeat.ts || heartbeat.lastSuccessAt || "");
+      workerHealthy = Number.isFinite(ts) && Date.now() - ts <= WORKER_STALE_MS && heartbeat.status !== "error";
+      checks.worker = { status: workerHealthy ? "healthy" : "stale" };
+    } catch {
+      checks.worker = { status: "unreachable", error: "No heartbeat file" };
+    }
+
+    // Stripe connectivity
+    try {
+      const stripeStart = Date.now();
+      const { default: Stripe } = await import("stripe");
+      const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY || "", { apiVersion: "2022-11-15" });
+      await stripeClient.balance.retrieve();
+      checks.stripe = { status: "healthy", latencyMs: Date.now() - stripeStart };
+    } catch (err) {
+      checks.stripe = { status: "unhealthy", error: err instanceof Error ? err.message : "Unknown" };
+    }
+
+    // Memory
+    const memUsage = process.memoryUsage();
+    const memPressure = memUsage.heapUsed / memUsage.heapTotal;
+    checks.memory = { status: memPressure > 0.9 ? "warning" : "healthy" };
+
+    const allHealthy = Object.values(checks).every((c) => c.status === "healthy");
+    res.status(allHealthy ? 200 : 503).json({
+      status: allHealthy ? "healthy" : "degraded",
+      checks,
+      uptime: Math.floor(process.uptime()),
+      memory: {
+        rss: Math.round(memUsage.rss / 1024 / 1024),
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+        heapPressure: Math.round(memPressure * 100),
+      },
       ts: new Date().toISOString(),
     });
   });
@@ -195,6 +261,18 @@ async function startServer() {
       db: dbOk ? "connected" : "unreachable",
       worker: workerHealthy ? "healthy" : "stale",
       ts: new Date().toISOString(),
+    });
+  });
+
+  // ─── Privacy & compliance endpoints ────────────────────────────────────────
+  app.get("/api/privacy-policy", (_req, res) => {
+    res.json({
+      version: "1.0",
+      lastUpdated: "2026-03-01",
+      dataRetention: "Messages retained for 2 years, then anonymized",
+      encryption: "AES-256 at rest, TLS 1.3 in transit",
+      compliance: ["TCPA", "GDPR", "CCPA", "PCI-DSS"],
+      contact: "privacy@rebooked.io",
     });
   });
 

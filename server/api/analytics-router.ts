@@ -3,13 +3,13 @@
  * TRPC router for analytics endpoints
  */
 
-import { createRouter, tenantProcedure } from '../_core/trpc';
+import { createRouter, protectedProcedure } from '../_core/trpc';
 import { z } from 'zod';
 import * as AnalyticsService from './analytics';
 
 export const analyticsRouter = createRouter({
   // Get dashboard statistics
-  getDashboardStats: tenantProcedure
+  getDashboardStats: protectedProcedure
     .input(z.object({
       dateRange: z.object({
         start: z.string(),
@@ -24,7 +24,7 @@ export const analyticsRouter = createRouter({
     }),
 
   // Get revenue analytics
-  getRevenueAnalytics: tenantProcedure
+  getRevenueAnalytics: protectedProcedure
     .input(z.object({
       dateRange: z.object({
         start: z.string(),
@@ -39,7 +39,7 @@ export const analyticsRouter = createRouter({
     }),
 
   // Get lead analytics
-  getLeadAnalytics: tenantProcedure
+  getLeadAnalytics: protectedProcedure
     .input(z.object({
       dateRange: z.object({
         start: z.string(),
@@ -54,7 +54,7 @@ export const analyticsRouter = createRouter({
     }),
 
   // Get activity feed
-  getActivityFeed: tenantProcedure
+  getActivityFeed: protectedProcedure
     .input(z.object({
       limit: z.number().optional().default(20),
     }))
@@ -63,7 +63,7 @@ export const analyticsRouter = createRouter({
     }),
 
   // Get real-time stats (for live updates)
-  getRealTimeStats: tenantProcedure
+  getRealTimeStats: protectedProcedure
     .query(async ({ ctx }) => {
       // Get today's stats only for real-time updates
       const today = new Date().toISOString().split('T')[0];

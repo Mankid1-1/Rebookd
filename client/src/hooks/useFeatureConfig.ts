@@ -13,14 +13,14 @@ export function useFeatureConfig<T extends Record<string, any>>({
   updateMutation,
   defaultConfig = {} as T,
 }: FeatureConfigOptions) {
-  const { data: settings, isLoading } = trpc.tenant.get.useQuery();
+  const { data: settings, isLoading } = trpc.tenant.settings.useQuery();
   const [config, setConfig] = useState<T>(defaultConfig as T);
   const [isDirty, setIsDirty] = useState(false);
 
   // Sync config with backend settings
   useEffect(() => {
-    if ((settings as any)?.[configKey]) {
-      setConfig((settings as any)[configKey] as T);
+    if (settings?.[configKey]) {
+      setConfig(settings[configKey] as T);
       setIsDirty(false);
     }
   }, [settings, configKey]);
@@ -48,7 +48,7 @@ export function useFeatureConfig<T extends Record<string, any>>({
   };
 
   const resetConfig = () => {
-    setConfig((settings as any)?.[configKey] as T || defaultConfig as T);
+    setConfig((settings?.[configKey] as T) || (defaultConfig as T));
     setIsDirty(false);
   };
 

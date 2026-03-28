@@ -39,10 +39,10 @@ export const sendMessageSchema = z.object({
   idempotencyKey: z.string().uuid().optional(),
 });
 
-// Auth schemas - must match server signup requirements (12+ chars)
+// Auth schemas
 export const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(12, "Password must be at least 12 characters"),
+  password: z.string().min(1),
 });
 
 // Pagination schemas

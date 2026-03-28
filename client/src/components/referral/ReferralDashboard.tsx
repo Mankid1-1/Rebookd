@@ -472,7 +472,7 @@ export function ReferralDashboard() {
                         index === 0 ? 'bg-yellow-100 text-yellow-800' :
                         index === 1 ? 'bg-gray-100 text-gray-800' :
                         index === 2 ? 'bg-orange-100 text-orange-800' :
-                        'bg-muted/30 text-gray-600'
+                        'bg-gray-50 text-gray-600'
                       }`}>
                         {entry.rank}
                       </div>
