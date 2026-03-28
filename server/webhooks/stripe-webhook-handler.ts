@@ -468,12 +468,14 @@ async function handlePayoutPaid(payout: Stripe.Payout): Promise<void> {
 
 async function processReferralCompletion(referralCode: string, userId: string, subscriptionId: string): Promise<void> {
   try {
+    const db = await getDb();
     const { processReferral, completeReferral } = await import('../services/referral.service');
     
-    const result = await processReferral(referralCode, userId);
+    const result = await processReferral(db, referralCode, parseInt(userId));
     
-    if (result.success && result.referral) {
-      await completeReferral(result.referral.id, subscriptionId, 6);
+    if (result.success && result.referralId) {
+      const referralId = result.referralId.split('-')[1]; // Extract referredUserId
+      await completeReferral(db, parseInt(referralId), subscriptionId, 6);
     }
   } catch (error) {
     console.error('Failed to process referral completion:', error);

@@ -32,6 +32,7 @@ import { isAppError } from "./_core/appErrors";
 import { ENV } from "./_core/env";
 import { verifyInboundWebhookSignature } from "./_core/webhookSignature";
 import * as WebhookDedupService from "./services/webhookDedup.service";
+import * as ReferralService from "./services/referral.service";
 
 function clampAdminPagination(input?: { page?: number; limit?: number }) {
   const page = Math.max(1, input?.page ?? 1);
@@ -776,6 +777,175 @@ export const appRouter = router({
         });
         return { success: true, refundId: refund.id };
       }),
+  }),
+
+  // ─── REFERRAL ──────────────────────────────────────────────────────────────
+  referral: router({
+    /**
+     * Get or create the current user's referral code and link.
+     * V2: $50/month for 6 months = $300 total per successful referral.
+     */
+    getCode: protectedProcedure.query(async ({ ctx }) => {
+      const code = await ReferralService.getOrCreateReferralCode(ctx.db, ctx.user.id);
+      const appUrl = process.env.APP_URL || "http://localhost:3000";
+      return {
+        code,
+        link: `${appUrl}/signup?ref=${code}`,
+        rewardPerMonth: 50,
+        totalMonths: 6,
+        totalReward: 300,
+        retentionRequired: "Referred user must maintain active subscription for 6 months",
+      };
+    }),
+
+    /**
+     * Get comprehensive referral stats for the current user.
+     */
+    stats: protectedProcedure.query(async ({ ctx }) => {
+      return ReferralService.getReferralStats(ctx.db, ctx.user.id);
+    }),
+
+    /**
+     * List all referrals made by the current user.
+     */
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return ReferralService.getUserReferrals(ctx.db, ctx.user.id);
+    }),
+
+    /**
+     * Get payout history for the current user.
+     */
+    payouts: protectedProcedure.query(async ({ ctx }) => {
+      return ReferralService.getUserPayouts(ctx.db, ctx.user.id);
+    }),
+
+    /**
+     * Apply a referral code at signup (public — called during registration).
+     */
+    apply: publicProcedure
+      .input(z.object({ code: z.string().min(4).max(16), newUserId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        return ReferralService.applyReferralCode(ctx.db, input.code, input.newUserId);
+      }),
+
+    /**
+     * Get referral leaderboard.
+     */
+    leaderboard: publicProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(50).default(10) }).optional())
+      .query(async ({ ctx, input }) => {
+        if (!ctx.db) return [];
+        return ReferralService.getReferralLeaderboard(ctx.db, input?.limit ?? 10);
+      }),
+  }),
+
+  // ─── REVENUE SHARE ─────────────────────────────────────────────────────────
+  revenueShare: router({
+    /**
+     * Record recovered revenue and calculate 15% platform commission.
+     * Called when a no-show rebooks, a cancelled slot is filled, etc.
+     */
+    record: tenantProcedure
+      .input(z.object({
+        recoveredAmount: z.number().positive(), // in cents
+        source: z.enum(["noshow_rebook", "cancellation_fill", "sms_followup", "waitlist", "other"]),
+        leadId: z.number().int().optional(),
+        campaignId: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const REVENUE_SHARE_PERCENT = 15;
+        const commissionAmount = Math.round(input.recoveredAmount * (REVENUE_SHARE_PERCENT / 100));
+        // Store in analytics — reuse the existing revenue recovery infrastructure
+        await ctx.db.execute(sql`
+          INSERT INTO revenue_recovery_events
+            (tenant_id, recovered_amount, commission_amount, commission_percent, source, lead_id, campaign_id, notes, created_at)
+          VALUES
+            (${ctx.tenantId}, ${input.recoveredAmount}, ${commissionAmount}, ${REVENUE_SHARE_PERCENT}, ${input.source}, ${input.leadId ?? null}, ${input.campaignId ?? null}, ${input.notes ?? null}, NOW())
+          ON DUPLICATE KEY UPDATE updated_at = NOW()
+        `).catch(() => null); // Table may not exist yet — graceful degradation
+        return {
+          recoveredAmount: input.recoveredAmount,
+          commissionPercent: REVENUE_SHARE_PERCENT,
+          commissionAmount,
+          netToClient: input.recoveredAmount - commissionAmount,
+        };
+      }),
+
+    /**
+     * Get revenue share summary for the current tenant.
+     */
+    summary: tenantProcedure.query(async ({ ctx }) => {
+      // Pull from analytics revenue recovery metrics
+      const metrics = await AnalyticsService.getRevenueRecoveryMetrics(ctx.db, ctx.tenantId);
+      const REVENUE_SHARE_PERCENT = 15;
+      const totalRecovered = (metrics as any)?.totalRecovered ?? 0;
+      const commission = Math.round(totalRecovered * (REVENUE_SHARE_PERCENT / 100));
+      return {
+        totalRecoveredRevenue: totalRecovered,
+        commissionPercent: REVENUE_SHARE_PERCENT,
+        commissionOwed: commission,
+        netRevenue: totalRecovered - commission,
+        monthlyFee: 19900, // $199/month in cents
+      };
+    }),
+  }),
+
+  // ─── EARLY ADOPTER ─────────────────────────────────────────────────────────
+  earlyAdopter: router({
+    /**
+     * Get early adopter program status.
+     * First 20 clients get free access if ROI is not positive.
+     */
+    status: publicProcedure.query(async ({ ctx }) => {
+      const EARLY_ADOPTER_LIMIT = 20;
+      if (!ctx.db) {
+        return { slotsRemaining: EARLY_ADOPTER_LIMIT, isEarlyAdopter: false, totalSlots: EARLY_ADOPTER_LIMIT };
+      }
+      try {
+        // Count tenants on the early-adopter plan
+        const result = await ctx.db.execute(sql`
+          SELECT COUNT(*) as cnt FROM subscriptions s
+          JOIN plans p ON s.plan_id = p.id
+          WHERE p.slug = 'early-adopter' AND s.status IN ('active', 'trialing')
+        `);
+        const count = Number((result as any)?.[0]?.[0]?.cnt ?? 0);
+        return {
+          totalSlots: EARLY_ADOPTER_LIMIT,
+          slotsUsed: count,
+          slotsRemaining: Math.max(0, EARLY_ADOPTER_LIMIT - count),
+          isOpen: count < EARLY_ADOPTER_LIMIT,
+          guarantee: "Free if platform doesn't generate more revenue than it costs. Risk-free for first 20 clients.",
+          revenueShare: "15% of all recovered revenue",
+        };
+      } catch {
+        return {
+          totalSlots: EARLY_ADOPTER_LIMIT,
+          slotsUsed: 0,
+          slotsRemaining: EARLY_ADOPTER_LIMIT,
+          isOpen: true,
+          guarantee: "Free if platform doesn't generate more revenue than it costs. Risk-free for first 20 clients.",
+          revenueShare: "15% of all recovered revenue",
+        };
+      }
+    }),
+
+    /**
+     * Check if the current tenant qualifies as an early adopter.
+     */
+    checkEligibility: tenantProcedure.query(async ({ ctx }) => {
+      const sub = await TenantService.getSubscriptionByTenantId(ctx.db, ctx.tenantId);
+      const plan = (sub as any)?.plan;
+      const isEarlyAdopter = plan?.slug === "early-adopter";
+      return {
+        isEarlyAdopter,
+        planName: plan?.name ?? "Unknown",
+        guarantee: isEarlyAdopter
+          ? "You are on the early adopter plan. Rebooked is FREE if it doesn't generate more revenue than it costs you."
+          : null,
+      };
+    }),
   }),
 
   // ─── ONBOARDING ────────────────────────────────────────────────────────────

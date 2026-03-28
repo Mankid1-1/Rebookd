@@ -110,19 +110,8 @@ const server = app.listen(port, () => {
   });
 });
 
-// Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-  logger.error('Uncaught Exception', { error: error.message });
-  process.exit(1);
-});
-
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Promise Rejection', {
-    reason: reason instanceof Error ? reason.message : String(reason),
-    promise: String(promise),
-  });
-  process.exit(1);
-});
+// Note: uncaughtException and unhandledRejection handlers are registered
+// in _core/index.ts (the canonical entry point) with graceful shutdown.
+// Do NOT duplicate them here — duplicate handlers cause race conditions.
 
 export default app;

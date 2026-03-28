@@ -319,15 +319,17 @@ export async function resumeSubscription(subscriptionId: string): Promise<void> 
  */
 async function processReferralCompletion(referralCode: string, userId: string, subscriptionId: string): Promise<void> {
   try {
+    const db = await getDb();
     // Import referral service to avoid circular dependency
     const { processReferral, completeReferral } = await import('./referral.service');
     
     // First process the referral
-    const result = await processReferral(referralCode, userId);
+    const result = await processReferral(db, referralCode, parseInt(userId));
     
-    if (result.success && result.referral) {
+    if (result.success && result.referralId) {
+      const referralId = result.referralId.split('-')[1]; // Extract referredUserId
       // Complete the referral (6+ months requirement will be checked)
-      await completeReferral(result.referral.id, subscriptionId, 6);
+      await completeReferral(db, parseInt(referralId), subscriptionId, 6);
     }
   } catch (error) {
     console.error('Failed to process referral completion:', error);

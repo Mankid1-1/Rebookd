@@ -9,40 +9,60 @@ async function seed() {
     process.exit(1);
   }
 
-  const starterPriceId = process.env.STRIPE_PRICE_STARTER || null;
-  const growthPriceId = process.env.STRIPE_PRICE_GROWTH || null;
-  const scalePriceId = process.env.STRIPE_PRICE_SCALE || null;
+  // V2 Pricing: Single plan $199/month + 15% revenue share
+  // Early adopter program: First 20 clients get risk-free trial
+  const priceId = process.env.STRIPE_PRICE_PRO || process.env.STRIPE_PRICE_SCALE || null;
+  const earlyAdopterPriceId = process.env.STRIPE_PRICE_EARLY_ADOPTER || null;
 
   const items = [
     {
-      name: "Starter",
-      slug: "starter",
-      priceMonthly: 4900,
-      maxAutomations: 3,
-      maxMessages: 500,
-      maxSeats: 1,
-      features: ["AI rewrite", "Basic automations"],
-      stripePriceId: starterPriceId,
-    },
-    {
-      name: "Growth",
-      slug: "growth",
-      priceMonthly: 9900,
-      maxAutomations: 10,
-      maxMessages: 2500,
-      maxSeats: 3,
-      features: ["Everything in Starter", "Advanced automations", "Priority support"],
-      stripePriceId: growthPriceId,
-    },
-    {
-      name: "Scale",
-      slug: "scale",
-      priceMonthly: 19900,
+      name: "Early Adopter",
+      slug: "early-adopter",
+      priceMonthly: 0, // Free if ROI is negative (risk-free guarantee)
       maxAutomations: 9999,
       maxMessages: 999999,
       maxSeats: 10,
-      features: ["Enterprise support", "Custom integrations"],
-      stripePriceId: scalePriceId,
+      features: [
+        "Full platform access",
+        "AI-powered SMS re-engagement",
+        "No-show recovery automation",
+        "Cancellation recovery campaigns",
+        "Revenue analytics dashboard",
+        "Multi-channel messaging (SMS + email)",
+        "Industry-specific templates",
+        "TCPA compliance built-in",
+        "ROI guarantee — FREE if platform doesn't generate positive ROI",
+        "15% revenue share on recovered revenue",
+        "Priority onboarding support",
+        "Early adopter pricing locked in forever",
+      ],
+      stripePriceId: earlyAdopterPriceId,
+    },
+    {
+      name: "Pro",
+      slug: "pro",
+      priceMonthly: 19900, // $199/month in cents
+      maxAutomations: 9999,
+      maxMessages: 999999,
+      maxSeats: 10,
+      features: [
+        "Full platform access",
+        "AI-powered SMS re-engagement",
+        "No-show recovery automation",
+        "Cancellation recovery campaigns",
+        "Revenue analytics dashboard",
+        "Multi-channel messaging (SMS + email)",
+        "Industry-specific templates",
+        "TCPA compliance built-in",
+        "A/B testing for message optimization",
+        "Waitlist management & cancellation filling",
+        "Review generation automation",
+        "Post-appointment follow-up sequences",
+        "15% revenue share on recovered revenue",
+        "Advanced reporting & custom insights",
+        "Priority support",
+      ],
+      stripePriceId: priceId,
     },
   ];
 
@@ -51,14 +71,26 @@ async function seed() {
       await db
         .insert(plans)
         .values(p)
-        .onDuplicateKeyUpdate({ set: { name: p.name, priceMonthly: p.priceMonthly, maxAutomations: p.maxAutomations, maxMessages: p.maxMessages, maxSeats: p.maxSeats, features: p.features, stripePriceId: p.stripePriceId } });
-      console.log(`Upserted plan: ${p.slug}`);
+        .onDuplicateKeyUpdate({
+          set: {
+            name: p.name,
+            priceMonthly: p.priceMonthly,
+            maxAutomations: p.maxAutomations,
+            maxMessages: p.maxMessages,
+            maxSeats: p.maxSeats,
+            features: p.features,
+            stripePriceId: p.stripePriceId,
+          },
+        });
+      console.log(`Upserted plan: ${p.slug} ($${(p.priceMonthly / 100).toFixed(0)}/month)`);
     } catch (err) {
       console.error(`Failed to upsert plan ${p.slug}:`, err);
     }
   }
 
-  console.log("Plans seed complete");
+  console.log("\n✅ V2 Plans seed complete");
+  console.log("   - Early Adopter: FREE (risk-free, first 20 clients) + 15% revenue share");
+  console.log("   - Pro: $199/month + 15% revenue share on recovered revenue");
   process.exit(0);
 }
 

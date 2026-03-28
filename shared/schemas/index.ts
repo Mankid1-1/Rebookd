@@ -1,3 +1,7 @@
 export * from "./leads";
-export * from "./auth";
-export * from "./admin";
+export { 
+  loginSchema as authLoginSchema
+} from "./auth";
+export { 
+  paginationSchema as adminPaginationSchema 
+} from "./admin";

@@ -85,6 +85,14 @@ export function requestLoggingMiddleware(req: Request, res: Response, next: Next
 // ─── Rate Limiting Middleware ──────────────────────────────────────────────────
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 
+// Prevent unbounded memory growth: purge expired entries every 60s
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitStore) {
+    if (entry.resetTime <= now) rateLimitStore.delete(key);
+  }
+}, 60_000).unref();
+
 export function createRateLimitMiddleware(
   windowMs: number = 60 * 1000, // 1 minute
   maxRequests: number = 100,

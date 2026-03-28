@@ -13,9 +13,9 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
 import {
-  Bot, Sparkles, TrendingUp, Target, MessageSquare,
-  RefreshCw, CheckCircle, AlertCircle, Info,
-  Zap, BarChart3, Clock, Users, DollarSign,
+  Bot, TrendingUp, Target, MessageSquare,
+  RefreshCw, CheckCircle, Info,
+  Zap, BarChart3, Clock, Users, DollarSign, Settings, Sparkles, AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -111,7 +111,7 @@ export function MessageOptimizer({
   const { data: tenant } = trpc.tenant.get.useQuery();
   const { data: userPreferences } = trpc.user.preferences.useQuery();
 
-  // Dynamic configurations based on user
+  // Get dynamic configurations
   const tones = getDynamicTones(context.userSkill, tenant?.industry);
   const messageTypes = getDynamicMessageTypes(userPreferences);
 
@@ -315,7 +315,7 @@ export function MessageOptimizer({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {MESSAGE_TYPES.map((type) => (
+                  {messageTypes.map((type) => (
                     <SelectItem key={type.value} value={type.value}>
                       {type.label}
                     </SelectItem>
@@ -331,7 +331,7 @@ export function MessageOptimizer({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {TONES.map((tone) => (
+                  {tones.map((tone) => (
                     <SelectItem key={tone.value} value={tone.value}>
                       <div>
                         <div>{tone.label}</div>

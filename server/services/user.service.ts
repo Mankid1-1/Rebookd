@@ -36,9 +36,9 @@ export async function createUser(
     openId: string;
     name?: string;
     email?: string;
-    loginMethod?: string;
+    loginMethod?: "email" | "phone" | "sso" | "oauth" | "google" | "microsoft";
     passwordHash?: string;
-    role?: "user" | "admin";
+    role?: "user" | "admin" | "super_admin";
     active?: boolean;
     lastSignedIn?: Date;
   },
@@ -55,9 +55,9 @@ export async function upsertUser(
   db: Db,
   data: {
     openId: string;
-    name?: string | null;
-    email?: string | null;
-    loginMethod?: string | null;
+    name?: string;
+    email?: string;
+    loginMethod?: "email" | "phone" | "sso" | "oauth" | "google" | "microsoft";
     lastSignedIn?: Date;
   },
 ) {
@@ -75,10 +75,10 @@ export async function upsertUser(
       .where(eq(users.id, existing.id));
   } else {
     await db.insert(users).values({
-      openId: data.openId,
+      openId: data.openId ?? crypto.randomUUID(),
       name: data.name ?? null,
       email: data.email ?? null,
-      loginMethod: data.loginMethod ?? "oauth",
+      loginMethod: data.loginMethod ?? "email",
       lastSignedIn: data.lastSignedIn ?? new Date(),
     });
   }

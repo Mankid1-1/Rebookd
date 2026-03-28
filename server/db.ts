@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import * as schema from "../drizzle/schema";
+import { logger } from "./_core/logger";
 
 let _pool: mysql.Pool | null = null;
 let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
@@ -27,6 +28,14 @@ export async function getDb() {
     ssl: { rejectUnauthorized: false },
   });
 
+  // Prevent unhandled 'error' events from crashing Node
+  _pool.on("error", (err) => {
+    logger.error("MySQL pool error (non-fatal, pool will self-heal)", {
+      error: err.message,
+      code: (err as any).code,
+    });
+  });
+
   _db = drizzle(_pool, { schema, mode: "default" }) as any;
   return _db;
 }
@@ -37,9 +46,12 @@ export async function pingDb(): Promise<boolean> {
     const pool = _pool;
     if (!pool) return false;
     const conn = await pool.getConnection();
-    await conn.ping();
-    conn.release();
-    return true;
+    try {
+      await conn.ping();
+      return true;
+    } finally {
+      conn.release();
+    }
   } catch {
     return false;
   }

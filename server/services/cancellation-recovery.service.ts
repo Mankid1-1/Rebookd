@@ -226,18 +226,20 @@ export async function autoFillWaitlist(
       await sendSMS(lead.phone, confirmMessage, tenantId);
 
       // Auto-confirm if no response (assuming they want the slot)
-      setTimeout(async () => {
-        await db
-          .update(leads)
-          .set({ 
+      setTimeout(() => {
+        db.update(leads)
+          .set({
             status: 'booked',
             updatedAt: new Date()
           })
-          .where(and(eq(leads.id, lead.id), eq(leads.tenantId, tenantId)));
-
-        filledSlots++;
-        
-        logger.info('Auto-filled waitlist slot', { leadId: lead.id });
+          .where(and(eq(leads.id, lead.id), eq(leads.tenantId, tenantId)))
+          .then(() => {
+            filledSlots++;
+            logger.info('Auto-filled waitlist slot', { leadId: lead.id });
+          })
+          .catch((err) => {
+            logger.error('Auto-fill waitlist slot failed', { error: (err as Error).message, leadId: lead.id });
+          });
       }, 30 * 60 * 1000); // 30 minutes
 
       // Log the auto-fill

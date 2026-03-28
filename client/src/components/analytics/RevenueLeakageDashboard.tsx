@@ -128,6 +128,9 @@ export function RevenueLeakageDashboard({
   isLoading = false, 
   onRecoveryAction 
 }: RevenueLeakageDashboardProps) {
+  const colors = getDynamicColors();
+  const LEAKAGE_COLORS = colors.leakage;
+  const SEVERITY_COLORS = colors.severity;
   const [selectedLeakageType, setSelectedLeakageType] = React.useState<string | null>(null);
   const [expandedRecommendations, setExpandedRecommendations] = React.useState(false);
   
@@ -137,7 +140,6 @@ export function RevenueLeakageDashboard({
   const getRecoveryProbability = useDynamicRecoveryProbability();
   const prioritizeActions = useDynamicActionPrioritization();
   const getRevenueImpact = useDynamicRevenueImpact();
-  const colors = getDynamicColors();
 
   const recoveryRate = leakageReport.totalLeakage > 0 
     ? (leakageReport.recoverableRevenue / leakageReport.totalLeakage) * 100 
@@ -422,7 +424,7 @@ export function RevenueLeakageDashboard({
                     size="sm" 
                     variant="outline" 
                     className="mt-2"
-                    onClick={() => onRecoveryAction?.("targeted_recovery", [source.id])}
+                    onClick={() => onRecoveryAction?.("targeted_recovery", [source.id.toString()])}
                   >
                     <Play className="w-3 h-3 mr-1" />
                     Recover

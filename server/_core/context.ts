@@ -2,6 +2,7 @@ import type { CreateExpressContextOptions } from "@trpc/server/adapters/express"
 import type { MySql2Database } from "drizzle-orm/mysql2";
 import type * as schema from "../../drizzle/schema";
 import type { User } from "../../drizzle/schema";
+import { TRPCError } from "@trpc/server";
 import { sdk } from "./sdk";
 import * as AuthService from "../services/auth.service";
 
@@ -21,7 +22,10 @@ export async function createContext(opts: CreateExpressContextOptions): Promise<
   const { getDb } = await import("../db");
   const dbRaw = await getDb();
   if (!dbRaw) {
-    throw new Error("Database unavailable");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Service temporarily unavailable — please retry",
+    });
   }
   const db = dbRaw;
 
