@@ -94,8 +94,8 @@ const getDynamicTutorials = (userSkill: any, businessType?: string, userPreferen
     }
   ];
 
-  // Add intermediate tutorials for users who have completed basics
-  if (userSkill?.level !== 'beginner') {
+  // All tutorials available at every skill level
+  {
     baseTutorials.push({
       id: 'lead-management',
       name: 'Lead Management',
@@ -137,10 +137,7 @@ const getDynamicTutorials = (userSkill: any, businessType?: string, userPreferen
         },
       ],
     });
-  }
 
-  // Add advanced tutorials for expert users
-  if (userSkill?.level === 'expert') {
     baseTutorials.push({
       id: 'advanced-automation',
       name: 'Advanced Automation',

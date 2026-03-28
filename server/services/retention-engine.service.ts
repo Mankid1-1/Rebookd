@@ -11,7 +11,7 @@ import { leads, messages, automations } from "../../drizzle/schema";
 import { sendSMS } from "../_core/sms";
 import { logger } from "../_core/logger";
 import type { Db } from "../_core/context";
-import { invokeLLM } from "../_core/llm";
+import { generateMessage } from "../_core/messageGenerator";
 
 interface RetentionConfig {
   rebookingIntervals: number[]; // weeks
@@ -270,77 +270,36 @@ function getLoyaltyTier(visitCount: number) {
 }
 
 /**
- * Generate rebooking offer message
+ * Generate rebooking offer message (in-house, zero API cost)
  */
-async function generateRebookingOffer(client: any, monthsInactive: number): Promise<string> {
-  try {
-    const response = await invokeLLM([
-      {
-        role: 'system',
-        content: `Generate a personalized rebooking SMS message. The client ${client.name} hasn't booked in ${monthsInactive} months. Their last appointment was ${client.lastBookingDate?.toLocaleString()}. Their average value is $${(client.avgValue || 75)}. Create urgency and a compelling offer to book again. Make it under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate the rebooking message'
-      }
-    ]);
-
-    return response.choices?.[0]?.message?.content || 
-      `Hi ${client.name}, we miss you! Book again and get 15% off your next visit.`;
-
-  } catch (error) {
-    logger.error('Failed to generate rebooking message', { error: error.message });
-    return `Hi ${client.name}, we miss you! Book again and get 15% off your next visit.`;
-  }
+function generateRebookingOffer(client: any, monthsInactive: number): string {
+  return generateMessage({
+    type: 'retention_rebooking',
+    tone: 'friendly',
+    variables: { name: client.name || '', business: '' },
+  });
 }
 
 /**
- * Generate loyalty reward message
+ * Generate loyalty reward message (in-house, zero API cost)
  */
-async function generateLoyaltyMessage(client: any, tier: any): Promise<string> {
-  try {
-    const response = await invokeLLM([
-      {
-        role: 'system',
-        content: `Generate a personalized loyalty reward SMS message. The client ${client.name} has ${client.visitCount} visits. They're getting the ${tier.reward} reward. Create excitement and urgency. Make it under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate the loyalty reward message'
-      }
-    ]);
-
-    return response.choices?.[0]?.message?.content || tier.message;
-
-  } catch (error) {
-    logger.error('Failed to generate loyalty message', { error: error.message });
-    return tier.message;
-  }
+function generateLoyaltyMessage(client: any, tier: any): string {
+  return generateMessage({
+    type: 'loyalty_reward',
+    tone: 'friendly',
+    variables: { name: client.name || '', business: '' },
+  });
 }
 
 /**
- * Generate reactivation message
+ * Generate reactivation message (in-house, zero API cost)
  */
-async function generateReactivationMessage(client: any, daysInactive: number): Promise<string> {
-  try {
-    const response = await invokeLLM([
-      {
-        role: 'system',
-        content: `Generate a personalized reactivation SMS message. The client ${client.name} has been inactive for ${daysInactive} days. Their estimated value is $${(client.estimatedValue || 75)}. Create a compelling offer to come back. Make it under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate the reactivation message'
-      }
-    ]);
-
-    return response.choices?.[0]?.message?.content || 
-      `Hi ${client.name}, we miss you! Come back and get 20% off your next booking.`;
-
-  } catch (error) {
-    logger.error('Failed to generate reactivation message', { error: error.message });
-    return `Hi ${client.name}, we miss you! Come back and get 20% off your next booking.`;
-  }
+function generateReactivationMessage(client: any, daysInactive: number): string {
+  return generateMessage({
+    type: 'reactivation',
+    tone: 'empathetic',
+    variables: { name: client.name || '', business: '' },
+  });
 }
 
 /**

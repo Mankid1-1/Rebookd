@@ -11,7 +11,7 @@ import { leads, messages, automations } from "../../drizzle/schema";
 import { sendSMS } from "../_core/sms";
 import { logger } from "../_core/logger";
 import type { Db } from "../_core/context";
-import { invokeLLM } from "../_core/llm";
+import { generateMessage } from "../_core/messageGenerator";
 
 interface SmartSchedulingConfig {
   gapThreshold: number; // minutes
@@ -258,38 +258,23 @@ function calculateLeadGapScore(lead: any, gap: any): number {
 }
 
 /**
- * Generate gap fill message
+ * Generate gap fill message (in-house, zero API cost)
  */
-async function generateGapFillMessage(
+function generateGapFillMessage(
   lead: any,
   gap: any,
   score: number
-): Promise<string> {
-  try {
-    const urgencyText = gap.priority === 'high' ? 'URGENT' : 
-                     gap.priority === 'medium' ? 'OPENING' : 'AVAILABLE';
-
-    const response = await invokeLLM({ messages: [
-      {
-        role: 'system',
-        content: `Generate a compelling SMS message offering a scheduling gap. The gap is from ${gap.startTime.toLocaleString()} to ${gap.endTime.toLocaleString()} (${gap.duration} minutes). The lead is ${lead.name}. Priority: ${urgencyText}. Match score: ${Math.round(score * 100)}%. Create urgency and scarcity. Make it under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate a gap fill message'
-      }
-    ] as any });
-
-    const content = typeof response === 'string' ? response : (response as any).choices?.[0]?.message?.content;
-    return content || 
-      `${urgencyText}: Opening available ${gap.startTime.toLocaleString()}-${gap.endTime.toLocaleString()}! Reply BOOK to claim your spot.`;
-
-  } catch (error) {
-    const urgencyText = gap.priority === 'high' ? 'URGENT' : 
-                     gap.priority === 'medium' ? 'OPENING' : 'AVAILABLE';
-    logger.error('Failed to generate gap fill message', { error: error instanceof Error ? error.message : String(error) });
-    return `${urgencyText}: Opening available! Reply BOOK to claim your spot.`;
-  }
+): string {
+  const tone = gap.priority === 'high' ? 'urgent' as const : 'friendly' as const;
+  return generateMessage({
+    type: 'gap_fill',
+    tone,
+    variables: {
+      name: lead.name || '',
+      date: gap.startTime?.toLocaleDateString() || '',
+      time: gap.startTime?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '',
+    },
+  });
 }
 
 /**
@@ -357,32 +342,21 @@ export async function triggerOffPeakCampaign(
 }
 
 /**
- * Generate off-peak offer message
+ * Generate off-peak offer message (in-house, zero API cost)
  */
-async function generateOffPeakOffer(
+function generateOffPeakOffer(
   lead: any,
   targetDate: Date
-): Promise<string> {
-  try {
-    const response = await invokeLLM({ messages: [
-      {
-        role: 'system',
-        content: `Generate a special off-peak SMS offer. The date is ${targetDate.toLocaleString()}. The lead is ${lead.name}. This is a less popular time slot, so offer a discount or incentive. Create urgency and value. Make it under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate an off-peak offer message'
-      }
-    ] as any });
-
-    const content = typeof response === 'string' ? response : (response as any).choices?.[0]?.message?.content;
-    return content || 
-      `SPECIAL OFFER: Book ${targetDate.toLocaleString()} and get 15% off! Limited spots available.`;
-
-  } catch (error) {
-    logger.error('Failed to generate off-peak offer', { error: error instanceof Error ? error.message : String(error) });
-    return `SPECIAL OFFER: Book ${targetDate.toLocaleString()} and get 15% off! Limited spots available.`;
-  }
+): string {
+  return generateMessage({
+    type: 'off_peak_offer',
+    tone: 'friendly',
+    variables: {
+      name: lead.name || '',
+      date: targetDate.toLocaleDateString(),
+      time: targetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    },
+  });
 }
 
 /**

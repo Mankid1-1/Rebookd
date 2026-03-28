@@ -10,7 +10,7 @@ import { leads, messages, automations } from "../../drizzle/schema";
 import { sendSMS } from "../_core/sms";
 import { logger } from "../_core/logger";
 import type { Db } from "../_core/context";
-import { invokeLLM } from "../_core/llm";
+import { generateMessage } from "../_core/messageGenerator";
 
 interface NoShowConfig {
   reminderSchedule: number[];
@@ -241,61 +241,48 @@ async function triggerRebookingAutomation(
   }
 }
 
-async function generateConfirmationMessage(appointmentTime: Date): Promise<string> {
-  try {
-    const response = await invokeLLM({
-      messages: [
-        {
-          role: 'system',
-          content: `Generate a friendly SMS confirmation message for an appointment at ${appointmentTime.toLocaleString()}. Keep it under 160 characters. Include a clear call to action to confirm or cancel.`
-        },
-        { role: 'user', content: 'Please generate the confirmation message' }
-      ]
-    });
-    return (response.choices?.[0]?.message?.content as string) ||
-      `Confirm your appointment on ${appointmentTime.toLocaleString()}. Reply YES to confirm or CANCEL to reschedule.`;
-  } catch (error: any) {
-    logger.error('Failed to generate AI confirmation message', { error: error.message });
-    return `Confirm your appointment on ${appointmentTime.toLocaleString()}. Reply YES to confirm or CANCEL to reschedule.`;
-  }
+/**
+ * Generate confirmation message (in-house, zero API cost)
+ */
+function generateConfirmationMessage(appointmentTime: Date): string {
+  return generateMessage({
+    type: 'confirmation',
+    tone: 'friendly',
+    variables: {
+      date: appointmentTime.toLocaleDateString(),
+      time: appointmentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    },
+  });
 }
 
-async function generateCancellationMessage(noShow: any): Promise<string> {
-  try {
-    const response = await invokeLLM({
-      messages: [
-        {
-          role: 'system',
-          content: `Generate a polite SMS cancellation message for a no-show appointment at ${noShow.appointmentAt?.toLocaleString()}. Keep it under 160 characters.`
-        },
-        { role: 'user', content: 'Please generate the cancellation message' }
-      ]
-    });
-    return (response.choices?.[0]?.message?.content as string) ||
-      `We missed you for your appointment. Reply BOOK to reschedule.`;
-  } catch (error: any) {
-    logger.error('Failed to generate AI cancellation message', { error: error.message });
-    return `We missed you for your appointment. Reply BOOK to reschedule.`;
-  }
+/**
+ * Generate cancellation message (in-house, zero API cost)
+ */
+function generateCancellationMessage(noShow: any): string {
+  return generateMessage({
+    type: 'no_show',
+    tone: 'empathetic',
+    variables: {
+      name: noShow.name || '',
+      date: noShow.appointmentAt?.toLocaleDateString() || '',
+      time: noShow.appointmentAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '',
+    },
+  });
 }
 
-async function generateRebookingMessage(cancelled: any, waitlistLead: any): Promise<string> {
-  try {
-    const response = await invokeLLM({
-      messages: [
-        {
-          role: 'system',
-          content: `Generate an urgent SMS offering a rebooking. Cancelled at ${cancelled.appointmentAt?.toLocaleString()}. Lead: ${waitlistLead.name}. Under 160 characters.`
-        },
-        { role: 'user', content: 'Please generate the rebooking message' }
-      ]
-    });
-    return (response.choices?.[0]?.message?.content as string) ||
-      `Urgent opening! A spot just opened up. Reply BOOK to claim it!`;
-  } catch (error: any) {
-    logger.error('Failed to generate AI rebooking message', { error: error.message });
-    return `Urgent opening! A spot just opened up. Reply BOOK to claim it!`;
-  }
+/**
+ * Generate rebooking message (in-house, zero API cost)
+ */
+function generateRebookingMessage(cancelled: any, waitlistLead: any): string {
+  return generateMessage({
+    type: 'rebooking',
+    tone: 'urgent',
+    variables: {
+      name: waitlistLead.name || '',
+      date: cancelled.appointmentAt?.toLocaleDateString() || '',
+      time: cancelled.appointmentAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '',
+    },
+  });
 }
 
 /**
@@ -370,21 +357,17 @@ export async function processScheduledReminders(
   }
 }
 
-async function generateReminderMessage(lead: any): Promise<string> {
-  try {
-    const response = await invokeLLM({
-      messages: [
-        {
-          role: 'system',
-          content: `Generate a friendly SMS reminder for an appointment at ${lead.appointmentAt?.toLocaleString()}. Keep it under 160 characters.`
-        },
-        { role: 'user', content: 'Please generate the reminder message' }
-      ]
-    });
-    return (response.choices?.[0]?.message?.content as string) ||
-      `Reminder: Your appointment is ${lead.appointmentAt?.toLocaleString()}. Reply STOP to unsubscribe.`;
-  } catch (error: any) {
-    logger.error('Failed to generate AI reminder message', { error: error.message });
-    return `Reminder: Your appointment is ${lead.appointmentAt?.toLocaleString()}. Reply STOP to unsubscribe.`;
-  }
+/**
+ * Generate reminder message (in-house, zero API cost)
+ */
+function generateReminderMessage(lead: any): string {
+  return generateMessage({
+    type: 'reminder',
+    tone: 'friendly',
+    variables: {
+      name: lead.name || '',
+      date: lead.appointmentAt?.toLocaleDateString() || '',
+      time: lead.appointmentAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '',
+    },
+  });
 }

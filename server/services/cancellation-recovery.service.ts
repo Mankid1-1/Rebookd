@@ -10,7 +10,7 @@ import { leads, messages, automations } from "../../drizzle/schema";
 import { sendSMS } from "../_core/sms";
 import { logger } from "../_core/logger";
 import type { Db } from "../_core/context";
-import { invokeLLM } from "../_core/llm";
+import { generateMessage } from "../_core/messageGenerator";
 
 interface CancellationRecoveryConfig {
   fillRate: number;
@@ -246,63 +246,54 @@ export async function autoFillWaitlist(
   }
 }
 
-async function generateUrgentRebookingMessage(cancelled: any, waitlistLead: any): Promise<string> {
-  try {
-    const response = await invokeLLM({
-      messages: [
-        {
-          role: 'system',
-          content: `Generate an urgent SMS message offering a rebooking. The cancelled appointment was at ${cancelled.appointmentAt?.toLocaleString()}. The new lead is ${waitlistLead.name}. Create urgency and scarcity. Make it compelling and under 160 characters.`
-        },
-        { role: 'user', content: 'Please generate the urgent rebooking message' }
-      ]
-    });
-    return (response.choices?.[0]?.message?.content as string) ||
-      `URGENT: Opening just freed up! Reply BOOK to claim your spot.`;
-  } catch (error: any) {
-    logger.error('Failed to generate urgent rebooking message', { error: error.message });
-    return `URGENT: Opening just freed up! Reply BOOK to claim your spot.`;
-  }
+/**
+ * Generate urgent rebooking message (in-house, zero API cost)
+ */
+function generateUrgentRebookingMessage(cancelled: any, waitlistLead: any): string {
+  return generateMessage({
+    type: 'rebooking',
+    tone: 'urgent',
+    variables: {
+      name: waitlistLead.name || '',
+      date: cancelled.appointmentAt?.toLocaleDateString() || '',
+      time: cancelled.appointmentAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '',
+    },
+  });
 }
 
-async function generateBroadcastMessage(openSlot: any, waitlistLead: any, urgency: string): Promise<string> {
-  try {
-    const urgencyText = urgency === 'immediate' ? 'IMMEDIATE' :
-                     urgency === 'urgent' ? 'URGENT' : 'NEW OPENING';
-    const response = await invokeLLM({
-      messages: [
-        {
-          role: 'system',
-          content: `Generate a ${urgencyText.toLowerCase()} SMS message announcing an open appointment slot. The appointment is at ${openSlot.appointmentTime?.toLocaleString()}. The lead is ${waitlistLead.name}. Create urgency. Under 160 characters.`
-        },
-        { role: 'user', content: 'Please generate the broadcast message' }
-      ]
-    });
-    return (response.choices?.[0]?.message?.content as string) ||
-      `${urgencyText}: New opening available! Reply BOOK to claim your spot.`;
-  } catch (error: any) {
-    logger.error('Failed to generate broadcast message', { error: error.message });
-    return `New opening available! Reply BOOK to claim your spot.`;
-  }
+/**
+ * Generate broadcast message (in-house, zero API cost)
+ */
+function generateBroadcastMessage(
+  openSlot: any,
+  waitlistLead: any,
+  urgency: string
+): string {
+  const tone = urgency === 'immediate' ? 'urgent' as const : urgency === 'urgent' ? 'urgent' as const : 'friendly' as const;
+  return generateMessage({
+    type: 'gap_fill',
+    tone,
+    variables: {
+      name: waitlistLead.name || '',
+      date: openSlot.appointmentTime?.toLocaleDateString() || '',
+      time: openSlot.appointmentTime?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '',
+    },
+  });
 }
 
-async function generateAutoFillMessage(lead: any): Promise<string> {
-  try {
-    const response = await invokeLLM({
-      messages: [
-        {
-          role: 'system',
-          content: `Generate a confirmation message for a waitlist lead. The appointment is at ${lead.appointmentAt?.toLocaleString()}. The lead is ${lead.name}. Under 160 characters.`
-        },
-        { role: 'user', content: 'Please generate the auto-fill confirmation message' }
-      ]
-    });
-    return (response.choices?.[0]?.message?.content as string) ||
-      `Confirming your spot for ${lead.appointmentAt?.toLocaleString()}. Reply STOP to cancel.`;
-  } catch (error: any) {
-    logger.error('Failed to generate auto-fill message', { error: error.message });
-    return `Your spot for ${lead.appointmentAt?.toLocaleString()} is confirmed! Reply STOP to cancel.`;
-  }
+/**
+ * Generate auto-fill confirmation message (in-house, zero API cost)
+ */
+function generateAutoFillMessage(lead: any): string {
+  return generateMessage({
+    type: 'confirmation',
+    tone: 'urgent',
+    variables: {
+      name: lead.name || '',
+      date: lead.appointmentAt?.toLocaleDateString() || '',
+      time: lead.appointmentAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '',
+    },
+  });
 }
 
 /**
@@ -389,23 +380,18 @@ export async function triggerUrgencyCampaign(
   }
 }
 
-async function generateUrgencyCampaignMessage(lead: any, urgency: string): Promise<string> {
-  try {
-    const urgencyText = urgency === 'immediate' ? 'IMMEDIATE NEED' :
-                     urgency === 'urgent' ? 'URGENT' : 'IMPORTANT';
-    const response = await invokeLLM({
-      messages: [
-        {
-          role: 'system',
-          content: `Generate a ${urgency.toLowerCase()} SMS message for a lead with an upcoming appointment at ${lead.appointmentAt?.toLocaleString()}. Lead: ${lead.name}. Under 160 characters.`
-        },
-        { role: 'user', content: 'Please generate the urgency campaign message' }
-      ]
-    });
-    return (response.choices?.[0]?.message?.content as string) ||
-      `${urgencyText}: Reply NOW to confirm your appointment.`;
-  } catch (error: any) {
-    logger.error('Failed to generate urgency campaign message', { error: error.message });
-    return `IMPORTANT: Please confirm your appointment.`;
-  }
+/**
+ * Generate urgency campaign message (in-house, zero API cost)
+ */
+function generateUrgencyCampaignMessage(lead: any, urgency: string): string {
+  const tone = urgency === 'immediate' || urgency === 'urgent' ? 'urgent' as const : 'friendly' as const;
+  return generateMessage({
+    type: 'confirmation',
+    tone,
+    variables: {
+      name: lead.name || '',
+      date: lead.appointmentAt?.toLocaleDateString() || '',
+      time: lead.appointmentAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '',
+    },
+  });
 }

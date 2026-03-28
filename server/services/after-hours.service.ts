@@ -10,7 +10,7 @@ import { leads, messages, automations } from "../../drizzle/schema";
 import { sendSMS } from "../_core/sms";
 import { logger } from "../_core/logger";
 import type { Db } from "../_core/context";
-import { invokeLLM } from "../_core/llm";
+import { generateMessage } from "../_core/messageGenerator";
 import crypto from "crypto";
 
 interface AfterHoursConfig {
@@ -207,34 +207,22 @@ function generateAfterHoursBookingLink(
 }
 
 /**
- * Generate after-hours response message
+ * Generate after-hours response message (in-house, zero API cost)
  */
-async function generateAfterHoursMessage(
+function generateAfterHoursMessage(
   lead: any,
   bookingLink: string,
   isAfterHours: boolean
-): Promise<string> {
-  try {
-    const response = await invokeLLM({
-      messages: [
-        {
-          role: 'system',
-          content: `Generate a friendly after-hours SMS response. The lead is ${lead.name}. The business is currently closed. Include the booking link ${bookingLink}. Create urgency for after-hours booking. Keep it under 160 characters.`
-        },
-        {
-          role: 'user',
-          content: 'Please generate an after-hours response message'
-        }
-      ]
-    });
-
-    return (response.choices?.[0]?.message?.content as string) ||
-      `Thanks for reaching out after hours! Book instantly: ${bookingLink} We'll confirm during business hours.`;
-
-  } catch (error: any) {
-    logger.error('Failed to generate after-hours message', { error: error.message });
-    return `Thanks for reaching out after hours! Book instantly: ${bookingLink} We'll confirm during business hours.`;
-  }
+): string {
+  return generateMessage({
+    type: 'after_hours',
+    tone: 'friendly',
+    variables: {
+      name: lead.name || '',
+      link: bookingLink,
+      business: lead.business || '',
+    },
+  });
 }
 
 /**

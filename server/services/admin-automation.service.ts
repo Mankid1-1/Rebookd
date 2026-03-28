@@ -10,7 +10,7 @@ import { leads, messages, automations } from "../../drizzle/schema";
 import { sendSMS } from "../_core/sms";
 import { logger } from "../_core/logger";
 import type { Db } from "../_core/context";
-import { invokeLLM } from "../_core/llm";
+import { generateMessage } from "../_core/messageGenerator";
 
 interface AdminAutomationConfig {
   confirmationWindow: number; // hours before appointment
@@ -235,84 +235,46 @@ export async function processSelfServiceRescheduling(
 }
 
 /**
- * Generate confirmation message
+ * Generate confirmation message (in-house, zero API cost)
  */
-async function generateConfirmationMessage(appointment: any): Promise<string> {
-  try {
-    const response = await invokeLLM({
-      messages: [
-        {
-          role: 'system',
-          content: `Generate a friendly appointment confirmation SMS. The appointment is at ${appointment.appointmentAt?.toLocaleString()} for ${appointment.name}. Include details like date, time, and any preparation needed. Create excitement and confirmation. Keep it under 160 characters.`
-        },
-        {
-          role: 'user',
-          content: 'Please generate a confirmation message'
-        }
-      ]
-    });
-
-    return (response.choices?.[0]?.message?.content as string) ||
-      `Confirming your appointment on ${appointment.appointmentAt?.toLocaleString()}. We're excited to see you!`;
-
-  } catch (error: any) {
-    logger.error('Failed to generate confirmation message', { error: error.message });
-    return `Confirming your appointment on ${appointment.appointmentAt?.toLocaleString()}. We're excited to see you!`;
-  }
+function generateConfirmationMessage(appointment: any): string {
+  return generateMessage({
+    type: 'confirmation',
+    tone: 'friendly',
+    variables: {
+      name: appointment.name || '',
+      date: appointment.appointmentAt?.toLocaleDateString() || '',
+      time: appointment.appointmentAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '',
+    },
+  });
 }
 
 /**
- * Generate follow-up message
+ * Generate follow-up message (in-house, zero API cost)
  */
-async function generateFollowUpMessage(appointment: any, daysAfter: number): Promise<string> {
-  try {
-    const response = await invokeLLM({
-      messages: [
-        {
-          role: 'system',
-          content: `Generate a friendly follow-up SMS. The appointment was ${daysAfter} days ago at ${appointment.appointmentAt?.toLocaleString()} for ${appointment.name}. Ask about their experience and encourage future bookings. Create value and personalization. Keep it under 160 characters.`
-        },
-        {
-          role: 'user',
-          content: 'Please generate a follow-up message'
-        }
-      ]
-    });
-
-    return (response.choices?.[0]?.message?.content as string) ||
-      `Hi ${appointment.name}, how was your appointment ${daysAfter} days ago? We'd love to see you again!`;
-
-  } catch (error: any) {
-    logger.error('Failed to generate follow-up message', { error: error.message });
-    return `Hi ${appointment.name}, how was your appointment ${daysAfter} days ago? We'd love to see you again!`;
-  }
+function generateFollowUpMessage(appointment: any, daysAfter: number): string {
+  return generateMessage({
+    type: 'follow_up',
+    tone: 'friendly',
+    variables: {
+      name: appointment.name || '',
+      business: '',
+    },
+  });
 }
 
 /**
- * Generate reschedule message
+ * Generate reschedule message (in-house, zero API cost)
  */
-async function generateRescheduleMessage(appointment: any): Promise<string> {
-  try {
-    const response = await invokeLLM({
-      messages: [
-        {
-          role: 'system',
-          content: `Generate a convenient self-service rescheduling SMS. The cancelled appointment was for ${appointment.name}. Include a link or instructions for them to reschedule at their convenience. Make it easy and helpful. Keep it under 160 characters.`
-        },
-        {
-          role: 'user',
-          content: 'Please generate a reschedule message'
-        }
-      ]
-    });
-
-    return (response.choices?.[0]?.message?.content as string) ||
-      `Hi ${appointment.name}, sorry about the cancellation! Reschedule easily: reply with preferred times.`;
-
-  } catch (error: any) {
-    logger.error('Failed to generate reschedule message', { error: error.message });
-    return `Hi ${appointment.name}, sorry about the cancellation! Reschedule easily: reply with preferred times.`;
-  }
+function generateRescheduleMessage(appointment: any): string {
+  return generateMessage({
+    type: 'reschedule',
+    tone: 'empathetic',
+    variables: {
+      name: appointment.name || '',
+      business: '',
+    },
+  });
 }
 
 /**
