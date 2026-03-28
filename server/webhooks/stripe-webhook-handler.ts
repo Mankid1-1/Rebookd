@@ -15,17 +15,50 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export interface WebhookEvent {
   type: string;
+  id?: string;
   data: {
     object: Record<string, unknown> & { id?: string };
   };
 }
 
+// ─── Idempotency: Track processed event IDs to prevent duplicate processing ───
+const processedEvents = new Map<string, number>();
+const DEDUP_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function isDuplicateEvent(eventId: string | undefined): boolean {
+  if (!eventId) return false;
+  const ts = processedEvents.get(eventId);
+  if (ts && Date.now() - ts < DEDUP_TTL_MS) return true;
+  return false;
+}
+
+function markEventProcessed(eventId: string | undefined): void {
+  if (!eventId) return;
+  processedEvents.set(eventId, Date.now());
+  // Cleanup old entries periodically
+  if (processedEvents.size > 5000) {
+    const cutoff = Date.now() - DEDUP_TTL_MS;
+    for (const [key, ts] of processedEvents) {
+      if (ts < cutoff) processedEvents.delete(key);
+    }
+  }
+}
+
+// ─── Grace period: Don't immediately downgrade on first payment failure ───────
+const PAYMENT_GRACE_PERIOD_DAYS = 3;
+
 /**
  * Process Stripe webhook events
  */
 export async function processStripeWebhook(event: WebhookEvent): Promise<void> {
+  // Idempotency check
+  if (isDuplicateEvent(event.id)) {
+    console.log(`⏭️ Skipping duplicate webhook event: ${event.id}`);
+    return;
+  }
+
   const db = await getDb();
-  
+
   try {
     switch (event.type) {
       // Checkout Events
@@ -89,6 +122,15 @@ export async function processStripeWebhook(event: WebhookEvent): Promise<void> {
         await handlePaymentMethodDetached(event.data.object);
         break;
 
+      // Dispute Events
+      case 'charge.dispute.created':
+        await handleDisputeCreated(event.data.object as unknown as Stripe.Dispute);
+        break;
+
+      case 'charge.dispute.closed':
+        await handleDisputeClosed(event.data.object as unknown as Stripe.Dispute);
+        break;
+
       // Payout Events (for Connect accounts)
       case 'payout.created':
         await handlePayoutCreated(event.data.object);
@@ -105,6 +147,9 @@ export async function processStripeWebhook(event: WebhookEvent): Promise<void> {
       default:
         console.log(`Unhandled webhook event type: ${event.type}`);
     }
+
+    // Mark as processed for idempotency
+    markEventProcessed(event.id);
 
     // Log webhook event for audit
     await logWebhookEvent(event, 'processed');
@@ -266,10 +311,12 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void
 
   console.log(`❌ Invoice payment failed for subscription ${subscriptionId}, amount: $${invoice.amount_due / 100}`);
 
-  // Update subscription status
+  // Grace period: mark as past_due but don't immediately downgrade
+  // The subscription stays active for PAYMENT_GRACE_PERIOD_DAYS before degrading service
   await (db as any).update('subscriptions')
-    .set({ 
+    .set({
       status: 'past_due',
+      gracePeriodEndsAt: new Date(Date.now() + PAYMENT_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000),
       updatedAt: new Date()
     })
     .where('id', '=', subscriptionId);
@@ -462,6 +509,49 @@ async function handlePayoutFailed(payout: Stripe.Payout): Promise<void> {
  */
 async function handlePayoutPaid(payout: Stripe.Payout): Promise<void> {
   console.log(`✅ Payout paid: $${payout.amount / 100}`);
+}
+
+/**
+ * Handle dispute creation - alert admin immediately
+ */
+async function handleDisputeCreated(dispute: Stripe.Dispute): Promise<void> {
+  const db = await getDb();
+
+  console.log(`⚠️ Dispute created: ${dispute.id}, amount: $${dispute.amount / 100}, reason: ${dispute.reason}`);
+
+  // Log as a high-priority system event
+  await (db as any).insert('system_error_logs').values({
+    level: 'critical',
+    category: 'billing',
+    message: `Stripe dispute created: ${dispute.id} for $${dispute.amount / 100}. Reason: ${dispute.reason}`,
+    metadata: JSON.stringify({
+      disputeId: dispute.id,
+      chargeId: typeof dispute.charge === 'string' ? dispute.charge : undefined,
+      amount: dispute.amount,
+      reason: dispute.reason,
+      status: dispute.status,
+    }),
+    createdAt: new Date(),
+  });
+}
+
+/**
+ * Handle dispute closure
+ */
+async function handleDisputeClosed(dispute: Stripe.Dispute): Promise<void> {
+  console.log(`📋 Dispute closed: ${dispute.id}, status: ${dispute.status}`);
+
+  const db = await getDb();
+  await (db as any).insert('system_error_logs').values({
+    level: 'info',
+    category: 'billing',
+    message: `Stripe dispute closed: ${dispute.id}. Status: ${dispute.status}`,
+    metadata: JSON.stringify({
+      disputeId: dispute.id,
+      status: dispute.status,
+    }),
+    createdAt: new Date(),
+  });
 }
 
 // Helper functions

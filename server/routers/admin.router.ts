@@ -6,7 +6,7 @@ import * as TenantService from "../services/tenant.service";
 import * as UserService from "../services/user.service";
 import * as SystemService from "../services/system.service";
 import * as AiService from "../services/ai.service";
-import * as AdminAuditService from "../services/adminAudit.service";
+import * as AdminAuditService from "../services/admin-audit.service";
 import { EmailService } from "../services/email.service";
 
 function clampAdminPagination(input?: { page?: number; limit?: number }) {

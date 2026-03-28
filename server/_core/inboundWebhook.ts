@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "../db";
 import { leads, messages, phoneNumbers } from "../../drizzle/schema";
-import { emitEvent } from "../services/eventBus";
+import { emitEvent } from "../services/event-bus.service";
 import * as SystemService from "../services/system.service";
 import { logger } from "./logger";
 import { captureException } from "./sentry";

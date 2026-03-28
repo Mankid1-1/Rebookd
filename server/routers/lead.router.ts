@@ -4,7 +4,7 @@ import { createLeadSchema, updateLeadSchema, updateLeadStatusSchema, sendMessage
 import { tenantProcedure, router } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
 import * as LeadService from "../services/lead.service";
-import { emitEvent } from "../services/eventBus";
+import { emitEvent } from "../services/event-bus.service";
 import { isAppError } from "../_core/appErrors";
 
 export const leadsRouter = router({

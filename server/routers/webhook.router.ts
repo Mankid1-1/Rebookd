@@ -3,8 +3,8 @@ import { TRPCError } from "@trpc/server";
 import { publicProcedure, router } from "../_core/trpc";
 import { ENV } from "../_core/env";
 import { verifyInboundWebhookSignature } from "../_core/webhookSignature";
-import { emitEvent } from "../services/eventBus";
-import * as WebhookDedupService from "../services/webhookDedup.service";
+import { emitEvent } from "../services/event-bus.service";
+import * as WebhookDedupService from "../services/webhook-dedup.service";
 
 export const webhooksRouter = router({
   receive: publicProcedure

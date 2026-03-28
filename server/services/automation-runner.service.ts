@@ -5,7 +5,7 @@ import { normalizePhoneE164 } from "../../shared/phone";
 import type { Db } from "../_core/context";
 import { resolveTemplate, sendSMS } from "../_core/sms";
 import type { SMSResult } from "../_core/sms";
-import * as AutomationJobService from "./automationJob.service";
+import * as AutomationJobService from "./automation-job.service";
 import * as AutomationService from "./automation.service";
 import * as LeadService from "./lead.service";
 import * as TenantService from "./tenant.service";

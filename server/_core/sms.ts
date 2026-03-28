@@ -6,7 +6,7 @@ import { ENV } from "./env";
 import { isAppError } from "./appErrors";
 import { logger } from "./logger";
 import { getDb } from "../db";
-import { assertSmsHourlyDailyLimits, assertSmsRateLimitAvailable } from "../services/rateLimit.service";
+import { assertSmsHourlyDailyLimits, assertSmsRateLimitAvailable } from "../services/rate-limit.service";
 import { assertUsageCapAvailable } from "../services/usage.service";
 
 const SMS_HTTP_TIMEOUT_MS = parseInt(process.env.SMS_HTTP_TIMEOUT_MS || "30000", 10);

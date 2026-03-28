@@ -5,7 +5,7 @@ import { protectedProcedure, tenantProcedure, router } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
 import * as AutomationService from "../services/automation.service";
 import * as TenantService from "../services/tenant.service";
-import { runAutomationsForEvent } from "../services/automationRunner";
+import { runAutomationsForEvent } from "../services/automation-runner.service";
 import type { EventType } from "../../shared/events";
 import { automationTemplates } from "../../shared/templates";
 import { isAppError } from "../_core/appErrors";

@@ -1,4 +1,4 @@
-import { runAutomationsForEvent } from "./automationRunner";
+import { runAutomationsForEvent } from "./automation-runner.service";
 import type { EventPayload } from "../../shared/events";
 
 const processedEvents = new Set<string>();

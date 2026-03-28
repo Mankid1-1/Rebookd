@@ -7,7 +7,7 @@ import { tenantProcedure, publicProcedure, router } from "../_core/trpc";
 import type { Db } from "../_core/context";
 import * as TenantService from "../services/tenant.service";
 import * as BillingService from "../services/billing.service";
-import * as AdminAuditService from "../services/adminAudit.service";
+import * as AdminAuditService from "../services/admin-audit.service";
 
 async function auditAdminRead(
   ctx: { db: Db; user: { id: number; email?: string | null }; req: { path?: string } },

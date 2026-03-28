@@ -76,7 +76,7 @@ vi.mock("./_core/llm", () => ({
   }),
 }));
 
-vi.mock("./services/eventBus", () => ({
+vi.mock("./services/event-bus.service", () => ({
   emitEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
