@@ -316,6 +316,13 @@ function DashboardLayoutContent({
 
   return (
     <>
+      {/* Skip navigation link for keyboard/screen reader users (WCAG AA) */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:rounded-md focus:text-sm"
+      >
+        Skip to main content
+      </a>
       <Sidebar collapsible="icon" className="border-r border-sidebar-border">
         {/* Header / Branding */}
         <SidebarHeader className="h-16 justify-center border-b border-sidebar-border">
@@ -492,7 +499,7 @@ function DashboardLayoutContent({
             </div>
           </div>
         )}
-        <main className="flex-1 overflow-auto">{children}</main>
+        <main id="main-content" className="flex-1 overflow-auto" role="main">{children}</main>
       </SidebarInset>
     </>
   );
