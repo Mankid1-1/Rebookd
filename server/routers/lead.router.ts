@@ -129,4 +129,14 @@ export const leadsRouter = router({
       await emitEvent({ type: "appointment.cancelled", tenantId: ctx.tenantId, data: { leadId: input.leadId, appointmentTime: input.appointmentTime ?? lead.appointmentAt, phone: lead.phone, name: lead.name }, userId: ctx.user.id, timestamp: new Date() });
       return { success: true };
     }),
+
+  csvImport: tenantProcedure
+    .input(z.object({
+      csvContent: z.string().min(1).max(5_000_000),
+      platform: z.enum(["square", "vagaro", "booksy", "fresha", "generic"]).default("generic"),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { importLeadsFromCSV } = await import("../services/csv-import.service");
+      return importLeadsFromCSV(ctx.db, ctx.tenantId, input.csvContent, input.platform);
+    }),
 });

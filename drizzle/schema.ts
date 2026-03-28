@@ -131,6 +131,13 @@ export const subscriptions = mysqlTable("subscriptions", {
   isPromotional: boolean("isPromotional").default(false).notNull(),
   customMonthlyPrice: int("customMonthlyPrice"), // Flex plan: custom price in cents, null = use plan default
   promotionalExpiresAt: timestamp("promotionalExpiresAt"),
+  // ROI Guarantee fields
+  guaranteeCohort: varchar("guaranteeCohort", { length: 50 }),
+  guaranteeStatus: mysqlEnum("guaranteeStatus", ["pending", "active", "passed", "failed", "refunded"]),
+  guaranteeStartedAt: timestamp("guaranteeStartedAt"),
+  guaranteeExpiresAt: timestamp("guaranteeExpiresAt"),
+  lastRoiCheckAt: timestamp("lastRoiCheckAt"),
+  lastRoiAmount: int("lastRoiAmount"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -230,6 +237,9 @@ export const leads = mysqlTable("leads", {
   tcpaConsentText: text("tcpaConsentText"), // Store the exact consent language
   unsubscribedAt: timestamp("unsubscribedAt"),
   unsubscribeMethod: varchar("unsubscribeMethod", { length: 50 }), // "sms_stop", "manual", etc.
+  // Recovery attribution fields (added by migration 0007)
+  recoverySource: varchar("recoverySource", { length: 100 }),
+  recoveredFromLeadId: int("recoveredFromLeadId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (t) => ({
@@ -285,7 +295,7 @@ export const templates = mysqlTable("templates", {
   key: varchar("key", { length: 100 }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   body: text("body").notNull(),
-  tone: mysqlEnum("tone", ["friendly", "professional", "casual", "urgent"]).default("friendly").notNull(),
+  tone: mysqlEnum("tone", ["friendly", "professional", "casual", "urgent", "empathetic"]).default("friendly").notNull(),
   variables: json("variables").$type<string[]>(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -530,3 +540,48 @@ export const stripeSubscriptions = mysqlTable("stripe_subscriptions", {
 
 export type StripeSubscription = typeof stripeSubscriptions.$inferSelect;
 export type InsertStripeSubscription = typeof stripeSubscriptions.$inferInsert;
+
+// ─── Recovery Attribution ─────────────────────────────────────────────────────
+
+export const recoveryEvents = mysqlTable("recovery_events", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  leadId: int("leadId").notNull(),
+  automationId: int("automationId"),
+  messageId: int("messageId"),
+  originalAppointmentId: varchar("originalAppointmentId", { length: 255 }),
+  recoveredAppointmentId: varchar("recoveredAppointmentId", { length: 255 }),
+  leakageType: varchar("leakageType", { length: 100 }).notNull(),
+  status: mysqlEnum("status", ["sent", "responded", "converted", "realized", "manual_realized", "failed", "expired"]).default("sent").notNull(),
+  trackingToken: varchar("trackingToken", { length: 64 }).notNull(),
+  stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
+  stripeInvoiceId: varchar("stripeInvoiceId", { length: 255 }),
+  estimatedRevenue: int("estimatedRevenue").default(0).notNull(),
+  realizedRevenue: int("realizedRevenue").default(0).notNull(),
+  attributionModel: varchar("attributionModel", { length: 50 }).default("last_touch").notNull(),
+  isPrimaryAttribution: boolean("isPrimaryAttribution").default(false).notNull(),
+  notes: text("notes"),
+  sentAt: timestamp("sentAt").defaultNow().notNull(),
+  respondedAt: timestamp("respondedAt"),
+  convertedAt: timestamp("convertedAt"),
+  realizedAt: timestamp("realizedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type RecoveryEvent = typeof recoveryEvents.$inferSelect;
+export type InsertRecoveryEvent = typeof recoveryEvents.$inferInsert;
+
+// ─── Feature Configs ──────────────────────────────────────────────────────────
+
+export const featureConfigs = mysqlTable("feature_configs", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  feature: varchar("feature", { length: 100 }).notNull(),
+  config: json("config").$type<Record<string, unknown>>(),
+  enabled: boolean("enabled").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type FeatureConfig = typeof featureConfigs.$inferSelect;

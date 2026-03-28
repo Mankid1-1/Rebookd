@@ -24,6 +24,8 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
     passwordHash: "",
     tenantId: 1,
     active: true,
+    accountType: "business" as const,
+    tenantRole: "owner" as const,
     stripeCustomerId: "",
     createdAt: new Date(),
     updatedAt: new Date(),

@@ -10,7 +10,8 @@ import { leads, messages, automations } from "../../drizzle/schema";
 import { sendSMS } from "../_core/sms";
 import { logger } from "../_core/logger";
 import type { Db } from "../_core/context";
-import { generateSecureToken } from "../_core/message-encryption";
+import crypto from "crypto";
+const generateSecureToken = (length = 32) => crypto.randomBytes(length).toString("hex");
 
 interface BookingLink {
   token: string;

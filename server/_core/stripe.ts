@@ -8,7 +8,7 @@ import * as BillingService from "../services/billing.service";
 import { ENV } from "./env";
 import type { Db } from "./context";
 
-const stripe = new Stripe(ENV.stripeSecretKey || "", { apiVersion: "2022-11-15" });
+export const stripe = new Stripe(ENV.stripeSecretKey || "", { apiVersion: "2022-11-15" });
 
 async function getSubscriptionByStripeId(db: Db, stripeId: string) {
   const rows = await db.select().from(subscriptions).where(eq(subscriptions.stripeId, stripeId)).limit(1);

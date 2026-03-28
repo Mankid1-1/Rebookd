@@ -17,7 +17,8 @@ export interface WebhookEvent {
   type: string;
   id?: string;
   data: {
-    object: Record<string, unknown> & { id?: string };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    object: any;
   };
 }
 

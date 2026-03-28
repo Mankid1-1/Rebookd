@@ -3,7 +3,9 @@ import mysql from "mysql2/promise";
 import * as schema from "../drizzle/schema";
 
 // Fallback to SQLite for development if MySQL is not available
+// @ts-ignore - better-sqlite3 is an optional dev dependency
 import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
+// @ts-ignore - better-sqlite3 is an optional dev dependency
 import Database from "better-sqlite3";
 
 let _pool: mysql.Pool | null = null;
@@ -31,13 +33,15 @@ export async function getDb() {
         enableKeepAlive: true,
         keepAliveInitialDelay: 10_000,
         connectTimeout: 10_000,
+        idleTimeout: 60_000,
+        maxIdle: parseInt(process.env.DB_MAX_IDLE || "5", 10),
         // Only use SSL for remote connections
         ...(dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1') ? {} : { ssl: { rejectUnauthorized: false } }),
       });
 
       // The cast is needed because getDb() returns the Db alias (MySql2Database<schema>)
       // but drizzle() infers a slightly different generic signature.
-      _db = drizzle(_pool, { schema, mode: "default" }) as ReturnType<typeof drizzle<typeof schema>>;
+      _db = drizzle(_pool, { schema, mode: "default" }) as unknown as ReturnType<typeof drizzle<typeof schema>>;
       return _db;
     } catch (error) {
       console.warn('MySQL connection failed, falling back to SQLite:', error);
@@ -68,7 +72,7 @@ export async function withTransaction<T>(
   const conn = await _pool.getConnection();
   try {
     await conn.beginTransaction();
-    const txDb = drizzle(conn, { schema, mode: "default" }) as ReturnType<typeof drizzle<typeof schema>>;
+    const txDb = drizzle(conn, { schema, mode: "default" }) as unknown as ReturnType<typeof drizzle<typeof schema>>;
     const result = await fn(txDb);
     await conn.commit();
     return result;

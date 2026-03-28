@@ -96,7 +96,7 @@ export const automationsRouter = router({
       await AutomationService.upsertAutomationByKey(ctx.db, ctx.tenantId, template.key, {
         name: template.name,
         category: template.category as AutoCategory,
-        triggerType: triggerMapping[template.trigger] || "custom",
+        triggerType: (triggerMapping[template.trigger] || "new_lead") as "new_lead" | "inbound_message" | "status_change" | "time_delay" | "appointment_reminder",
         triggerConfig: {},
         conditions: [],
         actions: template.steps as Array<Record<string, unknown>>,
@@ -137,5 +137,34 @@ export const aiRouter = router({
         }
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI rewrite failed" });
       }
+    }),
+
+  dryRun: tenantProcedure
+    .input(z.object({ automationId: z.number(), leadId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const automation = await AutomationService.getAutomationById(ctx.db, ctx.tenantId, input.automationId);
+      if (!automation) throw new TRPCError({ code: "NOT_FOUND", message: "Automation not found" });
+
+      const { getLeadById } = await import("../services/lead.service");
+      const lead = await getLeadById(ctx.db, ctx.tenantId, input.leadId);
+      if (!lead) throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
+
+      const tenant = await TenantService.getTenantById(ctx.db, ctx.tenantId);
+      const config = automation.triggerConfig as Record<string, unknown> | null;
+      const message = (config?.message as string) ?? "No message configured";
+
+      const rendered = message
+        .replace(/\{\{name\}\}/g, lead.name ?? "Customer")
+        .replace(/\{\{business\}\}/g, tenant?.name ?? "Business")
+        .replace(/\{\{phone\}\}/g, lead.phone ?? "")
+        .replace(/\{\{date\}\}/g, new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }))
+        .replace(/\{\{time\}\}/g, new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }));
+
+      return {
+        wouldSend: true,
+        message: rendered,
+        recipientPhone: lead.phone ?? "",
+        scheduledFor: new Date().toISOString(),
+      };
     }),
 });

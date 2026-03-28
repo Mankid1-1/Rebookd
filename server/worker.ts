@@ -180,7 +180,7 @@ async function fireAutomation(
   let appointmentTime = "";
   try {
     const lead = await db
-      .select({ appointmentDate: leads.appointmentDate })
+      .select({ appointmentDate: leads.appointmentAt })
       .from(leads)
       .where(and(eq(leads.id, leadId), eq(leads.tenantId, tenantId)))
       .limit(1);

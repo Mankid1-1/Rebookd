@@ -257,7 +257,7 @@ export async function evaluateGuarantee(
   if (roi.isPositiveROI) {
     await db
       .update(subscriptions)
-      .set({ guaranteeStatus: "satisfied" })
+      .set({ guaranteeStatus: "passed" })
       .where(eq(subscriptions.id, sub.id));
 
     logger.info("Guarantee satisfied — positive ROI achieved", {
@@ -291,7 +291,7 @@ export async function evaluateGuarantee(
     // Positive ROI at expiration
     await db
       .update(subscriptions)
-      .set({ guaranteeStatus: "satisfied" })
+      .set({ guaranteeStatus: "passed" })
       .where(eq(subscriptions.id, sub.id));
 
     return { action: "satisfied", roi };

@@ -126,7 +126,7 @@ export const adminRouter = router({
     const tenantRows = await ctx.db
       .select({
         tenantId: tenants.id,
-        tenantName: tenants.businessName,
+        tenantName: tenants.name,
         createdAt: tenants.createdAt,
       })
       .from(tenants);
@@ -137,7 +137,7 @@ export const adminRouter = router({
         const [loginActivity] = await ctx.db
           .select({ c: sql<number>`COUNT(*)` })
           .from(users)
-          .where(and(eq(users.tenantId, t.tenantId), gte(users.lastLoginAt, thirtyDaysAgo)));
+          .where(and(eq(users.tenantId, t.tenantId), gte(users.lastSignedIn, thirtyDaysAgo)));
 
         // Count active automations
         const [autoActivity] = await ctx.db
