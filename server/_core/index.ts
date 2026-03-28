@@ -18,8 +18,11 @@ import { initSentry, captureException } from "./sentry";
 import { ensureCorrelationId, runWithCorrelationId } from "./requestContext";
 import { registerSecurityMiddleware } from "./security";
 import { readFileSync } from "fs";
+import { trafficGateMiddleware, setShutdownRef } from "./traffic-gate";
+import { validateEnv } from "./env";
 
-// Graceful shutdown state
+// Graceful shutdown state — shared with traffic gate
+const shutdownState = { value: false };
 let isShuttingDown = false;
 const shutdownTimeoutMs = 30000; // 30 seconds timeout
 
@@ -63,6 +66,7 @@ async function gracefulShutdown(server: any, signal: string) {
   }
 
   isShuttingDown = true;
+  shutdownState.value = true;
   logger.info("Starting graceful shutdown", { signal, timeout: shutdownTimeoutMs });
 
   try {
@@ -137,6 +141,7 @@ function registerShutdownHandlers(server: any) {
 }
 
 async function startServer() {
+  validateEnv();
   await initSentry();
   const app = express();
   // Trust reverse proxy (nginx → Apache → PHP proxy → Node)
@@ -144,6 +149,10 @@ async function startServer() {
   const server = createServer(app);
   // Register Stripe webhook route first (it needs raw body)
   registerStripeWebhook(app);
+
+  // Traffic gate — load shedding before any heavy middleware
+  setShutdownRef(shutdownState);
+  app.use(trafficGateMiddleware);
 
   app.use(
     cors({
@@ -291,19 +300,24 @@ async function startServer() {
       router: appRouter,
       createContext,
       onError: async ({ error, path, ctx }) => {
-        logger.error("tRPC error", { path, message: error.message, correlationId: (ctx as any)?.correlationId });
-        captureException(error, { path, tenantId: (ctx as any)?.tenantId });
-        const db = await getDb();
-        if (db) {
-          await SystemService.createSystemError(db, {
-            type: "system",
-            message: `tRPC Error in ${path}: ${error.message}`,
-            detail: JSON.stringify({
-              stack: error.stack,
-              correlationId: (ctx as { correlationId?: string })?.correlationId,
-            }),
-            tenantId: (ctx as any)?.tenantId,
-          }).catch((err) => logger.error("Failed to log system error", { error: String(err) }));
+        try {
+          logger.error("tRPC error", { path, message: error.message, correlationId: (ctx as any)?.correlationId });
+          captureException(error, { path, tenantId: (ctx as any)?.tenantId });
+          const db = await getDb();
+          if (db) {
+            await SystemService.createSystemError(db, {
+              type: "system",
+              message: `tRPC Error in ${path}: ${error.message}`,
+              detail: JSON.stringify({
+                stack: error.stack,
+                correlationId: (ctx as { correlationId?: string })?.correlationId,
+              }),
+              tenantId: (ctx as any)?.tenantId,
+            }).catch((err) => logger.error("Failed to log system error", { error: String(err) }));
+          }
+        } catch (logErr) {
+          // Error logging itself failed (e.g., pool exhausted) — never let this propagate
+          logger.error("onError handler failed", { error: String(logErr) });
         }
       },
     })
