@@ -14,7 +14,7 @@ import { BUSY_PAGE_HTML, BUSY_PAGE_JSON } from "./busy-page";
 import { logger } from "./logger";
 
 // Paths that always pass through (health probes, monitoring)
-const BYPASS_PATHS = new Set(["/health", "/ready"]);
+const BYPASS_PATHS = new Set(["/health", "/ready", "/api/version"]);
 
 // Reference to the shutdown flag — set via setShutdownRef()
 let isShuttingDownRef: { value: boolean } = { value: false };

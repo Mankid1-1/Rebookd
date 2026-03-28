@@ -1,11 +1,15 @@
 import { build as viteBuild } from "vite";
 import { build as esbuild } from "esbuild";
-import { existsSync, mkdirSync, renameSync, rmSync } from "fs";
+import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 
 const root = resolve(process.cwd());
 const tempDist = join(root, "dist-build");
 const finalDist = join(root, "dist");
+
+// Unique build ID — used by the live-update system to detect new deployments
+const BUILD_VERSION = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+console.log(`Build version: ${BUILD_VERSION}`);
 
 if (existsSync(tempDist)) {
   rmSync(tempDist, { recursive: true, force: true });
@@ -16,7 +20,13 @@ try {
   await viteBuild({
     configFile: resolve(root, "vite.config.ts"),
     build: { outDir: join(tempDist, "public"), emptyOutDir: true },
+    define: {
+      "globalThis.__BUILD_VERSION__": JSON.stringify(BUILD_VERSION),
+    },
   });
+
+  // Write version file for the live-update system
+  writeFileSync(join(tempDist, "version.json"), JSON.stringify({ version: BUILD_VERSION, builtAt: new Date().toISOString() }));
 
   await esbuild({
     entryPoints: [resolve(root, "server/_core/index.ts")],
@@ -27,6 +37,7 @@ try {
     outfile: join(tempDist, "index.js"),
     define: {
       "process.env.NODE_ENV": '"production"',
+      "globalThis.__BUILD_VERSION__": JSON.stringify(BUILD_VERSION),
     },
     plugins: [{
       name: "exclude-vite-dev",
@@ -67,6 +78,9 @@ try {
     bundle: true,
     format: "esm",
     outfile: join(tempDist, "worker.js"),
+    define: {
+      "globalThis.__BUILD_VERSION__": JSON.stringify(BUILD_VERSION),
+    },
   });
 
   if (existsSync(finalDist)) {
