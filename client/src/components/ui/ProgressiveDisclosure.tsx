@@ -235,11 +235,35 @@ export function ProgressiveDisclosureProvider({ children, userId = 'current-user
   );
 }
 
-// Hook to use the shared context
+// Safe default when used outside a provider
+const SAFE_DEFAULT_CONTEXT = {
+  context: {
+    userSkill: null,
+    currentComplexity: 'standard' as UIComplexity,
+    disclosedFeatures: new Set<string>(),
+    hiddenFeatures: new Set<string>(),
+    adaptiveHints: [] as AdaptiveHint[],
+  },
+  isAnalyzing: false,
+  analyzeUserBehavior: async () => {},
+  trackFeatureUsage: (_featureId: string) => {},
+  trackSessionStart: () => {},
+  trackSessionEnd: () => {},
+  trackError: (_errorType: string) => {},
+  trackHelpSeeking: () => {},
+  completeTutorial: (_tutorialId: string) => {},
+  adjustComplexity: (_complexity: UIComplexity) => {},
+  toggleFeature: (_featureId: string, _visible: boolean) => {},
+  dismissHint: (_hintId: string) => {},
+  onDisclose: (_featureId: string) => {},
+  onConceal: (_featureId: string) => {},
+};
+
+// Hook to use the shared context — returns safe defaults if no provider
 export function useProgressiveDisclosureContext() {
   const context = useContext(ProgressiveDisclosureContext);
   if (!context) {
-    throw new Error('useProgressiveDisclosureContext must be used within a ProgressiveDisclosureProvider');
+    return SAFE_DEFAULT_CONTEXT;
   }
   return context;
 }
