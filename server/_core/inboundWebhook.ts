@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "../db";
 import { leads, messages, phoneNumbers } from "../../drizzle/schema";
-import { emitEvent } from "../services/eventBus";
+import { emitEvent } from "../services/event-bus.service";
 import * as SystemService from "../services/system.service";
 import { logger } from "./logger";
 import { captureException } from "./sentry";
@@ -198,7 +198,7 @@ async function handleInbound(msg: InboundMessage) {
     const stopText =
       process.env.TCPA_STOP_REPLY_TEXT ||
       "You have been unsubscribed from SMS from this business. Reply START to receive messages again.";
-    await sendSMS(from, stopText, undefined, undefined).catch((err) =>
+    await sendSMS(from, stopText, undefined, tenantId).catch((err) =>
       logger.warn("TCPA STOP confirmation SMS failed", { error: String(err) }),
     );
     await SystemService.createSystemError(db as any, {

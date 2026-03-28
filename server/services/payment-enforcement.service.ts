@@ -11,7 +11,7 @@ import { leads, messages, automations } from "../../drizzle/schema";
 import { sendSMS } from "../_core/sms";
 import { logger } from "../_core/logger";
 import type { Db } from "../_core/context";
-import { invokeLLM } from "../_core/llm";
+import { generateMessage } from "../_core/messageGenerator";
 
 interface PaymentConfig {
   depositAmount: number; // cents
@@ -262,107 +262,51 @@ export async function processNoShowPenalty(
 }
 
 /**
- * Generate card on file request message
+ * Generate card on file request message (in-house, zero API cost)
  */
-async function generateCardOnFileRequest(lead: any): Promise<string> {
-  try {
-    const response = await invokeLLM([
-      {
-        role: 'system',
-        content: `Generate a professional SMS message requesting payment information. The lead is ${lead.name}. Explain that a card on file is required to secure the booking. Create urgency but be professional. Keep it under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate a card on file request message'
-      }
-    ]);
-
-    return response.choices?.[0]?.message?.content || 
-      `Hi ${lead.name}, to secure your booking, please add a payment method. Reply PAY to continue.`;
-
-  } catch (error) {
-    logger.error('Failed to generate card on file request', { error: error.message });
-    return `Hi ${lead.name}, to secure your booking, please add a payment method. Reply PAY to continue.`;
-  }
+function generateCardOnFileRequest(lead: any): string {
+  return generateMessage({
+    type: 'card_on_file',
+    tone: 'professional',
+    variables: { name: lead.name || '', business: '' },
+  });
 }
 
 /**
- * Generate deposit request message
+ * Generate deposit request message (in-house, zero API cost)
  */
-async function generateDepositRequest(lead: any, depositAmount: number): Promise<string> {
-  try {
-    const response = await invokeLLM([
-      {
-        role: 'system',
-        content: `Generate a professional SMS message requesting a deposit. The lead is ${lead.name}. The deposit amount is $${depositAmount / 100}. Explain that this secures their appointment and is refundable with proper cancellation. Keep it under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate a deposit request message'
-      }
-    ]);
-
-    return response.choices?.[0]?.message?.content || 
-      `Hi ${lead.name}, a $${depositAmount / 100} deposit is required to secure your booking. Reply DEPOSIT to continue.`;
-
-  } catch (error) {
-    logger.error('Failed to generate deposit request', { error: error.message });
-    return `Hi ${lead.name}, a $${depositAmount / 100} deposit is required to secure your booking. Reply DEPOSIT to continue.`;
-  }
+function generateDepositRequest(lead: any, depositAmount: number): string {
+  return generateMessage({
+    type: 'deposit_request',
+    tone: 'professional',
+    variables: { name: lead.name || '', amount: `$${depositAmount / 100}`, business: '' },
+  });
 }
 
 /**
- * Generate cancellation fee message
+ * Generate cancellation fee message (in-house, zero API cost)
  */
-async function generateCancellationFeeMessage(
+function generateCancellationFeeMessage(
   lead: any,
   feeAmount: number,
   cancellationHours: number
-): Promise<string> {
-  try {
-    const response = await invokeLLM([
-      {
-        role: 'system',
-        content: `Generate a professional SMS message about a cancellation fee. The lead is ${lead.name}. The fee is $${feeAmount / 100}. The cancellation was made ${cancellationHours} hours before the appointment. Be transparent but professional. Keep it under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate a cancellation fee message'
-      }
-    ]);
-
-    return response.choices?.[0]?.message?.content || 
-      `Hi ${lead.name}, a $${feeAmount / 100} cancellation fee applies. Your booking has been cancelled.`;
-
-  } catch (error) {
-    logger.error('Failed to generate cancellation fee message', { error: error.message });
-    return `Hi ${lead.name}, a $${feeAmount / 100} cancellation fee applies. Your booking has been cancelled.`;
-  }
+): string {
+  return generateMessage({
+    type: 'cancellation_fee',
+    tone: 'professional',
+    variables: { name: lead.name || '', amount: `$${feeAmount / 100}`, business: '' },
+  });
 }
 
 /**
- * Generate no-show penalty message
+ * Generate no-show penalty message (in-house, zero API cost)
  */
-async function generateNoShowPenaltyMessage(lead: any, penaltyAmount: number): Promise<string> {
-  try {
-    const response = await invokeLLM([
-      {
-        role: 'system',
-        content: `Generate a professional SMS message about a no-show penalty. The lead is ${lead.name}. The penalty is $${penaltyAmount / 100}. Explain that this is due to the missed appointment without proper cancellation. Be firm but professional. Keep it under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate a no-show penalty message'
-      }
-    ]);
-
-    return response.choices?.[0]?.message?.content || 
-      `Hi ${lead.name}, a $${penaltyAmount / 100} no-show penalty applies. Please contact us to reschedule.`;
-
-  } catch (error) {
-    logger.error('Failed to generate no-show penalty message', { error: error.message });
-    return `Hi ${lead.name}, a $${penaltyAmount / 100} no-show penalty applies. Please contact us to reschedule.`;
-  }
+function generateNoShowPenaltyMessage(lead: any, penaltyAmount: number): string {
+  return generateMessage({
+    type: 'no_show_penalty',
+    tone: 'professional',
+    variables: { name: lead.name || '', amount: `$${penaltyAmount / 100}`, business: '' },
+  });
 }
 
 /**
@@ -465,27 +409,13 @@ export async function triggerPaymentEnforcementAutomation(
 }
 
 /**
- * Generate payment reminder message
+ * Generate payment reminder message (in-house, zero API cost)
  */
-async function generatePaymentReminder(lead: any): Promise<string> {
-  try {
-    const response = await invokeLLM([
-      {
-        role: 'system',
-        content: `Generate a friendly payment reminder SMS. The lead is ${lead.name}. They have a payment requirement pending. Create urgency but be helpful. Keep it under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate a payment reminder message'
-      }
-    ]);
-
-    return response.choices?.[0]?.message?.content || 
-      `Hi ${lead.name}, complete your payment to secure your booking. Reply PAY for options.`;
-
-  } catch (error) {
-    logger.error('Failed to generate payment reminder', { error: error.message });
-    return `Hi ${lead.name}, complete your payment to secure your booking. Reply PAY for options.`;
-  }
+function generatePaymentReminder(lead: any): string {
+  return generateMessage({
+    type: 'payment_reminder',
+    tone: 'friendly',
+    variables: { name: lead.name || '', business: '' },
+  });
 }
 

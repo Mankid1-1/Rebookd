@@ -1,4 +1,4 @@
-import DashboardLayout from "@/components/DashboardLayout";
+import DashboardLayout from "@/components/layout/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 
 // Dynamic loyalty tiers based on business type and user skill
 const getDynamicLoyaltyTiers = (businessType?: string, userSkill?: any) => {
@@ -32,20 +32,12 @@ const getDynamicLoyaltyTiers = (businessType?: string, userSkill?: any) => {
     { visits: 3, reward: '10% discount', message: 'Loyalty reward: 10% off your next booking!' }
   ];
 
-  // Add intermediate tiers for non-beginners
-  if (userSkill?.level !== 'beginner') {
-    baseTiers.push(
-      { visits: 5, reward: '15% discount', message: 'VIP reward: 15% off your next booking!' }
-    );
-  }
-
-  // Add expert tiers for advanced users
-  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
-    baseTiers.push(
-      { visits: 10, reward: '20% discount', message: 'Elite reward: 20% off your next booking!' },
-      { visits: 15, reward: 'Free service', message: 'Platinum reward: Free service on your next visit!' }
-    );
-  }
+  // All loyalty tiers available at every skill level
+  baseTiers.push(
+    { visits: 5, reward: '15% discount', message: 'VIP reward: 15% off your next booking!' },
+    { visits: 10, reward: '20% discount', message: 'Elite reward: 20% off your next booking!' },
+    { visits: 15, reward: 'Free service', message: 'Platinum reward: Free service on your next visit!' }
+  );
 
   // Business-specific tiers
   if (businessType?.includes('medical') || businessType?.includes('clinic')) {
@@ -87,7 +79,7 @@ export default function RetentionEngine() {
 
   useEffect(() => {
     if (settings?.retentionEngineConfig) {
-      setConfig(settings.retentionEngineConfig);
+      setConfig(settings.retentionEngineConfig as any);
     }
   }, [settings]);
 

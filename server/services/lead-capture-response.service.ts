@@ -7,11 +7,11 @@
  */
 
 import { eq, and, desc, sql, lt, isNull } from "drizzle-orm";
-import { leads, messages, automations } from "../../drizzle/schema";
+import { leads, messages, automations, tenants } from "../../drizzle/schema";
 import { sendSMS } from "../_core/sms";
 import { logger } from "../_core/logger";
 import type { Db } from "../_core/context";
-import { invokeLLM } from "../_core/llm";
+import { generateMessage } from "../_core/messageGenerator";
 import { encryptMessage, messageEncryption } from "../_core/message-encryption";
 
 interface LeadCaptureConfig {
@@ -61,24 +61,34 @@ export async function processIncomingLead(
     if (existingLead) {
       logger.info('Lead already exists, updating contact', { leadId: existingLead.id });
       await updateLeadContact(db, tenantId, existingLead.id, leadData);
-      return { success: true, existingLead: existingLead.id };
+      return { success: true };
     }
 
     // Create new lead
-    const [newLead] = await db
+    const { hashPhoneNumber } = await import("../_core/phone");
+    const phoneHash = hashPhoneNumber(leadData.phone);
+    await db
       .insert(leads)
       .values({
         tenantId,
         name: leadData.name,
         phone: messageEncryption.isConfigured() ? messageEncryption.encryptPhoneNumber(leadData.phone) : leadData.phone,
-        phoneHash: sql`HASH(${leadData.phone})`,
+        phoneHash,
         email: leadData.email,
         source: leadData.source || 'web_form',
         status: 'contacted',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      })
-      .returning();
+      });
+
+    // Get the newly created lead by phoneHash
+    const [newLead] = await db
+      .select()
+      .from(leads)
+      .where(and(eq(leads.tenantId, tenantId), eq(leads.phoneHash, phoneHash)))
+      .limit(1);
+
+    if (!newLead) {
+      return { success: false };
+    }
 
     // Generate instant booking link
     const bookingLink = await generateBookingLink(db, tenantId, newLead.id);
@@ -120,10 +130,8 @@ async function generateBookingLink(db: Db, tenantId: number, leadId: number): Pr
   const token = generateSecureToken();
   const expiryTime = new Date(Date.now() + DEFAULT_CONFIG.bookingLinkExpiry * 60 * 60 * 1000);
   
-  // Store booking token
-  await db
-    .insert(sql`INSERT INTO booking_tokens (tenantId, leadId, token, expiresAt, createdAt) VALUES (${tenantId}, ${leadId}, ${token}, ${expiryTime}, NOW())`)
-    .run();
+  // Store booking token (using raw execute since booking_tokens is not in the Drizzle schema)
+  await db.execute(sql`INSERT INTO booking_tokens (tenantId, leadId, token, expiresAt, createdAt) VALUES (${tenantId}, ${leadId}, ${token}, ${expiryTime}, NOW())`);
 
   const baseUrl = process.env.APP_URL || 'https://app.rebooked.com';
   return `${baseUrl}/book/${token}`;
@@ -141,8 +149,8 @@ async function sendInstantResponse(
 ): Promise<void> {
   const [tenant] = await db
     .select()
-    .from(sql`tenants`)
-    .where(eq(sql`tenants.id`, tenantId))
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
     .limit(1);
 
   const businessHours = isBusinessHours(tenant?.timezone || 'America/New_York');
@@ -157,9 +165,11 @@ async function sendInstantResponse(
 
   const message = template.replace('{bookingLink}', bookingLink);
   
+  const leadPhone = await getLeadPhone(db, leadId);
   await sendSMS(
-    getLeadPhone(db, leadId),
+    leadPhone,
     message,
+    undefined,
     tenantId
   );
 
@@ -198,23 +208,15 @@ async function triggerAIChatAutomation(
       return;
     }
 
-    // Generate AI response
-    const aiResponse = await invokeLLM([
-      {
-        role: 'system',
-        content: `You are a helpful AI assistant for a business. Respond naturally to engage the customer and encourage booking. Be conversational and helpful. Keep responses under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: `Customer inquired via web form. Engage them and encourage booking.`
-      }
-    ]);
-
-    const aiMessage = aiResponse.choices?.[0]?.message?.content || 
-      "Thanks for your interest! How can I help you book your appointment today?";
+    // Generate in-house response (zero API cost)
+    const aiMessage = generateMessage({
+      type: 'lead_capture',
+      tone: 'friendly',
+      variables: { name: '', business: '' },
+    });
 
     // Send AI response via SMS
-    await sendSMS(phoneNumber, aiMessage, tenantId);
+    await sendSMS(phoneNumber, aiMessage, undefined, tenantId);
 
     // Log AI interaction
     await db.insert(messages).values({
@@ -339,29 +341,29 @@ export async function getLeadCaptureMetrics(
   }> {
   const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   
-  const [metrics] = await db
-    .select({
-      totalLeads: sql<number>`COUNT(*)`,
-      instantResponses: sql<number>`COUNT(CASE WHEN response_time <= ${DEFAULT_CONFIG.instantResponseTime * 1000} THEN 1 END)`,
-      avgResponseTime: sql<number>`AVG(response_time)`,
-      conversions: sql<number>`COUNT(CASE WHEN status = 'booked' THEN 1 END)`
-    })
-    .from(sql`(
-      SELECT 
+  const metrics = await db.execute(sql`
+    SELECT
+      COUNT(*) as totalLeads,
+      COUNT(CASE WHEN response_time <= ${DEFAULT_CONFIG.instantResponseTime * 1000} THEN 1 END) as instantResponses,
+      AVG(response_time) as avgResponseTime,
+      COUNT(CASE WHEN status = 'booked' THEN 1 END) as conversions
+    FROM (
+      SELECT
         l.*,
         TIMESTAMPDIFF(SECOND, l.created_at, MIN(m.created_at)) as response_time
       FROM leads l
-      LEFT JOIN messages m ON l.id = m.lead_id 
-      WHERE l.tenant_id = ${tenantId} 
+      LEFT JOIN messages m ON l.id = m.lead_id
+      WHERE l.tenant_id = ${tenantId}
         AND l.created_at >= ${startDate}
       GROUP BY l.id
-    )`)
-    .where(eq(sql`tenant_id`, tenantId));
+    ) sub
+  `) as any;
+  const row = Array.isArray(metrics) && metrics.length > 0 ? (Array.isArray(metrics[0]) ? metrics[0][0] : metrics[0]) : {} as any;
 
-  const totalLeads = metrics?.totalLeads || 0;
-  const instantResponses = metrics?.instantResponses || 0;
-  const averageResponseTime = metrics?.avgResponseTime || 0;
-  const conversions = metrics?.conversions || 0;
+  const totalLeads = Number(row?.totalLeads) || 0;
+  const instantResponses = Number(row?.instantResponses) || 0;
+  const averageResponseTime = Number(row?.avgResponseTime) || 0;
+  const conversions = Number(row?.conversions) || 0;
   const conversionRate = totalLeads > 0 ? (conversions / totalLeads) * 100 : 0;
   
   // Calculate revenue impact (assuming $75 avg appointment value)

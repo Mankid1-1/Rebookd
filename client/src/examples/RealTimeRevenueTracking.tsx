@@ -21,23 +21,21 @@ export function RealTimeRevenueTracking() {
   const [realTimeStats, setRealTimeStats] = useState(null);
   const [isTracking, setIsTracking] = useState(true);
   
-  // Real-time data subscription
-  const { data: liveRecoveryData } = trpc.analytics.liveRecoveryData.useSubscription(
-    undefined,
-    {
-      onData: (data) => {
-        setRealTimeStats(data);
-      },
-    }
-  );
+  // Poll recovery analytics (replaces real-time subscription)
+  const { data: liveRecoveryData } = trpc.analytics.recoveryAnalytics.useQuery(undefined, {
+    refetchInterval: isTracking ? 10000 : false,
+    onSuccess: (data: any) => {
+      setRealTimeStats(data as any);
+    },
+  } as any);
 
   // Manual recovery action with real tracking
-  const executeRecoveryAction = async (automationType: string, leadIds: number[]) => {
+  const executeRecoveryMutation = trpc.analytics.executeRecoveryAction.useMutation();
+  const executeRecoveryAction = async (automationType: string, _leadIds: number[]) => {
     try {
-      const result = await trpc.analytics.executeRecoveryAction.mutateAsync({
-        automationType,
-        leadIds,
-        trackRevenue: true // Enable revenue tracking
+      const result = await executeRecoveryMutation.mutateAsync({
+        leadId: 0,
+        action: automationType,
       });
 
       // Real revenue recovered

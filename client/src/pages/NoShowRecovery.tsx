@@ -1,4 +1,4 @@
-import DashboardLayout from "@/components/DashboardLayout";
+import DashboardLayout from "@/components/layout/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,12 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { 
-  Clock, 
-  Bell, 
-  Users, 
-  CheckCircle, 
-  AlertTriangle, 
+import {
+  Clock,
+  Bell,
+  Users,
+  CheckCircle,
+  AlertTriangle,
   Calendar,
   TrendingUp,
   Settings,
@@ -33,32 +33,56 @@ export default function NoShowRecovery() {
     reminderSchedule: [24, 4, 2] // hours before appointment
   });
 
-  const { data: metrics, isLoading } = trpc.analytics.noShowRecoveryMetrics.useQuery(undefined, { refetchInterval: 30000 });
-  const { data: settings } = trpc.tenant.settings.useQuery(undefined, { retry: false });
-  const updateConfig = trpc.tenant.updateNoShowRecoveryConfig.useMutation({
-    onSuccess: () => toast.success("No-show recovery configuration updated"),
-    onError: (err: Error) => toast.error(err.message)
+  const { data: dashData, isLoading } = trpc.analytics.dashboard.useQuery(undefined, { refetchInterval: 30000 });
+  const metrics: any = dashData?.metrics;
+  const { data: settings } = trpc.tenant.get.useQuery(undefined, { retry: false });
+  const { data: savedConfig } = trpc.featureConfig.get.useQuery(
+    { feature: "no-show-recovery" },
+    { retry: false }
+  );
+  const saveConfig = trpc.featureConfig.save.useMutation({
+    onSuccess: () => toast.success("Configuration saved"),
+    onError: (err) => toast.error(err.message),
   });
 
   useEffect(() => {
-    if (settings?.noShowRecoveryConfig) {
-      setConfig(settings.noShowRecoveryConfig);
+    if (savedConfig?.config) {
+      setConfig((prev) => ({ ...prev, ...(savedConfig.config as any) }));
     }
-  }, [settings]);
+  }, [savedConfig]);
 
   const handleSaveConfig = () => {
-    updateConfig.mutate(config);
+    saveConfig.mutate({ feature: "no-show-recovery", config: config as any });
   };
 
   const handleTestReminder = () => {
-    toast.success("Test reminder sent successfully");
+    toast.info("To test, add a lead with a phone number first. The automation will trigger automatically.");
   };
 
   const handleTriggerRecovery = () => {
-    toast.success("No-show recovery campaign triggered");
+    toast.info("To test, add a lead with a phone number first. The automation will trigger automatically.");
   };
 
-  if (isLoading) return <DashboardLayout>Loading...</DashboardLayout>;
+  const responseRate = metrics?.messagesSent > 0
+    ? Math.round((metrics.messagesReceived / metrics.messagesSent) * 100)
+    : 0;
+
+  if (isLoading) return (
+    <DashboardLayout>
+      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+        <div className="h-10 w-64 bg-muted rounded animate-pulse" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}><CardContent className="p-4"><div className="h-16 bg-muted rounded animate-pulse" /></CardContent></Card>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card><CardContent className="p-6"><div className="h-48 bg-muted rounded animate-pulse" /></CardContent></Card>
+          <Card><CardContent className="p-6"><div className="h-48 bg-muted rounded animate-pulse" /></CardContent></Card>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
 
   return (
     <DashboardLayout>
@@ -92,54 +116,54 @@ export default function NoShowRecovery() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                  <Calendar className="h-6 w-6 text-blue-600" />
+                <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
+                  <Users className="h-6 w-6 text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total Appointments</p>
-                  <p className="text-2xl font-bold">{metrics?.totalAppointments || 0}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Leads Tracked</p>
+                  <p className="text-2xl font-bold">{metrics?.leadCount || 0}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-red-100 rounded-lg mr-3">
-                  <AlertTriangle className="h-6 w-6 text-red-600" />
+                <div className="p-2 bg-red-500/10 rounded-lg mr-3">
+                  <MessageSquare className="h-6 w-6 text-red-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">No-Shows</p>
-                  <p className="text-2xl font-bold">{metrics?.noShows || 0}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Follow-Ups Sent</p>
+                  <p className="text-2xl font-bold">{metrics?.messagesSent || 0}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg mr-3">
-                  <TrendingUp className="h-6 w-6 text-green-600" />
+                <div className="p-2 bg-green-500/10 rounded-lg mr-3">
+                  <TrendingUp className="h-6 w-6 text-green-400" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Recovered</p>
-                  <p className="text-2xl font-bold">{metrics?.recovered || 0}</p>
+                  <p className="text-2xl font-bold">{metrics?.bookedCount || 0}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-100 rounded-lg mr-3">
-                  <Users className="h-6 w-6 text-purple-600" />
+                <div className="p-2 bg-purple-500/10 rounded-lg mr-3">
+                  <Phone className="h-6 w-6 text-purple-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Recovery Rate</p>
-                  <p className="text-2xl font-bold">{metrics?.recoveryRate || 0}%</p>
+                  <p className="text-sm font-medium text-muted-foreground">Response Rate</p>
+                  <p className="text-2xl font-bold">{responseRate}%</p>
                 </div>
               </div>
             </CardContent>
@@ -160,7 +184,7 @@ export default function NoShowRecovery() {
                   <TabsTrigger value="waitlist">Waitlist</TabsTrigger>
                   <TabsTrigger value="advanced">Advanced</TabsTrigger>
                 </TabsList>
-                
+
                 <TabsContent value="reminders" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -168,7 +192,7 @@ export default function NoShowRecovery() {
                       <Switch
                         id="multi-touch"
                         checked={config.multiTouchReminders}
-                        onCheckedChange={(checked) => 
+                        onCheckedChange={(checked) =>
                           setConfig(prev => ({ ...prev, multiTouchReminders: checked }))
                         }
                       />
@@ -193,7 +217,7 @@ export default function NoShowRecovery() {
                         ))}
                       </div>
                     </div>
-                    <div className="p-4 bg-blue-50 rounded-lg">
+                    <div className="p-4 bg-blue-500/10 rounded-lg">
                       <h4 className="font-medium mb-2">Reminder Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• 24h, 4h, 2h before appointment</li>
@@ -204,7 +228,7 @@ export default function NoShowRecovery() {
                     </div>
                   </div>
                 </TabsContent>
-                
+
                 <TabsContent value="confirmation" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -212,12 +236,12 @@ export default function NoShowRecovery() {
                       <Switch
                         id="confirmation-flow"
                         checked={config.confirmationFlow}
-                        onCheckedChange={(checked) => 
+                        onCheckedChange={(checked) =>
                           setConfig(prev => ({ ...prev, confirmationFlow: checked }))
                         }
                       />
                     </div>
-                    <div className="p-4 bg-green-50 rounded-lg">
+                    <div className="p-4 bg-green-500/10 rounded-lg">
                       <h4 className="font-medium mb-2">Confirmation Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• "YES" confirmation responses</li>
@@ -228,7 +252,7 @@ export default function NoShowRecovery() {
                     </div>
                   </div>
                 </TabsContent>
-                
+
                 <TabsContent value="waitlist" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -236,12 +260,12 @@ export default function NoShowRecovery() {
                       <Switch
                         id="waitlist-fill"
                         checked={config.waitlistFill}
-                        onCheckedChange={(checked) => 
+                        onCheckedChange={(checked) =>
                           setConfig(prev => ({ ...prev, waitlistFill: checked }))
                         }
                       />
                     </div>
-                    <div className="p-4 bg-purple-50 rounded-lg">
+                    <div className="p-4 bg-purple-500/10 rounded-lg">
                       <h4 className="font-medium mb-2">Waitlist Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Instant gap filling</li>
@@ -252,10 +276,10 @@ export default function NoShowRecovery() {
                     </div>
                   </div>
                 </TabsContent>
-                
+
                 <TabsContent value="advanced" className="space-y-6 mt-6">
                   <div className="space-y-4">
-                    <div className="p-4 bg-orange-50 rounded-lg">
+                    <div className="p-4 bg-orange-500/10 rounded-lg">
                       <h4 className="font-medium mb-2">Advanced Options</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Custom reminder templates</li>
@@ -295,27 +319,27 @@ export default function NoShowRecovery() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>Current Recovery Rate</Label>
+                  <Label>Current Response Rate</Label>
                   <div className="flex items-center space-x-2">
-                    <Progress value={metrics?.recoveryRate || 0} className="flex-1" />
-                    <span className="text-sm font-medium">{metrics?.recoveryRate || 0}%</span>
+                    <Progress value={responseRate} className="flex-1" />
+                    <span className="text-sm font-medium">{responseRate}%</span>
                   </div>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Target: 80% | Current: {metrics?.recoveryRate || 0}%
+                  Target: 80% | Current: {responseRate}%
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <p className="text-2xl font-bold text-blue-600">{metrics?.totalAppointments || 0}</p>
-                  <p className="text-sm text-muted-foreground">Total Appointments</p>
+                <div className="text-center p-3 bg-blue-500/10 rounded-lg">
+                  <p className="text-2xl font-bold text-blue-400">{metrics?.leadCount || 0}</p>
+                  <p className="text-sm text-muted-foreground">Leads Tracked</p>
                 </div>
-                <div className="text-center p-3 bg-red-50 rounded-lg">
-                  <p className="text-2xl font-bold text-red-600">{metrics?.noShows || 0}</p>
-                  <p className="text-sm text-muted-foreground">No-Shows</p>
+                <div className="text-center p-3 bg-red-500/10 rounded-lg">
+                  <p className="text-2xl font-bold text-red-400">{metrics?.messagesSent || 0}</p>
+                  <p className="text-sm text-muted-foreground">Follow-Ups Sent</p>
                 </div>
-                <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <p className="text-2xl font-bold text-green-600">{metrics?.recovered || 0}</p>
+                <div className="text-center p-3 bg-green-500/10 rounded-lg">
+                  <p className="text-2xl font-bold text-green-400">{metrics?.bookedCount || 0}</p>
                   <p className="text-sm text-muted-foreground">Recovered</p>
                 </div>
               </div>

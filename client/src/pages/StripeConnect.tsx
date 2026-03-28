@@ -7,7 +7,7 @@
 import React from 'react';
 import StripeConnectProvider, { useStripeConnect } from '../components/stripe-connect/StripeConnectProvider';
 import ConnectDashboard from '../components/stripe-connect/ConnectDashboard';
-import DashboardLayout from '@/components/DashboardLayout';
+import DashboardLayout from '@/components/layout/DashboardLayout';
 
 const StripeConnect: React.FC = () => {
   return (
@@ -50,7 +50,7 @@ const StripeConnect: React.FC = () => {
         </main>
 
         {/* Footer */}
-        <footer className="bg-white border-t border-gray-200">
+        <footer className="bg-card border-t border-border">
           <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center">
               <p className="text-gray-500 text-sm">

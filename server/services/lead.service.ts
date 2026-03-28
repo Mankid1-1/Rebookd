@@ -1,11 +1,11 @@
-import { eq, and, desc, sql, ilike, or } from "drizzle-orm";
+import { eq, and, desc, sql, or } from "drizzle-orm";
 import { leads, messages } from "../../drizzle/schema";
 import { decrypt, encryptIfNeeded } from "../_core/crypto";
 import { hashPhoneNumber, normalizePhoneNumber } from "../_core/phone";
 import { logger } from "../_core/logger";
 import type { Db } from "../_core/context";
 import * as UsageService from "./usage.service";
-import * as TcpaComplianceService from "./tcpaCompliance.service";
+import * as TcpaComplianceService from "./tcpa-compliance.service";
 import { withQueryTimeout, withQueryRetry, QueryPerformanceMonitor } from "../_core/query-timeout.service";
 import { searchLeads, getLeadByIdOptimized, getSearchMemoryStats } from "./lead-search-optimization.service";
 import { encryptMessage, decryptMessage, messageEncryption } from "../_core/message-encryption";

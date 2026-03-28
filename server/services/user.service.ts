@@ -38,7 +38,8 @@ export async function createUser(
     email?: string;
     loginMethod?: "email" | "phone" | "sso" | "oauth" | "google" | "microsoft";
     passwordHash?: string;
-    role?: "user" | "admin" | "super_admin";
+    role?: "user" | "admin";
+    accountType?: "business" | "referral";
     active?: boolean;
     lastSignedIn?: Date;
   },

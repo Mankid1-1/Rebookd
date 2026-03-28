@@ -5,9 +5,10 @@
  * successful automations, and historical performance data.
  */
 
+import React from 'react';
 import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
 import { trpc } from '@/lib/trpc';
-import { useAuth } from '@/_core/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth';
 
 // Re-export for other components
 export { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
@@ -68,8 +69,7 @@ export function useDynamicLeakageDetection() {
         // Users with low conversion rates get more sensitive detection
         if (conversionRate < 0.3) {
           adaptedDetectionRate *= 1.5; // 50% more sensitive
-          adaptedSeverity = adaptedSeverity === "low" ? "medium" : 
-                          adaptedSeverity === "medium" ? "high" : "critical";
+          adaptedSeverity = adaptedSeverity === "low" ? "medium" : "high";
         }
         // Users with high conversion rates get less sensitive detection
         else if (conversionRate > 0.7) {
@@ -95,14 +95,8 @@ export function useDynamicLeakageDetection() {
         }
       }
       
-      // Adjust based on user skill level
-      if (context.userSkill.level === 'expert') {
-        adaptedRecoveryActions.push("advanced_analytics", "custom_workflow", "ai_optimization");
-      } else if (context.userSkill.level === 'beginner') {
-        adaptedRecoveryActions = adaptedRecoveryActions.filter(action => 
-          !action.includes("advanced") && !action.includes("custom") && !action.includes("ai")
-        );
-      }
+      // All recovery actions available at every skill level
+      adaptedRecoveryActions.push("advanced_analytics", "custom_workflow", "ai_optimization");
       
       return {
         ...leakage,
@@ -221,29 +215,21 @@ export function useDynamicRecoveryStrategies() {
       }
     }
     
-    // Adapt strategies based on user skill level
-    if (context.userSkill.level === 'expert') {
-      strategies.push({
-        id: 'custom_recovery_workflows',
-        category: "automation" as const,
-        priority: "medium" as const,
-        title: "Custom Recovery Workflows",
-        description: "Build custom recovery workflows for specific business scenarios",
-        expectedImpact: 30,
-        implementationEffort: "high" as const,
-        requiredSkill: "expert" as const,
-        successRate: 0.75
-      });
-    }
-    
-    // Filter strategies based on user skill level and sort by priority
+    // All strategies available at every skill level
+    strategies.push({
+      id: 'custom_recovery_workflows',
+      category: "automation" as const,
+      priority: "medium" as const,
+      title: "Custom Recovery Workflows",
+      description: "Build custom recovery workflows for specific business scenarios",
+      expectedImpact: 30,
+      implementationEffort: "high" as const,
+      requiredSkill: "expert" as const,
+      successRate: 0.75
+    });
+
+    // Sort by priority (no skill-level filtering)
     return strategies
-      .filter(strategy => {
-        const skillLevels = ['beginner', 'intermediate', 'advanced', 'expert'];
-        const userSkillIndex = skillLevels.indexOf(context.userSkill.level);
-        const requiredSkillIndex = skillLevels.indexOf(strategy.requiredSkill);
-        return userSkillIndex >= requiredSkillIndex;
-      })
       .sort((a, b) => {
         const priorityOrder = { critical: 4, high: 3, medium: 2, low: 1 };
         return priorityOrder[b.priority] - priorityOrder[a.priority];
@@ -262,7 +248,8 @@ export function useDynamicRecoveryProbability() {
     
     // Adjust based on user's historical recovery success
     if (recoveryHistory) {
-      const typeHistory = recoveryHistory.byType[leakageType];
+      const recoveryHistoryAny = recoveryHistory as any;
+      const typeHistory = recoveryHistoryAny?.byType?.[leakageType];
       if (typeHistory && typeHistory.attempts > 0) {
         baseProbability = typeHistory.successRate;
       }
@@ -376,7 +363,7 @@ export function useDynamicRevenueImpact() {
     
     // Adjust based on market conditions
     if (marketData) {
-      const marketDemand = marketData.demandIndex || 1.0;
+      const marketDemand = (marketData as any).demandIndex || 1.0;
       adjustedImpact *= marketDemand; // Scale by market demand
     }
     

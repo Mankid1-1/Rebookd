@@ -14,7 +14,7 @@ export function useFeatureConfig<T extends Record<string, any>>({
   defaultConfig = {} as T,
 }: FeatureConfigOptions) {
   const { data: settings, isLoading } = trpc.tenant.settings.useQuery();
-  const [config, setConfig] = useState<T>(defaultConfig);
+  const [config, setConfig] = useState<T>(defaultConfig as T);
   const [isDirty, setIsDirty] = useState(false);
 
   // Sync config with backend settings
@@ -48,7 +48,7 @@ export function useFeatureConfig<T extends Record<string, any>>({
   };
 
   const resetConfig = () => {
-    setConfig(settings?.[configKey] as T || defaultConfig);
+    setConfig((settings?.[configKey] as T) || (defaultConfig as T));
     setIsDirty(false);
   };
 

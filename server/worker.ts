@@ -13,12 +13,13 @@
 import "dotenv/config";
 import { and, desc, eq, gt, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { getDb } from "./db";
-import { automations, leads, messages, phoneNumbers, subscriptions, tenants } from "../drizzle/schema";
+import { automations, leads, messages, phoneNumbers, subscriptions, tenants, type Automation, type Lead } from "../drizzle/schema";
 import { sendSMS, resolveTemplate } from "./_core/sms";
 import { logger } from "./_core/logger";
 import { captureException } from "./_core/sentry";
 import { initSentry } from "./_core/sentry";
 import * as LeadService from "./services/lead.service";
+import * as TcpaCompliance from "./services/tcpa-compliance.service";
 import * as UserService from "./services/user.service";
 import type { Db } from "./_core/context";
 import type { SMSResult } from "./_core/sms";
@@ -26,7 +27,7 @@ import { writeFileSync } from "fs";
 import { randomUUID } from "crypto";
 import { decrypt } from "./_core/crypto";
 import { runWithCorrelationId } from "./_core/requestContext";
-import { processQueuedAutomationJobs } from "./services/automationRunner";
+import { processQueuedAutomationJobs } from "./services/automation-runner.service";
 import * as TenantService from "./services/tenant.service";
 import { EmailService } from "./services/email.service";
 import { gracefulShutdown } from "./_core/graceful-shutdown";
@@ -68,6 +69,33 @@ function getTzOffsetMs(timezone: string): number {
   } catch {
     return 0;
   }
+}
+
+/**
+ * Given a target UTC time and a recipient timezone, return the next valid
+ * send time that respects TCPA quiet hours (8am-9pm in recipient TZ).
+ * If the target time is already valid, returns it unchanged.
+ */
+function getNextValidSendTime(utcTime: Date, recipientTimezone: string): Date {
+  const offset = getTzOffsetMs(recipientTimezone);
+  const localTime = new Date(utcTime.getTime() + offset);
+  const localHour = localTime.getHours();
+
+  // TCPA: no SMS before 8am or after 9pm in recipient timezone
+  if (localHour >= 8 && localHour < 21) return utcTime; // Already valid
+
+  // If too late (9pm+), push to next day 8am
+  if (localHour >= 21) {
+    const nextMorning = new Date(localTime);
+    nextMorning.setDate(nextMorning.getDate() + 1);
+    nextMorning.setHours(8, 0, 0, 0);
+    return new Date(nextMorning.getTime() - offset);
+  }
+
+  // If too early (before 8am), push to 8am today
+  const thisMorning = new Date(localTime);
+  thisMorning.setHours(8, 0, 0, 0);
+  return new Date(thisMorning.getTime() - offset);
 }
 
 // ─── Idempotency ──────────────────────────────────────────────────────────────
@@ -123,9 +151,62 @@ async function fireAutomation(
   messageBody: string,
   fromNumber: string | undefined,
 ) {
+  // TCPA compliance: verify consent before sending automated SMS
+  const tcpaCheck = await TcpaCompliance.canSendSms(db, tenantId, leadId);
+  if (!tcpaCheck.allowed) {
+    logger.info("TCPA block: skipping automated SMS", { leadId, tenantId, automationId, reason: tcpaCheck.reason });
+    return;
+  }
+
   const decryptedPhone = decrypt(leadPhone);
   const decryptedName = leadName ? decrypt(leadName) : null;
-  const vars: Record<string, string> = { name: decryptedName || "there" };
+  const firstName = decryptedName ? decryptedName.split(" ")[0] : "there";
+
+  // Fetch the tenant's business name for the {{business}} template variable
+  let businessName = "";
+  try {
+    const tenantRow = await db
+      .select({ name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    businessName = tenantRow[0]?.name || "";
+  } catch (err) {
+    logger.warn("Failed to fetch tenant name for template", { tenantId, error: String(err) });
+  }
+
+  // Fetch lead's appointment data for date/time if available
+  let appointmentDate = "";
+  let appointmentTime = "";
+  try {
+    const lead = await db
+      .select({ appointmentDate: leads.appointmentAt })
+      .from(leads)
+      .where(and(eq(leads.id, leadId), eq(leads.tenantId, tenantId)))
+      .limit(1);
+    if (lead[0]?.appointmentDate) {
+      const apptDate = new Date(lead[0].appointmentDate);
+      appointmentDate = apptDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+      appointmentTime = apptDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    }
+  } catch (err) {
+    logger.warn("Failed to fetch lead appointment data for template", { leadId, error: String(err) });
+  }
+
+  // Use current date/time as fallbacks if no appointment data
+  if (!appointmentDate) {
+    const now = new Date();
+    appointmentDate = now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    appointmentTime = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+
+  const vars: Record<string, string> = {
+    name: decryptedName || "there",
+    first_name: firstName,
+    business: businessName,
+    date: appointmentDate,
+    time: appointmentTime,
+  };
   const resolved = resolveTemplate(messageBody, vars);
 
   const res = await sendWithRetry(decryptedPhone, resolved, fromNumber, tenantId);
@@ -165,22 +246,22 @@ async function fireAutomation(
   });
 }
 
-function getActionMessage(auto: any): string | null {
+function getActionMessage(auto: Automation): string | null {
   const actions = auto.actions as Array<{ type: string; body: string }> | null;
   if (!actions?.length) return null;
   return actions.find(a => a.type === "send_message" || a.type === "sms")?.body ?? null;
 }
 
-function cfg(auto: any, key: string, fallback: number): number {
+function cfg(auto: Automation, key: string, fallback: number): number {
   const v = (auto.triggerConfig as Record<string, unknown> | null)?.[key];
   return typeof v === "number" ? v : typeof v === "string" ? parseFloat(v) || fallback : fallback;
 }
 
-function leadTags(lead: any): string[] {
+function leadTags(lead: Lead): string[] {
   return Array.isArray(lead.tags) ? lead.tags.filter((tag: unknown): tag is string => typeof tag === "string") : [];
 }
 
-function leadHasTag(lead: any, tag: string): boolean {
+function leadHasTag(lead: Lead, tag: string): boolean {
   return leadTags(lead).includes(tag);
 }
 
@@ -204,7 +285,7 @@ async function hasOutboundSince(db: Db, leadId: number, since: Date) {
   return rows.length > 0;
 }
 
-async function isVipLead(db: Db, leadId: number, lead: any) {
+async function isVipLead(db: Db, leadId: number, lead: Lead) {
   if (leadHasTag(lead, "vip")) return true;
   const counts = await db
     .select({ count: sql<number>`count(*)` })
@@ -217,7 +298,7 @@ async function isVipLead(db: Db, leadId: number, lead: any) {
 // Each function fetches ALL matching leads across all tenants in ONE query,
 // then filters by tenantId in memory — eliminates the N+1 per-tenant loop.
 
-async function processNewLeadWelcome(db: Db, auto: any, fromNumber: string | undefined) {
+async function processNewLeadWelcome(db: Db, auto: Automation, fromNumber: string | undefined) {
   const newLeads = await db
     .select()
     .from(leads)
@@ -236,7 +317,7 @@ async function processNewLeadWelcome(db: Db, auto: any, fromNumber: string | und
   }
 }
 
-async function processFollowUp(db: Db, auto: any, fromNumber: string | undefined, delayDays: number) {
+async function processFollowUp(db: Db, auto: Automation, fromNumber: string | undefined, delayDays: number) {
   const target = ago(days(delayDays));
   const window = ago(days(delayDays + 1));
   const stale = await db
@@ -258,7 +339,7 @@ async function processFollowUp(db: Db, auto: any, fromNumber: string | undefined
   }
 }
 
-async function processAppointmentReminder(db: Db, auto: any, fromNumber: string | undefined, delayHours: number, tenantTimezone: string) {
+async function processAppointmentReminder(db: Db, auto: Automation, fromNumber: string | undefined, delayHours: number, tenantTimezone: string) {
   // Convert current time to tenant's timezone to compute the correct UTC window.
   // We find the UTC offset for the tenant's timezone and shift the window accordingly.
   const nowUtc = Date.now();
@@ -294,7 +375,7 @@ async function processAppointmentReminder(db: Db, auto: any, fromNumber: string 
   }
 }
 
-async function processNoShow(db: Db, auto: any, fromNumber: string | undefined, delayMinutes: number) {
+async function processNoShow(db: Db, auto: Automation, fromNumber: string | undefined, delayMinutes: number) {
   const windowStart = ago(mins(delayMinutes + 1));
   const windowEnd   = ago(mins(delayMinutes - 1));
   const noShows = await db
@@ -317,7 +398,7 @@ async function processNoShow(db: Db, auto: any, fromNumber: string | undefined, 
   }
 }
 
-async function processWinBack(db: Db, auto: any, fromNumber: string | undefined, delayDays: number) {
+async function processWinBack(db: Db, auto: Automation, fromNumber: string | undefined, delayDays: number) {
   const target = ago(days(delayDays));
   const window = ago(days(delayDays + 1));
   const lapsed = await db
@@ -340,7 +421,7 @@ async function processWinBack(db: Db, auto: any, fromNumber: string | undefined,
   }
 }
 
-async function processPostAppointment(db: Db, auto: any, fromNumber: string | undefined, delayHours: number) {
+async function processPostAppointment(db: Db, auto: Automation, fromNumber: string | undefined, delayHours: number) {
   const target = ago(hours(delayHours));
   const window = ago(hours(delayHours + 1));
   const completed = await db
@@ -363,7 +444,7 @@ async function processPostAppointment(db: Db, auto: any, fromNumber: string | un
   }
 }
 
-async function processConfirmationChase(db: Db, auto: any, fromNumber: string | undefined, delayHours: number, tenantTimezone: string) {
+async function processConfirmationChase(db: Db, auto: Automation, fromNumber: string | undefined, delayHours: number, tenantTimezone: string) {
   const nowUtc = Date.now();
   const tzOffset = getTzOffsetMs(tenantTimezone);
   const windowStart = new Date(nowUtc + hours(delayHours) - mins(1) - tzOffset);
@@ -390,7 +471,7 @@ async function processConfirmationChase(db: Db, auto: any, fromNumber: string | 
   }
 }
 
-async function processInboundResponseSla(db: Db, auto: any, fromNumber: string | undefined, delayMinutes: number) {
+async function processInboundResponseSla(db: Db, auto: Automation, fromNumber: string | undefined, delayMinutes: number) {
   const windowStart = ago(mins(delayMinutes + 1));
   const windowEnd = ago(mins(delayMinutes - 1));
   const recentInbound = await db
@@ -416,7 +497,7 @@ async function processInboundResponseSla(db: Db, auto: any, fromNumber: string |
   }
 }
 
-async function processQualifiedFollowUp(db: Db, auto: any, fromNumber: string | undefined, delayDays: number) {
+async function processQualifiedFollowUp(db: Db, auto: Automation, fromNumber: string | undefined, delayDays: number) {
   const target = ago(days(delayDays));
   const window = ago(days(delayDays + 1));
   const qualified = await db
@@ -439,7 +520,7 @@ async function processQualifiedFollowUp(db: Db, auto: any, fromNumber: string | 
   }
 }
 
-async function processDeliveryFailureRecovery(db: Db, auto: any, fromNumber: string | undefined, delayMinutes: number) {
+async function processDeliveryFailureRecovery(db: Db, auto: Automation, fromNumber: string | undefined, delayMinutes: number) {
   const windowStart = ago(mins(delayMinutes + 1));
   const windowEnd = ago(mins(delayMinutes - 1));
   const failedRows = await db
@@ -467,7 +548,7 @@ async function processDeliveryFailureRecovery(db: Db, auto: any, fromNumber: str
   }
 }
 
-async function processCancellationRescue(db: Db, auto: any, fromNumber: string | undefined, delayHours: number) {
+async function processCancellationRescue(db: Db, auto: Automation, fromNumber: string | undefined, delayHours: number) {
   const target = ago(hours(delayHours));
   const window = ago(hours(delayHours + 24));
   const cancelled = await db
@@ -490,7 +571,7 @@ async function processCancellationRescue(db: Db, auto: any, fromNumber: string |
   }
 }
 
-async function processWaitlistFill(db: Db, auto: any, fromNumber: string | undefined, candidateWindowDays: number) {
+async function processWaitlistFill(db: Db, auto: Automation, fromNumber: string | undefined, candidateWindowDays: number) {
   const cancellations = await db
     .select()
     .from(leads)
@@ -521,7 +602,7 @@ async function processWaitlistFill(db: Db, auto: any, fromNumber: string | undef
   }
 }
 
-async function processVipWinBack(db: Db, auto: any, fromNumber: string | undefined, delayDays: number) {
+async function processVipWinBack(db: Db, auto: Automation, fromNumber: string | undefined, delayDays: number) {
   const target = ago(days(delayDays));
   const window = ago(days(delayDays + 7));
   const lapsed = await db
@@ -631,8 +712,13 @@ async function runCycleInner() {
   const db = await getDb();
   if (!db) { logger.warn("Worker: DB unavailable, skipping cycle"); return; }
 
-  await processTrialReminders(db);
-  await processQueuedAutomationJobs(db);
+  // Wrap each sub-task so one failure doesn't kill the entire cycle
+  try { await processTrialReminders(db); } catch (err) {
+    logger.error("Worker: processTrialReminders failed", { error: String(err) });
+  }
+  try { await processQueuedAutomationJobs(db); } catch (err) {
+    logger.error("Worker: processQueuedAutomationJobs failed", { error: String(err) });
+  }
   
   // Process incoming emails from POP3
   try {
@@ -647,25 +733,31 @@ async function runCycleInner() {
   }
 
   // Fetch all enabled automations in ONE query
-  const allAutomations = await db
-    .select()
-    .from(automations)
-    .where(and(eq(automations.enabled, true), isNull(automations.deletedAt)));
+  let allAutomations;
+  try {
+    allAutomations = await db
+      .select()
+      .from(automations)
+      .where(and(eq(automations.enabled, true), isNull(automations.deletedAt)));
+  } catch (err) {
+    logger.error("Worker: Failed to fetch automations", { error: String(err) });
+    return;
+  }
 
   if (allAutomations.length === 0) return;
 
   const entitledTenantIds = new Set<number>();
-  for (const tenantId of Array.from(new Set(allAutomations.map(a => a.tenantId)))) {
+  for (const tenantId of Array.from(new Set((allAutomations as any[]).map((a: any) => a.tenantId as number)))) {
     if (await TenantService.tenantHasAutomationAccess(db, tenantId)) {
       entitledTenantIds.add(tenantId);
     }
   }
 
-  const runnableAutomations = allAutomations.filter((automation) => entitledTenantIds.has(automation.tenantId));
+  const runnableAutomations = (allAutomations as any[]).filter((automation: any) => entitledTenantIds.has(automation.tenantId as number));
   if (runnableAutomations.length === 0) return;
 
   // Build phone number cache for all tenants in ONE query
-  const tenantIds = Array.from(new Set(runnableAutomations.map(a => a.tenantId)));
+  const tenantIds: number[] = Array.from(new Set(runnableAutomations.map((a: any) => a.tenantId as number)));
   const phoneCache = await buildPhoneCache(db, tenantIds);
 
   // Build timezone cache for all tenants in ONE query

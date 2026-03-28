@@ -23,7 +23,7 @@ import { toast } from "sonner";
 import { StatusBadge, CommunicationBadge, ActivityBadge } from "@/components/ui/StatusBadge";
 import { HelpTooltip } from "@/components/ui/HelpTooltip";
 import { useDynamicStatuses } from "@/hooks/useDynamicConfiguration";
-import type { Lead } from "../../../shared/interfaces";
+import type { Lead } from "../../../../shared/interfaces";
 
 interface LeadsTableProps {
   leads: Lead[];
@@ -40,7 +40,7 @@ export function LeadsTable({ leads, isLoading, onAddClick, isFiltered, onClearFi
   const statusOptions = statuses;
   const utils = trpc.useUtils();
 
-  const updateLeadStatus = trpc.leads.update.useMutation({
+  const updateLeadStatus = trpc.leads.updateStatus.useMutation({
     onSuccess: () => {
       toast.success("Lead status updated");
       utils.leads.list.invalidate();
@@ -50,7 +50,7 @@ export function LeadsTable({ leads, isLoading, onAddClick, isFiltered, onClearFi
   });
 
   const handleStatusChange = (leadId: number, newStatus: string) => {
-    updateLeadStatus.mutate({ id: leadId, status: newStatus as any });
+    updateLeadStatus.mutate({ leadId, status: newStatus as any });
   };
 
   const formatDate = (date: Date | string | null) => {

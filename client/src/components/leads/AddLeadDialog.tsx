@@ -19,7 +19,7 @@ import { SmartInput, PhoneInput, EmailInput } from "@/components/ui/SmartInput";
 import { HelpTooltip } from "@/components/ui/HelpTooltip";
 import { Badge } from "@/components/ui/badge";
 import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 
 // Dynamic source options based on user skill and business type
 const getDynamicSourceOptions = (userSkill?: any, businessType?: string) => {
@@ -31,21 +31,13 @@ const getDynamicSourceOptions = (userSkill?: any, businessType?: string) => {
     { value: "other", label: "Other", description: "Different source" }
   ];
 
-  // Add advanced options for intermediate+ users
-  if (userSkill?.level !== 'beginner') {
-    baseOptions.push(
-      { value: "social", label: "Social Media", description: "From social media platform" },
-      { value: "event", label: "Event", description: "Met at trade show or event" }
-    );
-  }
-
-  // Add expert options for advanced users
-  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
-    baseOptions.push(
-      { value: "cold", label: "Cold Outreach", description: "Proactive outreach" },
-      { value: "partner", label: "Partner", description: "From business partner" }
-    );
-  }
+  // All source options available at every skill level
+  baseOptions.push(
+    { value: "social", label: "Social Media", description: "From social media platform" },
+    { value: "event", label: "Event", description: "Met at trade show or event" },
+    { value: "cold", label: "Cold Outreach", description: "Proactive outreach" },
+    { value: "partner", label: "Partner", description: "From business partner" }
+  );
 
   // Business-specific options
   if (businessType?.includes('medical') || businessType?.includes('clinic')) {

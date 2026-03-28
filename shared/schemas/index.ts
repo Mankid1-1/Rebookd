@@ -1,7 +1,3 @@
 export * from "./leads";
-export { 
-  loginSchema as authLoginSchema
-} from "./auth";
-export { 
-  paginationSchema as adminPaginationSchema 
-} from "./admin";
+// Note: auth.ts loginSchema and admin.ts paginationSchema conflict with leads.ts exports.
+// Import directly from "./auth" or "./admin" if you need those specific versions.

@@ -16,13 +16,13 @@ import {
   Layers, Grid, List, Sliders, Info,
   User, Clock, BarChart3, Shield,
   Lightbulb, GraduationCap, Award, Star,
+  RotateCcw, AlertCircle, X,
 } from "lucide-react";
 import { toast } from "sonner";
 
 // User skill levels and their characteristics
-export type { UserSkillLevel } from "../../../shared/interfaces";
-export type { UserSkillProfile } from "../../../shared/interfaces";
-
+import type { UserSkillLevel } from "../../../../shared/interfaces";
+export type { UserSkillLevel } from "../../../../shared/interfaces";
 export interface UserSkillProfile {
   level: UserSkillLevel;
   experience: {
@@ -41,10 +41,15 @@ export interface UserSkillProfile {
     adaptationSpeed: 'slow' | 'moderate' | 'fast';
   };
   behavior: {
-    explorationScore: number; // 0-100, how much they explore features
-    efficiencyScore: number; // 0-100, how efficient they are
-    confidenceLevel: number; // 0-100, how confident they seem
-    adaptationWillingness: number; // 0-100, how open to changes
+    explorationScore: number;
+    efficiencyScore: number;
+    confidenceLevel: number;
+    adaptationWillingness: number;
+  };
+  goals?: {
+    primary: string;
+    secondary: string[];
+    progress: Record<string, number>;
   };
 }
 
@@ -132,14 +137,14 @@ const COMPLEXITY_LEVELS: Record<UIComplexity, ComplexityLevel> = {
   essential: {
     name: 'essential',
     displayName: 'Essential',
-    description: 'Only the most important features visible',
+    description: 'Simplified view — all features available with guided help',
     features: {
-      showAdvancedOptions: false,
-      showExperimentalFeatures: false,
-      showDeveloperTools: false,
-      showDetailedMetrics: false,
-      showCustomizationOptions: false,
-      showShortcuts: false,
+      showAdvancedOptions: true,
+      showExperimentalFeatures: true,
+      showDeveloperTools: true,
+      showDetailedMetrics: true,
+      showCustomizationOptions: true,
+      showShortcuts: true,
       showTooltips: true,
       showContextualHelp: true,
     },
@@ -153,11 +158,11 @@ const COMPLEXITY_LEVELS: Record<UIComplexity, ComplexityLevel> = {
   standard: {
     name: 'standard',
     displayName: 'Standard',
-    description: 'Balanced feature set for regular use',
+    description: 'Balanced view with all features accessible',
     features: {
-      showAdvancedOptions: false,
-      showExperimentalFeatures: false,
-      showDeveloperTools: false,
+      showAdvancedOptions: true,
+      showExperimentalFeatures: true,
+      showDeveloperTools: true,
       showDetailedMetrics: true,
       showCustomizationOptions: true,
       showShortcuts: true,
@@ -174,11 +179,11 @@ const COMPLEXITY_LEVELS: Record<UIComplexity, ComplexityLevel> = {
   advanced: {
     name: 'advanced',
     displayName: 'Advanced',
-    description: 'Most features including advanced options',
+    description: 'Full features with streamlined presentation',
     features: {
       showAdvancedOptions: true,
-      showExperimentalFeatures: false,
-      showDeveloperTools: false,
+      showExperimentalFeatures: true,
+      showDeveloperTools: true,
       showDetailedMetrics: true,
       showCustomizationOptions: true,
       showShortcuts: true,
@@ -195,7 +200,7 @@ const COMPLEXITY_LEVELS: Record<UIComplexity, ComplexityLevel> = {
   expert: {
     name: 'expert',
     displayName: 'Expert',
-    description: 'All features including experimental and developer tools',
+    description: 'All features with compact, power-user layout',
     features: {
       showAdvancedOptions: true,
       showExperimentalFeatures: true,
@@ -235,11 +240,35 @@ export function ProgressiveDisclosureProvider({ children, userId = 'current-user
   );
 }
 
-// Hook to use the shared context
+// Safe default when used outside a provider
+const SAFE_DEFAULT_CONTEXT = {
+  context: {
+    userSkill: null,
+    currentComplexity: 'standard' as UIComplexity,
+    disclosedFeatures: new Set<string>(),
+    hiddenFeatures: new Set<string>(),
+    adaptiveHints: [] as AdaptiveHint[],
+  },
+  isAnalyzing: false,
+  analyzeUserBehavior: async () => {},
+  trackFeatureUsage: (_featureId: string) => {},
+  trackSessionStart: () => {},
+  trackSessionEnd: () => {},
+  trackError: (_errorType: string) => {},
+  trackHelpSeeking: () => {},
+  completeTutorial: (_tutorialId: string) => {},
+  adjustComplexity: (_complexity: UIComplexity) => {},
+  toggleFeature: (_featureId: string, _visible: boolean) => {},
+  dismissHint: (_hintId: string) => {},
+  onDisclose: (_featureId: string) => {},
+  onConceal: (_featureId: string) => {},
+};
+
+// Hook to use the shared context — returns safe defaults if no provider
 export function useProgressiveDisclosureContext() {
   const context = useContext(ProgressiveDisclosureContext);
   if (!context) {
-    throw new Error('useProgressiveDisclosureContext must be used within a ProgressiveDisclosureProvider');
+    return SAFE_DEFAULT_CONTEXT;
   }
   return context;
 }

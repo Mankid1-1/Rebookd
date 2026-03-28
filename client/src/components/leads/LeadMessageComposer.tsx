@@ -15,7 +15,7 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 
 // Dynamic quick replies based on user skill and business type
 const getDynamicQuickReplies = (userSkill?: any, businessType?: string) => {
@@ -25,21 +25,13 @@ const getDynamicQuickReplies = (userSkill?: any, businessType?: string) => {
     "Hey {{name}}, just a friendly reminder about your upcoming appointment!",
   ];
 
-  // Add advanced replies for intermediate+ users
-  if (userSkill?.level !== 'beginner') {
-    baseReplies.push(
-      "Hi {{name}}, thanks for getting back to us! We'd love to help.",
-      "Hi {{name}}, following up on your inquiry. How can we assist you today?"
-    );
-  }
-
-  // Add expert replies for advanced users
-  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
-    baseReplies.push(
-      "Hi {{name}}, I noticed you haven't responded. Is there a better time to connect?",
-      "Hi {{name}}, we have a special offer available this week. Would you like to hear more?"
-    );
-  }
+  // All replies available at every skill level
+  baseReplies.push(
+    "Hi {{name}}, thanks for getting back to us! We'd love to help.",
+    "Hi {{name}}, following up on your inquiry. How can we assist you today?",
+    "Hi {{name}}, I noticed you haven't responded. Is there a better time to connect?",
+    "Hi {{name}}, we have a special offer available this week. Would you like to hear more?"
+  );
 
   // Business-specific replies
   if (businessType?.includes('medical') || businessType?.includes('clinic')) {
@@ -82,47 +74,25 @@ export function LeadMessageComposer({ leadId, leadName }: LeadMessageComposerPro
   }, [messageBody]);
 
   const sendMessage = trpc.leads.sendMessage.useMutation({
-    onMutate: async (input) => {
-      const previous = utils.leads.messages.getData({ leadId: input.leadId });
-      const optimistic = {
-        id: -Date.now(),
-        tenantId: 0,
-        leadId: input.leadId,
-        direction: "outbound" as const,
-        body: input.body,
-        status: "sent" as const,
-        createdAt: new Date(),
-        twilioSid: null as string | null,
-        provider: null as string | null,
-        providerError: null as string | null,
-        fromNumber: null as string | null,
-        toNumber: null as string | null,
-      };
-      utils.leads.messages.setData({ leadId: input.leadId }, (old) => [...(old ?? []), optimistic as any]);
-      return { previous };
-    },
-    onError: (err, input, ctx) => {
-      if (ctx?.previous !== undefined) {
-        utils.leads.messages.setData({ leadId: input.leadId }, ctx.previous);
-      }
+    onError: (err) => {
       toast.error(err.message);
     },
-    onSuccess: (data) => {
-      if (!data.success) {
-        toast.warning("Message saved — SMS delivery failed. Check Twilio config.");
-      } else {
-        toast.success("Message sent ✓");
-      }
+    onSuccess: () => {
+      toast.success("Message sent");
       setMessageBody("");
       setCharCount(0);
-      utils.leads.messages.invalidate({ leadId });
       utils.leads.list.invalidate();
+      utils.leads.messages.invalidate({ leadId });
     },
   });
 
   const doSend = () => {
     if (!messageBody.trim() || sendMessage.isPending) return;
-    sendMessage.mutate({ leadId, body: messageBody, tone });
+    sendMessage.mutate({
+      leadId,
+      body: messageBody,
+      ...(useAI ? { tone } : {}),
+    });
   };
 
   const smsLimit = 160;

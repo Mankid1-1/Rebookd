@@ -4,7 +4,7 @@
  */
 
 import http from 'http';
-import { logger } from './_core/logger';
+import { logger } from './logger';
 
 export interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -52,7 +52,8 @@ async function checkDatabase(): Promise<{ status: string; latency: number }> {
     const startTime = Date.now();
     
     // Simple database ping
-    const { db } = await import('./server/_core/context');
+    const { getDb } = await import('../db');
+    const db = await getDb();
     if (db) {
       await (db as any).execute('SELECT 1');
     }

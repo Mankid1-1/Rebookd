@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(mkdir -p docs)",
+      "Bash(mv AUDIT-REPORT.md FINAL-AUDIT-REPORT.md IMPLEMENTATION-SUMMARY.md REFERRAL-PAYOUT-DELAY.md REFERRAL-SYSTEM.md STRIPE-LIFECYCLE-MANAGEMENT.md STRIPE-TESTING-GUIDE.md STRIPE_CONNECT_IMPLEMENTATION.md DEPLOYMENT.md WINDOWS-DEPLOYMENT.md DATABASE_SETUP_INSTRUCTIONS.txt DELIVERABLES.txt PRODUCTION_LAUNCH_SUMMARY.txt todo.md docs/)",
+      "Bash(npx tsc:*)",
+      "Bash(xargs sed:*)",
+      "Bash(rmdir client/src/_core)",
+      "Bash(mkdir -p client/src/components/layout)",
+      "Bash(mv client/src/components/AuthGuard.tsx client/src/components/DashboardLayout.tsx client/src/components/DashboardLayoutSkeleton.tsx client/src/components/ErrorBoundary.tsx client/src/components/FeatureConfigPage.tsx client/src/components/SetupChecklist.tsx client/src/components/WelcomeTour.tsx client/src/components/layout/)",
+      "Bash(npx vite:*)",
+      "Bash(sed -i -e 's|from \"\"./ui/button\"\"|from \"\"@/components/ui/button\"\"|g' -e 's|from \"\"./LanguageSelector\"\"|from \"\"@/components/LanguageSelector\"\"|g' client/src/components/layout/DashboardLayout.tsx)",
+      "Bash(sed -i 's|from ''''./ui/skeleton''''|from ''''@/components/ui/skeleton''''|g' client/src/components/layout/DashboardLayoutSkeleton.tsx)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(ls server/services/*.ts)",
+      "Bash(ls server/routers/*.ts)",
+      "Bash(sed -i 's|from \"\"../services/eventBus\"\"|from \"\"../services/event-bus.service\"\"|g' server/routers/webhook.router.ts server/routers/lead.router.ts)",
+      "Bash(sed -i 's|from \"\"../services/webhookDedup.service\"\"|from \"\"../services/webhook-dedup.service\"\"|g' server/routers/webhook.router.ts)",
+      "Bash(sed -i 's|from \"\"../services/adminAudit.service\"\"|from \"\"../services/admin-audit.service\"\"|g' server/routers/billing.router.ts server/routers/admin.router.ts)",
+      "Bash(sed -i 's|from \"\"../services/automationRunner\"\"|from \"\"../services/automation-runner.service\"\"|g' server/routers/automation.router.ts)",
+      "Bash(sed -i 's|from \"\"./automationRunner\"\"|from \"\"./automation-runner.service\"\"|g' server/services/event-bus.service.ts)",
+      "Bash(sed -i 's|\"\"../services/rateLimit.service\"\"|\"\"../services/rate-limit.service\"\"|g' server/__tests__/sms.test.ts)",
+      "Bash(sed -i 's|\"\"./services/eventBus\"\"|\"\"./services/event-bus.service\"\"|g' server/rebooked.test.ts)"
+    ]
+  }
+}

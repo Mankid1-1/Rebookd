@@ -8,7 +8,7 @@ import { Phone, User, Mail, Calendar } from "lucide-react";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import type { Lead } from "../../../shared/interfaces";
+import type { Lead } from "../../../../shared/interfaces";
 
 interface LeadInfoSidebarProps {
   lead: Lead;

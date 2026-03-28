@@ -297,7 +297,7 @@ export function ProgressiveDisclosure({
 // Progressive Disclosure Hook
 export function useProgressiveDisclosure(
   initialLevel: string = 'basic',
-  levels: ProgressiveLevel[]
+  levels: ProgressiveLevel[] = []
 ) {
   const [currentLevel, setCurrentLevel] = useState(initialLevel);
   const [completedFeatures, setCompletedFeatures] = useState<Set<string>>(new Set());

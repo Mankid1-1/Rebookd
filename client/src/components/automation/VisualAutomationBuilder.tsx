@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useDynamicAutomationNodes } from '@/hooks/useDynamicConfiguration';
-import { useAuth } from '@/_core/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth';
 import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";

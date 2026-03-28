@@ -46,7 +46,7 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
-vi.mock("@/_core/hooks/useAuth", () => ({
+vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({
     user: { id: 1, email: "test@example.com" },
   }),
@@ -89,24 +89,18 @@ vi.mock("@/components/analytics/RevenueDashboard", () => ({
 }));
 
 // Mock DashboardLayout
-vi.mock("@/components/DashboardLayout", () => ({
+vi.mock("@/components/layout/DashboardLayout", () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="dashboard-layout">{children}</div>,
 }));
 
-// Mock lucide-react icons
-vi.mock("lucide-react", () => ({
-  AlertTriangle: () => <div data-testid="alert-triangle-icon" />,
-  BarChart3: () => <div data-testid="bar-chart-icon" />,
-  Bot: () => <div data-testid="bot-icon" />,
-  MessageSquare: () => <div data-testid="message-square-icon" />,
-  TrendingUp: () => <div data-testid="trending-up-icon" />,
-  Users: () => <div data-testid="users-icon" />,
-  Zap: () => <div data-testid="zap-icon" />,
-  ArrowRight: () => <div data-testid="arrow-right-icon" />,
-  Calendar: () => <div data-testid="calendar-icon" />,
-  Plus: () => <div data-testid="plus-icon" />,
-  DollarSign: () => <div data-testid="dollar-sign-icon" />,
-  XIcon: () => <div data-testid="x-icon" />,
+// Mock lucide-react icons — use Proxy to auto-generate any icon component
+vi.mock("lucide-react", () => new Proxy({}, {
+  get: (_target, name) => {
+    if (typeof name !== "string") return undefined;
+    const IconComponent = (props: any) => <div data-testid={`${name}-icon`} {...props} />;
+    IconComponent.displayName = name as string;
+    return IconComponent;
+  },
 }));
 
 const createTestQueryClient = () => new QueryClient({

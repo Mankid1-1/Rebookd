@@ -37,16 +37,14 @@ const getDynamicFeatures = (userSkill?: any, businessType?: string) => {
     },
   ];
 
-  // Add advanced features for expert users
-  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
-    baseFeatures.push({
-      icon: Zap,
-      title: "16 Ready-Made Automations", 
-      description: "Enable pre-built workflows for reminders, no-shows, cancellations, win-backs and more. No setup required.",
-      color: isDarkMode ? "text-yellow-300" : "text-yellow-400",
-      bg: isDarkMode ? "bg-yellow-500/20" : "bg-yellow-500/10"
-    });
-  }
+  // All features available at every skill level
+  baseFeatures.push({
+    icon: Zap,
+    title: "16 Ready-Made Automations",
+    description: "Enable pre-built workflows for reminders, no-shows, cancellations, win-backs and more. No setup required.",
+    color: isDarkMode ? "text-yellow-300" : "text-yellow-400",
+    bg: isDarkMode ? "bg-yellow-500/20" : "bg-yellow-500/10"
+  });
 
   return baseFeatures;
 };

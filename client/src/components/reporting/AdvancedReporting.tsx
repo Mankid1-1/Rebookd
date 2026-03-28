@@ -26,7 +26,7 @@ import {
 import { format, subDays, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
 
 interface ReportData {
@@ -64,21 +64,13 @@ const getDynamicReportTypes = (userRole?: string, userSkill?: any) => {
     { id: 'customer', name: 'Customer Report', description: 'Customer satisfaction and behavior' },
   ];
 
-  // Add advanced reports for intermediate+ users
-  if (userSkill?.level !== 'beginner') {
-    baseTypes.push(
-      { id: 'financial', name: 'Financial Report', description: 'Revenue and cost analysis' },
-      { id: 'operational', name: 'Operational Report', description: 'Operations and efficiency metrics' }
-    );
-  }
-
-  // Add expert reports for advanced users
-  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
-    baseTypes.push(
-      { id: 'compliance', name: 'Compliance Report', description: 'Regulatory and compliance metrics' },
-      { id: 'forecast', name: 'Forecast Report', description: 'Predictive analytics and forecasting' }
-    );
-  }
+  // All report types available at every skill level
+  baseTypes.push(
+    { id: 'financial', name: 'Financial Report', description: 'Revenue and cost analysis' },
+    { id: 'operational', name: 'Operational Report', description: 'Operations and efficiency metrics' },
+    { id: 'compliance', name: 'Compliance Report', description: 'Regulatory and compliance metrics' },
+    { id: 'forecast', name: 'Forecast Report', description: 'Predictive analytics and forecasting' }
+  );
 
   // Role-specific reports
   if (userRole === 'admin') {

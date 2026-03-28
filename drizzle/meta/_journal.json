@@ -50,6 +50,13 @@
       "when": 1774126336644,
       "tag": "0006_typical_revanche",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1774329317099,
+      "tag": "0007_bored_solo",
+      "breakpoints": true
     }
   ]
 }

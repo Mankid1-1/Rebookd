@@ -9,60 +9,35 @@ async function seed() {
     process.exit(1);
   }
 
-  // V2 Pricing: Single plan $199/month + 15% revenue share
-  // Early adopter program: First 20 clients get risk-free trial
-  const priceId = process.env.STRIPE_PRICE_PRO || process.env.STRIPE_PRICE_SCALE || null;
-  const earlyAdopterPriceId = process.env.STRIPE_PRICE_EARLY_ADOPTER || null;
+  const rebookedPriceId = process.env.STRIPE_PRICE_REBOOKED || null;
+  const flexPriceId = process.env.STRIPE_PRICE_FLEX || null;
 
   const items = [
     {
-      name: "Early Adopter",
-      slug: "early-adopter",
-      priceMonthly: 0, // Free if ROI is negative (risk-free guarantee)
-      maxAutomations: 9999,
-      maxMessages: 999999,
-      maxSeats: 10,
-      features: [
-        "Full platform access",
-        "AI-powered SMS re-engagement",
-        "No-show recovery automation",
-        "Cancellation recovery campaigns",
-        "Revenue analytics dashboard",
-        "Multi-channel messaging (SMS + email)",
-        "Industry-specific templates",
-        "TCPA compliance built-in",
-        "ROI guarantee — FREE if platform doesn't generate positive ROI",
-        "15% revenue share on recovered revenue",
-        "Priority onboarding support",
-        "Early adopter pricing locked in forever",
-      ],
-      stripePriceId: earlyAdopterPriceId,
+      name: "Flex",
+      slug: "flex",
+      priceMonthly: 2900,
+      maxAutomations: 3,
+      maxMessages: 500,
+      maxSeats: 1,
+      revenueSharePercent: 20,
+      hasPromotion: true,
+      promotionalSlots: 10,
+      features: ["Basic automations", "SMS messaging", "Lead management"],
+      stripePriceId: flexPriceId,
     },
     {
-      name: "Pro",
-      slug: "pro",
-      priceMonthly: 19900, // $199/month in cents
+      name: "Rebooked",
+      slug: "rebooked",
+      priceMonthly: 19900,
       maxAutomations: 9999,
       maxMessages: 999999,
       maxSeats: 10,
-      features: [
-        "Full platform access",
-        "AI-powered SMS re-engagement",
-        "No-show recovery automation",
-        "Cancellation recovery campaigns",
-        "Revenue analytics dashboard",
-        "Multi-channel messaging (SMS + email)",
-        "Industry-specific templates",
-        "TCPA compliance built-in",
-        "A/B testing for message optimization",
-        "Waitlist management & cancellation filling",
-        "Review generation automation",
-        "Post-appointment follow-up sequences",
-        "15% revenue share on recovered revenue",
-        "Advanced reporting & custom insights",
-        "Priority support",
-      ],
-      stripePriceId: priceId,
+      revenueSharePercent: 15,
+      hasPromotion: true,
+      promotionalSlots: 20,
+      features: ["Unlimited automations", "AI rewrite", "Priority support", "Team members", "Advanced analytics"],
+      stripePriceId: rebookedPriceId,
     },
   ];
 
@@ -78,11 +53,12 @@ async function seed() {
             maxAutomations: p.maxAutomations,
             maxMessages: p.maxMessages,
             maxSeats: p.maxSeats,
+            revenueSharePercent: p.revenueSharePercent,
             features: p.features,
             stripePriceId: p.stripePriceId,
           },
         });
-      console.log(`Upserted plan: ${p.slug} ($${(p.priceMonthly / 100).toFixed(0)}/month)`);
+      console.log(`Upserted plan: ${p.slug}`);
     } catch (err) {
       console.error(`Failed to upsert plan ${p.slug}:`, err);
     }

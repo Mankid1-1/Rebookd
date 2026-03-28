@@ -48,58 +48,35 @@ import {
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
+import { RebookedAIChat } from "./chat/RebookedAIChat";
 import { Button } from "./ui/button";
 import { trpc } from "@/lib/trpc";
 
 // Dynamic menu items based on user role, permissions, and skill level
 const getDynamicMainMenuItems = (userRole?: string, userSkill?: any) => {
-  const baseItems = [
+  // All features available at every skill level — just the UI adapts
+  return [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: Users, label: "Leads", path: "/leads" },
     { icon: MessageSquare, label: "Inbox", path: "/inbox" },
+    { icon: Calendar, label: "Automations", path: "/automations" },
+    { icon: FileText, label: "Templates", path: "/templates" },
+    { icon: Bot, label: "AI Tools", path: "/ai-tools" },
+    { icon: BarChart3, label: "Analytics", path: "/analytics" },
   ];
-
-  // Add advanced items for intermediate+ users
-  if (userSkill?.level !== 'beginner') {
-    baseItems.push(
-      { icon: Calendar, label: "Automations", path: "/automations" },
-      { icon: FileText, label: "Templates", path: "/templates" }
-    );
-  }
-
-  // Add expert items for advanced users
-  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
-    baseItems.push(
-      { icon: Bot, label: "AI Tools", path: "/ai-tools" },
-      { icon: BarChart3, label: "Analytics", path: "/analytics" }
-    );
-  }
-
-  return baseItems;
 };
 
 // Dynamic high-impact features based on user skill and business type
 const getDynamicHighImpactMenuItems = (userSkill?: any, businessType?: string) => {
+  // All features available at every skill level
   const baseFeatures = [
     { icon: Zap, label: "Lead Capture", path: "/lead-capture" },
     { icon: LayoutDashboard, label: "Booking Conversion", path: "/booking-conversion" },
+    { icon: Shield, label: "No-Show Recovery", path: "/no-show-recovery" },
+    { icon: Heart, label: "Retention Engine", path: "/retention" },
+    { icon: Bot, label: "AI Automation", path: "/ai-automation" },
+    { icon: Settings, label: "Admin Automation", path: "/admin-automation" },
   ];
-
-  // Add advanced features for intermediate+ users
-  if (userSkill?.level !== 'beginner') {
-    baseFeatures.push(
-      { icon: Shield, label: "No-Show Recovery", path: "/no-show-recovery" },
-      { icon: Heart, label: "Retention Engine", path: "/retention" }
-    );
-  }
-
-  // Add expert features for advanced users
-  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
-    baseFeatures.push(
-      { icon: Bot, label: "AI Automation", path: "/ai-automation" },
-      { icon: Settings, label: "Admin Automation", path: "/admin-automation" }
-    );
-  }
 
   // Business-specific features
   if (businessType?.includes('medical') || businessType?.includes('clinic')) {
@@ -125,22 +102,14 @@ const getDynamicSettingsMenuItems = (userRole?: string) => {
 };
 
 const getDynamicAdminMenuItems = (userRole?: string, userSkill?: any) => {
-  // Only show admin items to admin users
+  // Only show admin items to admin users (role-based, not skill-based)
   if (userRole !== 'admin') return [];
 
-  const baseAdminItems = [
+  return [
     { icon: Shield, label: "Tenants", path: "/admin/tenants" },
+    { icon: Users, label: "Users", path: "/admin/users" },
+    { icon: BarChart3, label: "System Health", path: "/admin/health" },
   ];
-
-  // Add advanced admin items for expert admins
-  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
-    baseAdminItems.push(
-      { icon: Users, label: "Users", path: "/admin/users" },
-      { icon: BarChart3, label: "System Health", path: "/admin/health" }
-    );
-  }
-
-  return baseAdminItems;
 };  
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -469,6 +438,7 @@ function DashboardLayoutContent({
         )}
         <main className="flex-1 overflow-auto">{children}</main>
       </SidebarInset>
+      <RebookedAIChat />
     </>
   );
 }

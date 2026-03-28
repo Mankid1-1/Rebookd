@@ -25,10 +25,12 @@ export async function createTemplate(db: Db, data: {
   key: string;
   name: string;
   body: string;
-  tone?: "friendly" | "professional" | "casual" | "urgent";
+  tone?: "friendly" | "professional" | "casual" | "urgent" | "empathetic";
   category?: string;
 }) {
-  await db.insert(templates).values(data);
+  // Extract only columns that exist in the templates table (category is not a DB column)
+  const { category, ...insertData } = data;
+  await db.insert(templates).values(insertData);
   return { success: true };
 }
 
@@ -36,11 +38,11 @@ export async function updateTemplate(
   db: Db,
   tenantId: number,
   templateId: number,
-  data: { name?: string; body?: string; tone?: "friendly" | "professional" | "casual" | "urgent" }
+  data: { name?: string; body?: string; tone?: "friendly" | "professional" | "casual" | "urgent" | "empathetic" }
 ) {
   await db
     .update(templates)
-    .set({ ...data, updatedAt: new Date() })
+    .set({ name: data.name, body: data.body, tone: data.tone, updatedAt: new Date() })
     .where(and(eq(templates.id, templateId), eq(templates.tenantId, tenantId), isNull(templates.deletedAt)));
 }
 

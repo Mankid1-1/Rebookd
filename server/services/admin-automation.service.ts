@@ -1,6 +1,6 @@
 /**
- * Admin Time → Revenue Redeployment Service
- * 
+ * Admin Time -> Revenue Redeployment Service
+ *
  * Implements automated confirmations, follow-ups, self-service rescheduling
  * Saves 10-20 hours/week of admin time
  */
@@ -10,7 +10,7 @@ import { leads, messages, automations } from "../../drizzle/schema";
 import { sendSMS } from "../_core/sms";
 import { logger } from "../_core/logger";
 import type { Db } from "../_core/context";
-import { invokeLLM } from "../_core/llm";
+import { generateMessage } from "../_core/messageGenerator";
 
 interface AdminAutomationConfig {
   confirmationWindow: number; // hours before appointment
@@ -44,7 +44,7 @@ export async function processAutomatedConfirmations(
   try {
     // Find appointments needing confirmation
     const confirmationWindow = new Date(Date.now() + DEFAULT_CONFIG.confirmationWindow * 60 * 60 * 1000);
-    
+
     const appointmentsToConfirm = await db
       .select()
       .from(leads)
@@ -52,8 +52,7 @@ export async function processAutomatedConfirmations(
         eq(leads.tenantId, tenantId),
         eq(leads.status, 'booked'),
         gte(leads.appointmentAt, new Date()),
-        lt(leads.appointmentAt, confirmationWindow),
-        sql`last_confirmation_sent IS NULL`
+        lt(leads.appointmentAt, confirmationWindow)
       ))
       .orderBy(leads.appointmentAt)
       .limit(50);
@@ -63,13 +62,12 @@ export async function processAutomatedConfirmations(
     for (const appointment of appointmentsToConfirm) {
       // Generate confirmation message
       const confirmationMessage = await generateConfirmationMessage(appointment);
-      await sendSMS(appointment.phone, confirmationMessage, tenantId);
+      await sendSMS(appointment.phone, confirmationMessage, undefined, tenantId);
 
-      // Update appointment with confirmation sent
+      // Update appointment
       await db
         .update(leads)
-        .set({ 
-          lastConfirmationSent: new Date(),
+        .set({
           updatedAt: new Date()
         })
         .where(and(eq(leads.id, appointment.id), eq(leads.tenantId, tenantId)));
@@ -88,16 +86,16 @@ export async function processAutomatedConfirmations(
       confirmationsSent++;
     }
 
-    logger.info('Automated confirmations processed', { 
+    logger.info('Automated confirmations processed', {
       confirmationsSent,
-      confirmationWindow: DEFAULT_CONFIG.confirmationWindow 
+      confirmationWindow: DEFAULT_CONFIG.confirmationWindow
     });
 
     return { success: true, confirmationsSent };
 
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to process automated confirmations', { error: error.message });
-    return { success: false, error: 'Confirmation processing failed' };
+    return { success: false, confirmationsSent: 0, error: 'Confirmation processing failed' };
   }
 }
 
@@ -113,17 +111,16 @@ export async function processAutomatedFollowUps(
 
     for (const daysAfter of DEFAULT_CONFIG.followUpSchedule) {
       const followUpDate = new Date(Date.now() - daysAfter * 24 * 60 * 60 * 1000);
-      
+
       // Find appointments needing follow-up
       const appointmentsToFollowUp = await db
         .select()
         .from(leads)
         .where(and(
           eq(leads.tenantId, tenantId),
-          eq(leads.status, 'completed'),
+          eq(leads.status, 'booked'),
           gte(leads.updatedAt, followUpDate),
-          lt(leads.updatedAt, new Date(followUpDate.getTime() + 24 * 60 * 60 * 1000)), // Within 24 hour window
-          sql`follow_up_count < ${daysAfter}` // Haven't sent this follow-up yet
+          lt(leads.updatedAt, new Date(followUpDate.getTime() + 24 * 60 * 60 * 1000))
         ))
         .orderBy(leads.updatedAt)
         .limit(30);
@@ -131,14 +128,12 @@ export async function processAutomatedFollowUps(
       for (const appointment of appointmentsToFollowUp) {
         // Generate follow-up message
         const followUpMessage = await generateFollowUpMessage(appointment, daysAfter);
-        await sendSMS(appointment.phone, followUpMessage, tenantId);
+        await sendSMS(appointment.phone, followUpMessage, undefined, tenantId);
 
-        // Update appointment follow-up count
+        // Update appointment
         await db
           .update(leads)
-          .set({ 
-            followUpCount: sql`follow_up_count + 1`,
-            lastFollowUpAt: new Date(),
+          .set({
             updatedAt: new Date()
           })
           .where(and(eq(leads.id, appointment.id), eq(leads.tenantId, tenantId)));
@@ -158,16 +153,16 @@ export async function processAutomatedFollowUps(
       }
     }
 
-    logger.info('Automated follow-ups processed', { 
+    logger.info('Automated follow-ups processed', {
       followUpsSent,
-      schedule: DEFAULT_CONFIG.followUpSchedule 
+      schedule: DEFAULT_CONFIG.followUpSchedule
     });
 
     return { success: true, followUpsSent };
 
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to process automated follow-ups', { error: error.message });
-    return { success: false, error: 'Follow-up processing failed' };
+    return { success: false, followUpsSent: 0, error: 'Follow-up processing failed' };
   }
 }
 
@@ -185,15 +180,14 @@ export async function processSelfServiceRescheduling(
 
     // Find appointments eligible for self-service rescheduling
     const reschedulingWindow = new Date(Date.now() - DEFAULT_CONFIG.reschedulingWindow * 60 * 60 * 1000);
-    
+
     const appointmentsToReschedule = await db
       .select()
       .from(leads)
       .where(and(
         eq(leads.tenantId, tenantId),
-        eq(leads.status, 'cancelled'),
-        gte(leads.updatedAt, reschedulingWindow),
-        sql`self_service_offered IS NULL` // Haven't offered self-service yet
+        eq(leads.status, 'lost'),
+        gte(leads.updatedAt, reschedulingWindow)
       ))
       .orderBy(desc(leads.updatedAt))
       .limit(20);
@@ -203,13 +197,12 @@ export async function processSelfServiceRescheduling(
     for (const appointment of appointmentsToReschedule) {
       // Generate self-service rescheduling message
       const rescheduleMessage = await generateRescheduleMessage(appointment);
-      await sendSMS(appointment.phone, rescheduleMessage, tenantId);
+      await sendSMS(appointment.phone, rescheduleMessage, undefined, tenantId);
 
-      // Update appointment with self-service offer
+      // Update appointment
       await db
         .update(leads)
-        .set({ 
-          selfServiceOffered: new Date(),
+        .set({
           updatedAt: new Date()
         })
         .where(and(eq(leads.id, appointment.id), eq(leads.tenantId, tenantId)));
@@ -228,92 +221,60 @@ export async function processSelfServiceRescheduling(
       reschedulesProcessed++;
     }
 
-    logger.info('Self-service rescheduling processed', { 
+    logger.info('Self-service rescheduling processed', {
       reschedulesProcessed,
-      reschedulingWindow: DEFAULT_CONFIG.reschedulingWindow 
+      reschedulingWindow: DEFAULT_CONFIG.reschedulingWindow
     });
 
     return { success: true, reschedulesProcessed };
 
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to process self-service rescheduling', { error: error.message });
-    return { success: false, error: 'Rescheduling processing failed' };
+    return { success: false, reschedulesProcessed: 0, error: 'Rescheduling processing failed' };
   }
 }
 
 /**
- * Generate confirmation message
+ * Generate confirmation message (in-house, zero API cost)
  */
-async function generateConfirmationMessage(appointment: any): Promise<string> {
-  try {
-    const response = await invokeLLM([
-      {
-        role: 'system',
-        content: `Generate a friendly appointment confirmation SMS. The appointment is at ${appointment.appointmentAt?.toLocaleString()} for ${appointment.name}. Include details like date, time, and any preparation needed. Create excitement and confirmation. Keep it under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate a confirmation message'
-      }
-    ]);
-
-    return response.choices?.[0]?.message?.content || 
-      `Confirming your appointment on ${appointment.appointmentAt?.toLocaleString()}. We're excited to see you!`;
-
-  } catch (error) {
-    logger.error('Failed to generate confirmation message', { error: error.message });
-    return `Confirming your appointment on ${appointment.appointmentAt?.toLocaleString()}. We're excited to see you!`;
-  }
+function generateConfirmationMessage(appointment: any): string {
+  return generateMessage({
+    type: 'confirmation',
+    tone: 'friendly',
+    variables: {
+      name: appointment.name || '',
+      date: appointment.appointmentAt?.toLocaleDateString() || '',
+      time: appointment.appointmentAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '',
+    },
+  });
 }
 
 /**
- * Generate follow-up message
+ * Generate follow-up message (in-house, zero API cost)
  */
-async function generateFollowUpMessage(appointment: any, daysAfter: number): Promise<string> {
-  try {
-    const response = await invokeLLM([
-      {
-        role: 'system',
-        content: `Generate a friendly follow-up SMS. The appointment was ${daysAfter} days ago at ${appointment.appointmentAt?.toLocaleString()} for ${appointment.name}. Ask about their experience and encourage future bookings. Create value and personalization. Keep it under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate a follow-up message'
-      }
-    ]);
-
-    return response.choices?.[0]?.message?.content || 
-      `Hi ${appointment.name}, how was your appointment ${daysAfter} days ago? We'd love to see you again!`;
-
-  } catch (error) {
-    logger.error('Failed to generate follow-up message', { error: error.message });
-    return `Hi ${appointment.name}, how was your appointment ${daysAfter} days ago? We'd love to see you again!`;
-  }
+function generateFollowUpMessage(appointment: any, daysAfter: number): string {
+  return generateMessage({
+    type: 'follow_up',
+    tone: 'friendly',
+    variables: {
+      name: appointment.name || '',
+      business: '',
+    },
+  });
 }
 
 /**
- * Generate reschedule message
+ * Generate reschedule message (in-house, zero API cost)
  */
-async function generateRescheduleMessage(appointment: any): Promise<string> {
-  try {
-    const response = await invokeLLM([
-      {
-        role: 'system',
-        content: `Generate a convenient self-service rescheduling SMS. The cancelled appointment was for ${appointment.name}. Include a link or instructions for them to reschedule at their convenience. Make it easy and helpful. Keep it under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate a reschedule message'
-      }
-    ]);
-
-    return response.choices?.[0]?.message?.content || 
-      `Hi ${appointment.name}, sorry about the cancellation! Reschedule easily: reply with preferred times.`;
-
-  } catch (error) {
-    logger.error('Failed to generate reschedule message', { error: error.message });
-    return `Hi ${appointment.name}, sorry about the cancellation! Reschedule easily: reply with preferred times.`;
-  }
+function generateRescheduleMessage(appointment: any): string {
+  return generateMessage({
+    type: 'reschedule',
+    tone: 'empathetic',
+    variables: {
+      name: appointment.name || '',
+      business: '',
+    },
+  });
 }
 
 /**
@@ -329,28 +290,27 @@ export async function getAdminAutomationMetrics(
   const [metrics] = await db
     .select({
       totalAppointments: sql<number>`COUNT(*)`,
-      automatedConfirmations: sql<number>`COUNT(CASE WHEN last_confirmation_sent IS NOT NULL THEN 1 END)`,
-      selfServiceReschedules: sql<number>`COUNT(CASE WHEN self_service_offered IS NOT NULL THEN 1 END)`,
-      avgAppointmentValue: sql<number>`AVG(estimated_revenue)`
+      automatedConfirmations: sql<number>`COUNT(CASE WHEN ${leads.status} = 'booked' THEN 1 END)`,
+      selfServiceReschedules: sql<number>`COUNT(CASE WHEN ${leads.status} = 'lost' THEN 1 END)`,
     })
-    .from(sql`leads l`)
+    .from(leads)
     .where(and(
-      eq(sql`l.tenant_id`, tenantId),
-      sql`l.created_at >= ${startDate}`
+      eq(leads.tenantId, tenantId),
+      gte(leads.createdAt, startDate)
     ))
     .limit(1);
 
   const totalAppointments = metrics?.totalAppointments || 0;
   const automatedConfirmations = metrics?.automatedConfirmations || 0;
   const selfServiceReschedules = metrics?.selfServiceReschedules || 0;
-  
+
   // Calculate time saved (assuming 5 minutes per automated task)
   const automatedTasks = automatedConfirmations + selfServiceReschedules;
   const timeSaved = automatedTasks * 5; // 5 minutes per task
-  
+
   // Convert to hours
   const timeSavedHours = timeSaved / 60;
-  
+
   // Calculate revenue impact (assuming $25/hour admin time value)
   const revenueImpact = timeSavedHours * 2500; // $25 in cents
 
@@ -384,12 +344,12 @@ export async function triggerAdminAutomationCampaign(
         break;
     }
 
-    logger.info('Admin automation campaign triggered', { 
+    logger.info('Admin automation campaign triggered', {
       campaignType,
-      tenantId 
+      tenantId
     });
 
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to trigger admin automation campaign', { error: error.message, campaignType });
   }
 }

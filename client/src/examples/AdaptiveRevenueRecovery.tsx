@@ -60,9 +60,8 @@ export function AdaptiveRevenueRecovery() {
       
       // Execute the recovery action
       const result = await trpc.analytics.executeRecoveryAction.mutateAsync({
-        actionType,
-        leadIds,
-        userId: context.userSkill.level
+        leadId: leadIds[0] ?? 0,
+        action: actionType,
       });
       
       // Track success/failure

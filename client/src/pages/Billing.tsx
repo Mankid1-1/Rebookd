@@ -1,41 +1,218 @@
-import DashboardLayout from "@/components/DashboardLayout";
+import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { toast } from "sonner";
-import { CheckCircle, CreditCard, MessageSquare, Star, Zap } from "lucide-react";
+import { useState } from "react";
+import { useLocale } from "@/contexts/LocaleContext";
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  Award,
+  Bot,
+  Calendar,
+  CheckCircle,
+  Clock,
+  CreditCard,
+  DollarSign,
+  Download,
+  ExternalLink,
+  HelpCircle,
+  MessageSquare,
+  Pause,
+  PieChart,
+  RefreshCw,
+  Shield,
+  TrendingUp,
+  Users,
+  XCircle,
+  Zap,
+} from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
-export default function Billing() {
-  const { data: plans = [] } = trpc.plans.list.useQuery();
-  const { data: subscription } = trpc.tenant.subscription.useQuery(undefined, { retry: false });
-  const { data: usage } = trpc.tenant.usage.useQuery(undefined, { retry: false });
-  const { data: billingHistory } = trpc.billing.invoices.useQuery(undefined, { retry: false });
+// ─── Constants ──────────────────────────────────────────────────────────────
 
-  const currentPlan = plans.find((p) => p.id === subscription?.sub?.planId);
-  const { data: dashData } = trpc.analytics.dashboard.useQuery(undefined, { retry: false });
-  const leadCount = dashData?.metrics?.leadCount ?? 0;
+const DEFAULT_REVENUE_SHARE_PERCENT = 15;
 
-  const handleUpgrade = (planId: number) => {
-    // Opens default email client with pre-filled upgrade request
-    const plan = plans.find((p) => p.id === planId);
-    const subject = encodeURIComponent(`Rebooked Plan Upgrade Request — ${plan?.name ?? "Plan"}`);
-    const body = encodeURIComponent(`Hi,
+const FONT_HEADING: React.CSSProperties = {
+  fontFamily: "'Space Grotesk', sans-serif",
+};
 
-I'd like to upgrade my Rebooked subscription to the ${plan?.name ?? ""} plan ($${((plan?.priceMonthly ?? 0) / 100).toFixed(0)}/month).
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
-My account email: 
+function usageMeterColor(percent: number) {
+  if (percent >= 80) return "text-red-400";
+  if (percent >= 50) return "text-yellow-400";
+  return "text-green-400";
+}
 
-Please send me a payment link.
+function progressBarClass(percent: number) {
+  if (percent >= 80) return "[&>div]:bg-red-500";
+  if (percent >= 50) return "[&>div]:bg-yellow-500";
+  return "[&>div]:bg-green-500";
+}
 
-Thank you`);
-    window.open(`mailto:support@rebooked.com?subject=${subject}&body=${body}`);
+function statusBadgeVariant(status: string) {
+  switch (status) {
+    case "paid":
+    case "active":
+      return "bg-green-500/15 text-green-400 border-green-500/30";
+    case "open":
+    case "pending":
+    case "trialing":
+      return "bg-yellow-500/15 text-yellow-400 border-yellow-500/30";
+    case "failed":
+    case "uncollectible":
+    case "past_due":
+      return "bg-red-500/15 text-red-400 border-red-500/30";
+    case "canceled":
+      return "bg-gray-500/15 text-gray-400 border-gray-500/30";
+    default:
+      return "bg-muted text-muted-foreground border-border";
+  }
+}
+
+function statusLabel(status: string) {
+  const map: Record<string, string> = {
+    active: "Active",
+    trialing: "Trial",
+    past_due: "Past Due",
+    canceled: "Canceled",
+    paid: "Paid",
+    open: "Pending",
+    failed: "Failed",
+    uncollectible: "Uncollectible",
   };
+  return map[status] ?? status.charAt(0).toUpperCase() + status.slice(1);
+}
 
+const fmtUSD = (n: number) =>
+  n.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+const fmtDate = (d: string | Date, style: "short" | "long" = "short") =>
+  new Date(d).toLocaleDateString("en-US", {
+    month: style === "long" ? "long" : "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+// ─── Component ──────────────────────────────────────────────────────────────
+
+export default function Billing() {
+  const { t } = useLocale();
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [pauseDialogOpen, setPauseDialogOpen] = useState(false);
+
+  // ── Data queries ──────────────────────────────────────────────────────────
+  const { data: plans = [] } = trpc.plans.list.useQuery();
+  const { data: subscription } = trpc.tenant.subscription.useQuery(undefined, {
+    retry: false,
+  });
+  const { data: usage } = trpc.tenant.usage.useQuery(undefined, {
+    retry: false,
+  });
+  const { data: billingHistory } = trpc.billing.invoices.useQuery(undefined, {
+    retry: false,
+  });
+  const { data: dashData } = trpc.analytics.dashboard.useQuery(undefined, {
+    retry: false,
+  });
+
+  // ── Mutations ─────────────────────────────────────────────────────────────
   const checkout = trpc.billing.createCheckoutSession.useMutation();
   const changePlan = trpc.billing.changePlan.useMutation();
   const portal = trpc.billing.createCustomerPortal.useMutation();
+
+  // ── Derived state ─────────────────────────────────────────────────────────
+  const hasSub = !!subscription?.sub;
+  const currentPlan = plans.find((p) => p.id === subscription?.sub?.planId);
+  const subStatus = subscription?.sub?.status;
+  const leadCount = dashData?.metrics?.leadCount ?? 0;
+  const hasStripe = !!subscription?.sub?.stripeId;
+
+  // Usage metrics
+  const smsUsed = usage?.messagesSent ?? 0;
+  const smsLimit = currentPlan?.maxMessages ?? 0;
+  const smsPercent =
+    smsLimit > 0 ? Math.min(100, Math.round((smsUsed / smsLimit) * 100)) : 0;
+  const automationsRun = usage?.automationsRun ?? 0;
+  const aiRewrites = (usage as any)?.aiRewrites ?? 0;
+
+  // Revenue calculations — only show costs when there's an active paid subscription
+  const revenueRecovered = (usage as any)?.revenueRecovered ?? 0;
+  const revenueSharePercent = currentPlan?.revenueSharePercent ?? DEFAULT_REVENUE_SHARE_PERCENT;
+  const revenueShareOwed =
+    Math.round(revenueRecovered * (revenueSharePercent / 100) * 100) / 100;
+  const monthlyFee = (hasSub && currentPlan) ? currentPlan.priceMonthly / 100 : 0;
+  const totalCost = monthlyFee + revenueShareOwed;
+  const netSavings = revenueRecovered - totalCost;
+  const roiPercent =
+    totalCost > 0 ? Math.round((netSavings / totalCost) * 100) : 0;
+
+  // Trial
+  const trialEndsAt = subscription?.sub?.trialEndsAt;
+  const trialMs = trialEndsAt
+    ? new Date(trialEndsAt).getTime() - Date.now()
+    : 0;
+  const trialDays = Math.max(0, Math.ceil(trialMs / (1000 * 60 * 60 * 24)));
+  const trialHours = Math.max(
+    0,
+    Math.ceil(trialMs / (1000 * 60 * 60)) - trialDays * 24
+  );
+
+  // Invoices
+  const invoices = billingHistory?.invoices ?? [];
+  const refunds = billingHistory?.refunds ?? [];
+  let runningTotal = 0;
+
+  // Early adopter
+  const earlyAdopterPlan = plans.find(
+    (p) => p.hasPromotion && p.promotionalSlots > 0
+  );
+  const isEarlyAdopter =
+    earlyAdopterPlan && (subscription as any)?.sub?.isEarlyAdopter;
+
+  // Revenue share breakdown (recovered appointments)
+  const recoveredAppointments =
+    (dashData as any)?.recoveredAppointments ?? [];
+
+  // Payment method info
+  const cardLast4 = (subscription?.sub as any)?.cardLast4;
+  const cardBrand = (subscription?.sub as any)?.cardBrand;
+  const cardExpMonth = (subscription?.sub as any)?.cardExpMonth;
+  const cardExpYear = (subscription?.sub as any)?.cardExpYear;
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleCheckout = async (priceId?: string) => {
     if (!priceId) return toast.error("Payment not configured for this plan");
@@ -49,329 +226,1178 @@ Thank you`);
     }
   };
 
-  const smsUsed = usage?.messagesSent ?? 0;
-  const smsLimit = currentPlan?.maxMessages ?? 0;
-  const smsPercent = smsLimit > 0 ? Math.min(100, Math.round((smsUsed / smsLimit) * 100)) : 0;
+  const openPortal = async () => {
+    try {
+      const res = await portal.mutateAsync({});
+      if (res?.url) window.location.href = res.url;
+      else toast.error("Could not open customer portal");
+    } catch (err) {
+      console.error(err);
+      toast.error("Error opening customer portal");
+    }
+  };
+
+  const handlePlanAction = async (plan: (typeof plans)[0]) => {
+    if (!(plan as any).stripePriceId) {
+      const subject = encodeURIComponent(
+        `Rebooked Plan Upgrade Request - ${plan.name}`
+      );
+      const body = encodeURIComponent(
+        `Hi,\n\nI'd like to upgrade my Rebooked subscription to the ${plan.name} plan ($${((plan.priceMonthly ?? 0) / 100).toFixed(0)}/month).\n\nMy account email: \n\nPlease send me a payment link.\n\nThank you`
+      );
+      window.open(
+        `mailto:rebooked@rebooked.org?subject=${subject}&body=${body}`
+      );
+      return;
+    }
+    if (subscription?.sub?.stripeId) {
+      try {
+        await changePlan.mutateAsync({
+          priceId: (plan as any).stripePriceId,
+          prorateImmediately: true,
+        });
+        window.location.reload();
+      } catch (err) {
+        console.error(err);
+        toast.error("Could not change the plan right now");
+      }
+    } else {
+      handleCheckout((plan as any).stripePriceId);
+    }
+  };
+
+  const handleCancel = async () => {
+    try {
+      await openPortal();
+    } catch {
+      toast.error("Could not process cancellation");
+    } finally {
+      setCancelDialogOpen(false);
+    }
+  };
+
+  const handlePause = async () => {
+    try {
+      await openPortal();
+    } catch {
+      toast.error("Could not pause subscription");
+    } finally {
+      setPauseDialogOpen(false);
+    }
+  };
+
+  const activatePlan = () => {
+    const plan = plans.find((p) => (p as any).stripePriceId);
+    if (plan) handlePlanAction(plan);
+    else openPortal();
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6 max-w-4xl mx-auto">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Billing</h1>
-          <p className="text-muted-foreground text-sm mt-1">Manage your subscription and usage</p>
-        </div>
+      <TooltipProvider>
+        <div className="p-6 space-y-6 max-w-5xl mx-auto">
+          {/* ────────────────────────────────────────────────────────────────
+              Page Header
+              ──────────────────────────────────────────────────────────── */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold" style={FONT_HEADING}>
+                {t('billing.title')}
+              </h1>
+              <p className="text-muted-foreground text-sm mt-1">
+                {t('billing.subtitle')}
+              </p>
+            </div>
+            {hasStripe && (
+              <Button variant="outline" size="sm" onClick={openPortal}>
+                <ExternalLink className="w-4 h-4 mr-1.5" />
+                Stripe Portal
+              </Button>
+            )}
+          </div>
 
-        {/* Trial banner */}
-        {subscription?.sub?.status === "trialing" && subscription?.sub?.trialEndsAt && (() => {
-          const daysLeft = Math.max(0, Math.ceil(
-            (new Date(subscription.sub.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-          ));
-          return (
-            <div className={`rounded-xl p-4 flex items-center gap-3 ${
-              daysLeft <= 3 ? "bg-red-500/10 border border-red-500/20" : "bg-yellow-500/10 border border-yellow-500/20"
-            }`}>
-              <div className={`text-2xl font-bold ${daysLeft <= 3 ? "text-red-400" : "text-yellow-400"}`}>
-                {daysLeft}
+          {/* ────────────────────────────────────────────────────────────────
+              Status Banners
+              ──────────────────────────────────────────────────────────── */}
+          {subStatus === "trialing" && trialEndsAt && (
+            <div
+              className={`rounded-xl p-5 flex items-start gap-4 ${
+                trialDays <= 3
+                  ? "bg-red-500/10 border border-red-500/30"
+                  : "bg-yellow-500/10 border border-yellow-500/30"
+              }`}
+            >
+              <Clock
+                className={`w-6 h-6 shrink-0 mt-0.5 ${trialDays <= 3 ? "text-red-400" : "text-yellow-400"}`}
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-1">
+                  <span
+                    className={`text-2xl font-bold ${trialDays <= 3 ? "text-red-400" : "text-yellow-400"}`}
+                  >
+                    {trialDays === 0
+                      ? `${Math.max(0, Math.ceil(trialMs / (1000 * 60 * 60)))}h`
+                      : `${trialDays}d${trialHours > 0 ? ` ${trialHours}h` : ""}`}
+                  </span>
+                  <span className="text-sm font-medium">
+                    remaining in trial
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {trialDays <= 1
+                    ? "Your trial ends very soon. Automations, SMS, and AI features will stop working when it expires. Upgrade now to avoid disruption."
+                    : trialDays <= 3
+                      ? "Your trial is ending soon. Add a payment method to keep your automations running without interruption."
+                      : "You have full access to all features during your trial. Add a payment method anytime to continue after it ends."}
+                </p>
+                {trialDays <= 3 && (
+                  <Button size="sm" className="mt-3" onClick={activatePlan}>
+                    Upgrade now
+                  </Button>
+                )}
               </div>
+            </div>
+          )}
+
+          {subStatus === "active" && (
+            <div className="rounded-xl p-4 flex items-center gap-3 bg-green-500/10 border border-green-500/30">
+              <CheckCircle className="w-5 h-5 text-green-400 shrink-0" />
               <div>
-                <p className="text-sm font-medium">
-                  {daysLeft === 0 ? "Your trial ends today" : `Day${daysLeft !== 1 ? "s" : ""} left in your free trial`}
+                <p className="text-sm font-medium text-green-400">
+                  All systems running
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {daysLeft <= 3
-                    ? "Upgrade now to keep your automations running without interruption."
-                    : "Upgrade anytime to continue after your trial ends."}
+                  Your subscription is active and all features are available.
                 </p>
               </div>
             </div>
-          );
-        })()}
+          )}
 
-        {/* Current Plan */}
-        {subscription && currentPlan && (
+          {subStatus === "past_due" && (
+            <div className="rounded-xl p-5 flex items-start gap-4 bg-red-500/15 border border-red-500/40">
+              <AlertTriangle className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-red-400">
+                  Payment past due
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Your last payment failed. Update your payment method to avoid
+                  service interruption. Automations will be paused if payment is
+                  not received.
+                </p>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="mt-3"
+                  onClick={openPortal}
+                >
+                  Update payment method
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {subStatus === "canceled" && (
+            <div className="rounded-xl p-5 flex items-start gap-4 bg-muted/50 border border-border">
+              <RefreshCw className="w-6 h-6 text-muted-foreground shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold">
+                  Subscription canceled
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Your subscription has been canceled. Re-activate to regain
+                  access to automations, SMS, and AI features.
+                </p>
+                <Button size="sm" className="mt-3" onClick={activatePlan}>
+                  Re-activate subscription
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ────────────────────────────────────────────────────────────────
+              1. Current Plan Card
+              ──────────────────────────────────────────────────────────── */}
           <Card className="border-primary/30 bg-primary/5">
             <CardHeader className="pb-3 border-b border-border">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <CreditCard className="w-4 h-4 text-primary" /> Current Plan
+                <CreditCard className="w-4 h-4 text-primary" />
+                Current Plan
               </CardTitle>
             </CardHeader>
             <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xl font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                      {currentPlan.name}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xl font-bold" style={FONT_HEADING}>
+                      {currentPlan ? currentPlan.name : (hasSub ? "Rebooked" : "No Active Plan")}
                     </h3>
-                    <Badge className={
-                      subscription.sub.status === "trialing" ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" :
-                      subscription.sub.status === "past_due" ? "bg-red-500/20 text-red-400 border-red-500/30" :
-                      subscription.sub.status === "canceled" ? "bg-gray-500/20 text-gray-400 border-gray-500/30" :
-                      "bg-primary/20 text-primary border-primary/30"
-                    }>
-                      {subscription.sub.status === "trialing" ? "Trial" :
-                       subscription.sub.status === "past_due" ? "Past Due" :
-                       subscription.sub.status === "canceled" ? "Canceled" : "Active"}
-                    </Badge>
+                    {subStatus && (
+                      <Badge className={statusBadgeVariant(subStatus)}>
+                        {statusLabel(subStatus)}
+                      </Badge>
+                    )}
+                    {isEarlyAdopter && (
+                      <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30">
+                        <Award className="w-3 h-3 mr-1" />
+                        Early Adopter
+                      </Badge>
+                    )}
                   </div>
-                  <p className="text-muted-foreground text-sm mt-1">
-                    ${(currentPlan.priceMonthly / 100).toFixed(0)}/month
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">
-                    {subscription.sub.status === "trialing" ? "Trial ends" : "Renews"}
-                  </p>
-                  <p className="text-sm font-medium">
-                    {subscription.sub.status === "trialing" && subscription.sub.trialEndsAt
-                      ? new Date(subscription.sub.trialEndsAt).toLocaleDateString()
-                      : subscription.sub.currentPeriodEnd
-                      ? new Date(subscription.sub.currentPeriodEnd).toLocaleDateString()
-                      : "—"}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <Button
-                  variant="outline"
-                  onClick={async () => {
-                    try {
-                      const res = await portal.mutateAsync({});
-                      if (res?.url) window.location.href = res.url;
-                      else toast.error("Could not open customer portal");
-                    } catch (err) {
-                      console.error(err);
-                      toast.error("Error opening customer portal");
-                    }
-                  }}
-                >
-                  Manage subscription
-                </Button>
-              </div>
-
-              {/* SMS Usage */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-1.5">
-                    <MessageSquare className="w-4 h-4 text-muted-foreground" />
-                    <span>SMS Usage</span>
-                  </div>
-                  <span className="font-medium">
-                    {smsUsed.toLocaleString()} / {smsLimit.toLocaleString()}
-                  </span>
-                </div>
-                <Progress value={smsPercent} className="h-2" />
-                <p className="text-xs text-muted-foreground">
-                  {smsPercent}% used this billing period
-                  {smsPercent >= 80 && (
-                    <span className="text-yellow-400 ml-2">⚠ Approaching limit</span>
+                  {hasSub ? (
+                    <div className="mt-2 flex items-baseline gap-2 flex-wrap">
+                      <span className="text-3xl font-bold" style={FONT_HEADING}>
+                        ${monthlyFee > 0 ? monthlyFee.toFixed(0) : "0"}
+                      </span>
+                      <span className="text-muted-foreground text-sm">/month</span>
+                      {monthlyFee > 0 && (
+                        <>
+                          <span className="text-muted-foreground text-sm">+</span>
+                          <span className="text-sm font-medium text-primary">
+                            {revenueSharePercent}% revenue share
+                          </span>
+                        </>
+                      )}
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <HelpCircle className="w-3.5 h-3.5 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p>
+                            {monthlyFee > 0
+                              ? `You pay $${monthlyFee.toFixed(0)}/mo plus ${revenueSharePercent}% of recovered revenue.`
+                              : `Flex plan: ${revenueSharePercent}% of recovered revenue only. No monthly fee.`}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground mt-2">
+                      You don't have an active subscription yet. Choose a plan to get started.
+                    </p>
                   )}
-                </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {hasSub ? "Full access to all features." : "Select a plan below to activate your account."}
+                  </p>
+                </div>
+                <div className="text-left md:text-right">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">
+                    {subStatus === "trialing"
+                      ? "Trial ends"
+                      : "Next billing date"}
+                  </p>
+                  <p className="text-sm font-semibold mt-0.5">
+                    {subStatus === "trialing" && trialEndsAt
+                      ? fmtDate(trialEndsAt, "long")
+                      : subscription?.sub?.currentPeriodEnd
+                        ? fmtDate(subscription.sub.currentPeriodEnd, "long")
+                        : "\u2014"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 mt-5">
+                {hasStripe ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={openPortal}>
+                      <CreditCard className="w-4 h-4 mr-1.5" />
+                      Manage subscription
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={openPortal}>
+                      <ExternalLink className="w-4 h-4 mr-1.5" />
+                      Customer portal
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={activatePlan}>
+                    <CreditCard className="w-4 h-4 mr-1.5" />
+                    Activate subscription
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
-        )}
 
-        {/* Plans */}
-        <div>
-          <h2 className="text-lg font-semibold mb-4" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-            Available Plans
-          </h2>
-          <div className="grid md:grid-cols-3 gap-4">
-            {plans.map((plan) => {
-              const isCurrentPlan = plan.id === subscription?.sub?.planId;
-              // Dynamic popularity based on actual subscription data
-              const isPopular = plan.name === "Professional" || (tenant?.popularPlanId === plan.id);
-              const hasRevenueShare = plan.revenueSharePercent && plan.revenueSharePercent > 0;
-              return (
-                <Card
-                  key={plan.id}
-                  className={`relative border transition-all ${
-                    isCurrentPlan
-                      ? "border-primary bg-primary/5"
-                      : isPopular
-                      ? "border-primary/40 bg-card"
-                      : "border-border bg-card"
-                  }`}
-                >
-                  {isPopular && !isCurrentPlan && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1">
-                      <Star className="w-3 h-3 mr-1" /> {tenant?.popularPlanId === plan.id ? "Recommended" : "Most popular"}
-                    </Badge>
-                  )}
-                  {isCurrentPlan && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-primary">
-                      <CheckCircle className="w-3 h-3 mr-1" /> Current plan
-                    </Badge>
-                  )}
-                  <CardContent className="p-5">
-                    <div className="mb-4">
-                      <h3 className="font-bold text-lg" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{plan.name}</h3>
-                      <div className="flex items-baseline gap-1 mt-1">
-                        <span className="text-3xl font-bold">${(plan.priceMonthly / 100).toFixed(0)}</span>
-                        <span className="text-muted-foreground text-sm">/mo</span>
-                      </div>
-                      {hasRevenueShare && (
-                        <div className="mt-2">
-                          <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
-                            +{plan.revenueSharePercent}% of recovered revenue
-                          </span>
-                        </div>
-                      )}
-                      {plan.hasPromotion && plan.promotionalSlots > 0 && (
-                        <div className="mt-2 space-y-1">
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs bg-green-500/10 text-green-400 px-2 py-1 rounded-full font-medium">
-                              🎉 Limited Time Offer
-                            </span>
-                          </div>
-                          <p className="text-xs text-green-400">
-                            First {plan.promotionalSlots} clients: Free if total cost ≤ ${(plan.promotionalPriceLimit / 100).toFixed(0)}/month
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {plan.promotionalSlots} slots remaining
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                    <ul className="space-y-2 mb-5">
-                      <li className="flex items-center gap-2 text-sm">
-                        <CheckCircle className="w-4 h-4 text-primary shrink-0" />
-                        {plan.maxMessages.toLocaleString()} SMS/month
-                      </li>
-                      <li className="flex items-center gap-2 text-sm">
-                        <CheckCircle className="w-4 h-4 text-primary shrink-0" />
-                        {plan.maxAutomations} automations
-                      </li>
-                      <li className="flex items-center gap-2 text-sm">
-                        <CheckCircle className="w-4 h-4 text-primary shrink-0" />
-                        AI tone rewriting
-                      </li>
-                      {plan.name !== "Free" && (
-                        <li className="flex items-center gap-2 text-sm">
-                          <CheckCircle className="w-4 h-4 text-primary shrink-0" />
-                          Advanced analytics
-                        </li>
-                      )}
-                      {hasRevenueShare && (
-                        <li className="flex items-center gap-2 text-sm">
-                          <Zap className="w-4 h-4 text-primary shrink-0" />
-                          Revenue sharing model
-                        </li>
-                      )}
-                    </ul>
-                    <Button
-                      className="w-full"
-                      variant={isCurrentPlan ? "outline" : isPopular ? "default" : "outline"}
-                      disabled={isCurrentPlan}
-                      onClick={async () => {
-                        if (isCurrentPlan) return;
-                        if (!(plan as any).stripePriceId) {
-                          handleUpgrade(plan.id);
-                          return;
-                        }
-                        if (subscription?.sub?.stripeId) {
-                          try {
-                            await changePlan.mutateAsync({
-                              priceId: (plan as any).stripePriceId,
-                              prorateImmediately: true,
-                            });
-                            window.location.reload();
-                          } catch (err) {
-                            console.error(err);
-                            toast.error("Could not change the plan right now");
-                          }
-                        } else {
-                          handleCheckout((plan as any).stripePriceId);
-                        }
+          {/* ────────────────────────────────────────────────────────────────
+              2. Revenue Share Summary
+              ──────────────────────────────────────────────────────────── */}
+          {hasSub && <Card className="border-border bg-card">
+            <CardHeader className="pb-3 border-b border-border">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-primary" />
+                Revenue Share Summary
+                <span className="text-xs font-normal text-muted-foreground ml-auto">
+                  This billing period
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                {/* Recovered Revenue */}
+                <div className="rounded-lg border border-border p-4 space-y-1">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                    Revenue Recovered
+                  </p>
+                  <p
+                    className="text-2xl font-bold text-green-400"
+                    style={FONT_HEADING}
+                  >
+                    ${fmtUSD(revenueRecovered)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    From automated re-engagement
+                  </p>
+                </div>
+
+                {/* Revenue Share (15%) */}
+                <div className="rounded-lg border border-border p-4 space-y-1">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                    {revenueSharePercent}% Revenue Share
+                  </p>
+                  <p className="text-2xl font-bold" style={FONT_HEADING}>
+                    ${fmtUSD(revenueShareOwed)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Owed to Rebooked this period
+                  </p>
+                </div>
+
+                {/* Net Savings */}
+                <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-4 space-y-1">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                    Your Net Savings
+                  </p>
+                  <p
+                    className={`text-2xl font-bold ${netSavings >= 0 ? "text-green-400" : "text-red-400"}`}
+                    style={FONT_HEADING}
+                  >
+                    {netSavings >= 0 ? "+" : ""}${fmtUSD(netSavings)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    After subscription + revenue share
+                  </p>
+                </div>
+              </div>
+
+              {/* Split Bar Visualization */}
+              {revenueRecovered > 0 && (
+                <div className="mt-5 rounded-lg bg-muted/30 border border-border p-4">
+                  <div className="flex items-center gap-2 text-sm mb-3">
+                    <ArrowUpRight className="w-4 h-4 text-green-400" />
+                    <span className="font-medium">
+                      You keep {100 - revenueSharePercent}% of recovered
+                      revenue
+                    </span>
+                  </div>
+                  <div className="flex h-3 w-full rounded-full overflow-hidden">
+                    <div
+                      className="bg-green-500 transition-all"
+                      style={{
+                        width: `${100 - revenueSharePercent}%`,
                       }}
-                    >
-                      {isCurrentPlan ? "Current plan" : (plan as any).stripePriceId ? "Upgrade" : "Request upgrade"}
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
+                    />
+                    <div
+                      className="bg-primary/40 transition-all"
+                      style={{ width: `${revenueSharePercent}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1.5">
+                    <span>
+                      Your share: $
+                      {fmtUSD(
+                        revenueRecovered *
+                          ((100 - revenueSharePercent) / 100)
+                      )}
+                    </span>
+                    <span>Rebooked: ${fmtUSD(revenueShareOwed)}</span>
+                  </div>
+                </div>
+              )}
 
-        {/* Usage Summary */}
-        {usage && (
+              {/* Cost Breakdown Table */}
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Cost Breakdown
+                  </h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Monthly subscription</span>
+                      <span className="font-medium">${monthlyFee.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>
+                        Revenue share ({revenueSharePercent}% of $
+                        {fmtUSD(revenueRecovered)})
+                      </span>
+                      <span className="font-medium">
+                        ${revenueShareOwed.toFixed(2)}
+                      </span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between text-sm font-semibold">
+                      <span>Total cost this period</span>
+                      <span>${totalCost.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Your ROI
+                  </h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Revenue recovered</span>
+                      <span className="font-medium text-green-400">
+                        +${fmtUSD(revenueRecovered)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Total Rebooked cost</span>
+                      <span className="font-medium text-red-400">
+                        -${totalCost.toFixed(2)}
+                      </span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between text-sm font-semibold">
+                      <span>Net profit</span>
+                      <span
+                        className={
+                          netSavings >= 0 ? "text-green-400" : "text-red-400"
+                        }
+                      >
+                        {netSavings >= 0 ? "+" : ""}${fmtUSD(netSavings)}
+                        {totalCost > 0 && (
+                          <span className="text-xs font-normal text-muted-foreground ml-1.5">
+                            ({roiPercent}% ROI)
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>}
+
+          {/* ────────────────────────────────────────────────────────────────
+              3. Usage Metrics
+              ──────────────────────────────────────────────────────────── */}
           <Card className="border-border bg-card">
             <CardHeader className="pb-3 border-b border-border">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Zap className="w-4 h-4 text-primary" /> Usage This Period
+                <Zap className="w-4 h-4 text-primary" />
+                Usage Metrics
               </CardTitle>
             </CardHeader>
             <CardContent className="p-5">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center">
-                  <p className="text-2xl font-bold">{usage.messagesSent ?? 0}</p>
-                  <p className="text-xs text-muted-foreground mt-1">SMS Sent</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {/* Messages Sent */}
+                <div className="space-y-2 rounded-lg border border-border p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <MessageSquare className="w-4 h-4 text-muted-foreground" />
+                      Messages Sent
+                    </div>
+                    <span
+                      className={`text-xs font-semibold ${usageMeterColor(smsPercent)}`}
+                    >
+                      {smsPercent}%
+                    </span>
+                  </div>
+                  <Progress
+                    value={smsPercent}
+                    className={`h-2.5 ${progressBarClass(smsPercent)}`}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {smsUsed.toLocaleString()} / {smsLimit.toLocaleString()}{" "}
+                    sent this period
+                    {smsPercent >= 80 && (
+                      <span className="text-red-400 font-medium ml-1">
+                        - Approaching limit
+                      </span>
+                    )}
+                  </p>
                 </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold">—</p>
-                  <p className="text-xs text-muted-foreground mt-1">AI Rewrites</p>
+
+                {/* Automations Active */}
+                <div className="rounded-lg border border-border p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                    <Bot className="w-4 h-4 text-muted-foreground" />
+                    Automations Active
+                  </div>
+                  <p className="text-2xl font-bold" style={FONT_HEADING}>
+                    {automationsRun.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    runs this billing period
+                  </p>
                 </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold">{usage.automationsRun ?? 0}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Automation Runs</p>
+
+                {/* Leads Managed */}
+                <div className="rounded-lg border border-border p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                    <Users className="w-4 h-4 text-muted-foreground" />
+                    Leads Managed
+                  </div>
+                  <p className="text-2xl font-bold" style={FONT_HEADING}>
+                    {leadCount.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    total active leads
+                  </p>
                 </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold">{leadCount}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Leads Added</p>
+
+                {/* AI Rewrites */}
+                <div className="rounded-lg border border-border p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                    <Zap className="w-4 h-4 text-muted-foreground" />
+                    AI Rewrites
+                  </div>
+                  <p className="text-2xl font-bold" style={FONT_HEADING}>
+                    {aiRewrites > 0 ? aiRewrites.toLocaleString() : "\u2014"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    this billing period
+                  </p>
+                </div>
+
+                {/* Revenue Recovered */}
+                <div className="rounded-lg border border-border p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                    <DollarSign className="w-4 h-4 text-muted-foreground" />
+                    Revenue Recovered
+                  </div>
+                  <p
+                    className="text-2xl font-bold text-green-400"
+                    style={FONT_HEADING}
+                  >
+                    ${fmtUSD(revenueRecovered)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    this billing period
+                  </p>
+                </div>
+
+                {/* Revenue Share Owed */}
+                <div className="rounded-lg border border-border p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                    <PieChart className="w-4 h-4 text-muted-foreground" />
+                    Revenue Share Owed
+                  </div>
+                  <p className="text-2xl font-bold" style={FONT_HEADING}>
+                    ${fmtUSD(revenueShareOwed)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {revenueSharePercent}% of recovered revenue
+                  </p>
                 </div>
               </div>
             </CardContent>
           </Card>
-        )}
 
-        <Card className="border-border bg-card">
-          <CardHeader className="pb-3 border-b border-border">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-primary" /> Invoice History
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-5 space-y-3">
-            {(billingHistory?.invoices ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">Invoices will appear here once Stripe posts them.</p>
-            ) : (
-              billingHistory?.invoices.map((invoice) => (
-                <div key={invoice.stripeInvoiceId} className="flex flex-col gap-2 rounded-lg border border-border p-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="font-medium">{invoice.number || invoice.stripeInvoiceId}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(invoice.createdAt).toLocaleDateString()} · {(invoice.total / 100).toFixed(2)} {invoice.currency.toUpperCase()} · {invoice.status}
-                    </p>
+          {/* ────────────────────────────────────────────────────────────────
+              4. Billing History
+              ──────────────────────────────────────────────────────────── */}
+          <Card className="border-border bg-card">
+            <CardHeader className="pb-3 border-b border-border">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-primary" />
+                Billing History
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5">
+              {invoices.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  Invoices will appear here once Stripe posts them.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Invoice</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">
+                          Running Total
+                        </TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {invoices.map((invoice) => {
+                        const amount = invoice.total / 100;
+                        if (invoice.status === "paid") {
+                          runningTotal += amount;
+                        }
+                        return (
+                          <TableRow key={invoice.stripeInvoiceId}>
+                            <TableCell className="font-medium text-xs">
+                              {invoice.number || invoice.stripeInvoiceId}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {fmtDate(invoice.createdAt)}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              ${amount.toFixed(2)}{" "}
+                              <span className="text-xs text-muted-foreground">
+                                {invoice.currency.toUpperCase()}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={statusBadgeVariant(invoice.status)}
+                              >
+                                {statusLabel(invoice.status)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground">
+                              ${runningTotal.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                {invoice.hostedInvoiceUrl && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() =>
+                                          window.open(
+                                            invoice.hostedInvoiceUrl!,
+                                            "_blank"
+                                          )
+                                        }
+                                      >
+                                        <ExternalLink className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>View invoice</TooltipContent>
+                                  </Tooltip>
+                                )}
+                                {invoice.invoicePdfUrl && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() =>
+                                          window.open(
+                                            invoice.invoicePdfUrl!,
+                                            "_blank"
+                                          )
+                                        }
+                                      >
+                                        <Download className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      Download PDF
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {/* Refunds */}
+              {refunds.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3 font-semibold">
+                    Refunds
+                  </p>
+                  <div className="space-y-2">
+                    {refunds.map((refund) => (
+                      <div
+                        key={refund.stripeRefundId}
+                        className="flex items-center justify-between text-sm rounded-lg border border-border p-3"
+                      >
+                        <div>
+                          <p className="font-medium">
+                            {fmtDate(refund.createdAt)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {refund.stripeRefundId}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">
+                            ${(refund.amount / 100).toFixed(2)}{" "}
+                            {refund.currency.toUpperCase()}
+                          </p>
+                          <Badge
+                            variant="outline"
+                            className={statusBadgeVariant(refund.status)}
+                          >
+                            {refund.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex gap-2">
-                    {invoice.hostedInvoiceUrl && (
-                      <Button variant="outline" onClick={() => window.open(invoice.hostedInvoiceUrl!, "_blank")}>
-                        View
-                      </Button>
-                    )}
-                    {invoice.invoicePdfUrl && (
-                      <Button onClick={() => window.open(invoice.invoicePdfUrl!, "_blank")}>
-                        PDF
-                      </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ────────────────────────────────────────────────────────────────
+              5. Payment Method
+              ──────────────────────────────────────────────────────────── */}
+          <Card className="border-border bg-card">
+            <CardHeader className="pb-3 border-b border-border">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-primary" />
+                Payment Method
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-8 rounded-md bg-muted flex items-center justify-center border border-border">
+                    <CreditCard className="w-5 h-3.5 text-muted-foreground" />
+                  </div>
+                  <div>
+                    {cardLast4 ? (
+                      <>
+                        <p className="text-sm font-medium">
+                          {cardBrand
+                            ? cardBrand.charAt(0).toUpperCase() +
+                              cardBrand.slice(1)
+                            : "Card"}{" "}
+                          ending in {cardLast4}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {cardExpMonth && cardExpYear
+                            ? `Expires ${String(cardExpMonth).padStart(2, "0")}/${cardExpYear}`
+                            : "Managed via Stripe"}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium">
+                          No payment method on file
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Add a card through the Stripe customer portal
+                        </p>
+                      </>
                     )}
                   </div>
                 </div>
-              ))
-            )}
-            {(billingHistory?.refunds ?? []).length > 0 && (
-              <div className="pt-2">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground mb-2">Refunds</p>
-                {billingHistory?.refunds.map((refund) => (
-                  <div key={refund.stripeRefundId} className="text-sm text-muted-foreground">
-                    {new Date(refund.createdAt).toLocaleDateString()} · {(refund.amount / 100).toFixed(2)} {refund.currency.toUpperCase()} refunded · {refund.status}
-                  </div>
-                ))}
+                <Button variant="outline" size="sm" onClick={openPortal}>
+                  {cardLast4 ? "Update" : "Add payment method"}
+                </Button>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
+
+          {/* ────────────────────────────────────────────────────────────────
+              6. Early Adopter Badge
+              ──────────────────────────────────────────────────────────── */}
+          {earlyAdopterPlan && (
+            <Card className="border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-green-500/5">
+              <CardHeader className="pb-3 border-b border-amber-500/20">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Award className="w-4 h-4 text-amber-400" />
+                  Early Adopter Program
+                  <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 ml-2">
+                    Limited
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-5">
+                <div className="flex flex-col md:flex-row md:items-center gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span
+                        className="text-2xl font-bold text-amber-400"
+                        style={FONT_HEADING}
+                      >
+                        {earlyAdopterPlan.promotionalSlots}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        of 20 slots remaining
+                      </span>
+                    </div>
+                    <Progress
+                      value={
+                        ((20 - earlyAdopterPlan.promotionalSlots) / 20) * 100
+                      }
+                      className="h-2 mb-3 [&>div]:bg-amber-500"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      The first 20 clients are protected by our ROI guarantee.{" "}
+                      <span className="text-amber-400 font-medium">
+                        If Rebooked doesn't generate positive ROI, you don't
+                        pay.
+                      </span>
+                    </p>
+                    {isEarlyAdopter && (
+                      <div className="mt-3 rounded-lg bg-green-500/10 border border-green-500/20 p-3 flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
+                        <p className="text-sm text-green-400 font-medium">
+                          You are an Early Adopter. Your ROI guarantee is
+                          active.
+                        </p>
+                      </div>
+                    )}
+                    {earlyAdopterPlan.promotionalPriceCap > 0 && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Guarantee applies when total cost is under $
+                        {(earlyAdopterPlan.promotionalPriceCap / 100).toFixed(
+                          0
+                        )}
+                        /month. Limited to the first 20 clients.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ────────────────────────────────────────────────────────────────
+              7. ROI Guarantee Section
+              ──────────────────────────────────────────────────────────── */}
+          <Card className="border-green-500/30 bg-green-500/5">
+            <CardHeader className="pb-3 border-b border-green-500/20">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Shield className="w-4 h-4 text-green-400" />
+                ROI Guarantee
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5">
+              <div className="flex flex-col md:flex-row gap-6">
+                <div className="flex-1 space-y-3">
+                  <h3
+                    className="text-lg font-bold leading-snug"
+                    style={FONT_HEADING}
+                  >
+                    If Rebooked doesn't make you more than it costs, you don't
+                    pay.
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    We stand behind our platform. If your total Rebooked cost
+                    (subscription + revenue share) exceeds the revenue we
+                    recover for you in any billing period, we'll credit you the
+                    difference. Early Adopter clients get it completely free
+                    during negative-ROI months.
+                  </p>
+                </div>
+                <div className="md:w-64 shrink-0">
+                  <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                      Your Real-Time ROI
+                    </p>
+                    <div className="text-center">
+                      <p
+                        className={`text-3xl font-bold ${netSavings >= 0 ? "text-green-400" : "text-red-400"}`}
+                        style={FONT_HEADING}
+                      >
+                        {netSavings >= 0 ? "+" : ""}${fmtUSD(netSavings)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        net profit this period
+                      </p>
+                    </div>
+                    <Separator />
+                    <div className="space-y-1.5 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Recovered</span>
+                        <span className="text-green-400 font-medium">
+                          +${fmtUSD(revenueRecovered)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">
+                          Rebooked cost
+                        </span>
+                        <span className="text-red-400 font-medium">
+                          -${fmtUSD(totalCost)}
+                        </span>
+                      </div>
+                    </div>
+                    {netSavings >= 0 ? (
+                      <div className="rounded bg-green-500/10 border border-green-500/20 p-2 text-center">
+                        <p className="text-xs text-green-400 font-medium">
+                          <CheckCircle className="w-3 h-3 inline mr-1" />
+                          ROI positive - {roiPercent}% return
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="rounded bg-amber-500/10 border border-amber-500/20 p-2 text-center">
+                        <p className="text-xs text-amber-400 font-medium">
+                          <AlertTriangle className="w-3 h-3 inline mr-1" />
+                          ROI guarantee may apply
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ────────────────────────────────────────────────────────────────
+              8. Manage Subscription
+              ──────────────────────────────────────────────────────────── */}
+          {subscription?.sub && subStatus !== "canceled" && (
+            <Card className="border-border bg-card">
+              <CardHeader className="pb-3 border-b border-border">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-primary" />
+                  Manage Subscription
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-5">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  {/* Pause */}
+                  <AlertDialog
+                    open={pauseDialogOpen}
+                    onOpenChange={setPauseDialogOpen}
+                  >
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <Pause className="w-4 h-4 mr-1.5" />
+                        Pause subscription
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          Pause your subscription?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Pausing will temporarily suspend your subscription.
+                          During the pause, automations will stop running, SMS
+                          messages will not be sent, and revenue recovery will
+                          be inactive. You can resume at any time.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Keep active</AlertDialogCancel>
+                        <AlertDialogAction onClick={handlePause}>
+                          Pause subscription
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+
+                  {/* Cancel */}
+                  <AlertDialog
+                    open={cancelDialogOpen}
+                    onOpenChange={setCancelDialogOpen}
+                  >
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                      >
+                        <XCircle className="w-4 h-4 mr-1.5" />
+                        Cancel subscription
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          Cancel your subscription?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="space-y-3">
+                          <span className="block">
+                            Are you sure you want to cancel? Here's what you'll
+                            lose:
+                          </span>
+                          <span className="block text-sm space-y-1">
+                            <span className="flex items-center gap-2">
+                              <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                              Automated SMS re-engagement
+                            </span>
+                            <span className="flex items-center gap-2">
+                              <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                              AI-powered message rewrites
+                            </span>
+                            <span className="flex items-center gap-2">
+                              <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                              Revenue recovery automations
+                            </span>
+                            <span className="flex items-center gap-2">
+                              <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                              No-show and cancellation recovery
+                            </span>
+                          </span>
+                          {revenueRecovered > 0 && (
+                            <span className="block text-sm font-medium text-amber-400">
+                              You've recovered ${fmtUSD(revenueRecovered)} this
+                              period. Canceling means leaving that revenue on
+                              the table.
+                            </span>
+                          )}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Keep subscription</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleCancel}
+                          className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                          Cancel subscription
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+
+                  {/* Portal link */}
+                  <Button variant="ghost" size="sm" onClick={openPortal}>
+                    <ExternalLink className="w-4 h-4 mr-1.5" />
+                    Full billing portal
+                  </Button>
+                </div>
+
+                <p className="text-xs text-muted-foreground mt-3">
+                  Changes take effect at the end of your current billing period.
+                  You can manage all billing details through the Stripe customer
+                  portal.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ────────────────────────────────────────────────────────────────
+              9. Revenue Share Breakdown
+              ──────────────────────────────────────────────────────────── */}
+          <Card className="border-border bg-card">
+            <CardHeader className="pb-3 border-b border-border">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-primary" />
+                Revenue Share Breakdown
+                <Tooltip>
+                  <TooltipTrigger>
+                    <HelpCircle className="w-3.5 h-3.5 text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p>
+                      Each recovered appointment contributes to the{" "}
+                      {revenueSharePercent}% revenue share. This table shows a
+                      detailed breakdown of every recovered appointment and
+                      its share amount.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5">
+              {recoveredAppointments.length === 0 ? (
+                <div className="text-center py-8">
+                  <DollarSign className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    No recovered appointments this billing period yet.
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    When Rebooked recovers revenue from re-engaged clients, the
+                    breakdown will appear here.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Client</TableHead>
+                          <TableHead>Service</TableHead>
+                          <TableHead className="text-right">
+                            Appointment Value
+                          </TableHead>
+                          <TableHead className="text-right">
+                            {revenueSharePercent}% Share
+                          </TableHead>
+                          <TableHead className="text-right">
+                            You Keep
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {recoveredAppointments.map(
+                          (appt: any, idx: number) => {
+                            const value = appt.value ?? 0;
+                            const share =
+                              Math.round(
+                                value * (revenueSharePercent / 100) * 100
+                              ) / 100;
+                            const kept = value - share;
+                            return (
+                              <TableRow key={appt.id ?? idx}>
+                                <TableCell className="text-muted-foreground">
+                                  {appt.date ? fmtDate(appt.date) : "\u2014"}
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                  {appt.clientName ?? "Unknown"}
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
+                                  {appt.service ?? "\u2014"}
+                                </TableCell>
+                                <TableCell className="text-right font-medium">
+                                  ${fmtUSD(value)}
+                                </TableCell>
+                                <TableCell className="text-right text-muted-foreground">
+                                  ${fmtUSD(share)}
+                                </TableCell>
+                                <TableCell className="text-right text-green-400 font-medium">
+                                  ${fmtUSD(kept)}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          }
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Summary row */}
+                  <div className="mt-4 pt-4 border-t border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <p className="text-sm text-muted-foreground">
+                      {recoveredAppointments.length} recovered appointment
+                      {recoveredAppointments.length !== 1 ? "s" : ""} this period
+                    </p>
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className="text-muted-foreground">
+                        Total share:{" "}
+                        <span className="font-medium text-foreground">
+                          ${fmtUSD(revenueShareOwed)}
+                        </span>
+                      </span>
+                      <span className="text-muted-foreground">
+                        You keep:{" "}
+                        <span className="font-medium text-green-400">
+                          $
+                          {fmtUSD(
+                            revenueRecovered *
+                              ((100 - revenueSharePercent) / 100)
+                          )}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </TooltipProvider>
     </DashboardLayout>
   );
 }

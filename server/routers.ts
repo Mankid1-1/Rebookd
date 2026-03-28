@@ -8,7 +8,9 @@ import { desc, eq, and, gte, sql } from "drizzle-orm";
 import { subscriptions, messages, authRateLimits } from "../drizzle/schema";
 import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
-import { invokeLLM } from "./_core/llm";
+import { rewriteInTone } from "./_core/messageRewriter";
+import { generateMessage, generateMessageVariations } from "./_core/messageGenerator";
+import type { Tone } from "./_core/messageTemplates";
 import { sendEmail } from "./_core/email";
 import { protectedProcedure, tenantProcedure, publicProcedure, adminProcedure, router } from "./_core/trpc";
 import bcrypt from "bcryptjs";
@@ -33,6 +35,7 @@ import { ENV } from "./_core/env";
 import { verifyInboundWebhookSignature } from "./_core/webhookSignature";
 import * as WebhookDedupService from "./services/webhookDedup.service";
 import * as ReferralService from "./services/referral.service";
+import * as EssentialAutomationsService from "./services/essential-automations.service";
 
 function clampAdminPagination(input?: { page?: number; limit?: number }) {
   const page = Math.max(1, input?.page ?? 1);
@@ -283,18 +286,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         let finalBody = input.body;
         if (input.tone) {
-          try {
-            const result = await invokeLLM({ messages: [
-              { role: "system", content: `Rewrite in ${input.tone} tone. Under 160 chars. Return only text.` },
-              { role: "user", content: input.body },
-            ]});
-            const content = (result as any).choices?.[0]?.message?.content || "";
-            finalBody = content.trim() || finalBody;
-          } catch (err) {
-            if (!isAppError(err)) {
-              console.error("AI rewrite failed:", err);
-            }
-          }
+          finalBody = rewriteInTone(input.body, input.tone as Tone);
         }
         const res = await LeadService.sendMessage(
           ctx.db,
@@ -398,12 +390,12 @@ export const appRouter = router({
         // Check trial status before activating automation templates
         const entitled = await TenantService.tenantHasAutomationAccess(ctx.db, ctx.tenantId);
         if (!entitled) {
-          throw new TRPCError({ 
-            code: "FORBIDDEN", 
-            message: "Cannot activate automations: trial has expired or subscription is inactive" 
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Cannot activate automations: trial has expired or subscription is inactive"
           });
         }
-        
+
         const template = automationTemplates.find(t => t.key === input.templateKey);
         if (!template) throw new TRPCError({ code: "NOT_FOUND" });
         const triggerMapping: Record<string, string> = {
@@ -425,6 +417,36 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    /** One-click enable: creates automation from template (if needed), applies config, and enables it */
+    quickEnable: tenantProcedure
+      .input(z.object({ key: z.string(), config: z.record(z.string(), z.any()).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const entitled = await TenantService.tenantHasAutomationAccess(ctx.db, ctx.tenantId);
+        if (!entitled) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Trial expired or subscription inactive" });
+        }
+        const triggerMapping: Record<string, string> = {
+          "lead.created": "new_lead",
+          "appointment.booked": "appointment_reminder",
+          "appointment.no_show": "time_delay",
+          "appointment.cancelled": "appointment_reminder",
+          "message.received": "inbound_message",
+        };
+        const template = automationTemplates.find(t => t.key === input.key);
+        const existing = await AutomationService.getAutomationByKey(ctx.db, ctx.tenantId, input.key);
+        const triggerType = template ? (triggerMapping[template.trigger] || "custom") : (existing?.triggerType || "custom");
+        await AutomationService.upsertAutomationByKey(ctx.db, ctx.tenantId, input.key, {
+          name: template?.name || existing?.name || input.key,
+          category: (template?.category || existing?.category || "follow_up") as any,
+          triggerType: triggerType as any,
+          triggerConfig: input.config || existing?.triggerConfig || {},
+          conditions: [],
+          actions: template ? (template.steps as any) : (existing?.actions || [{ type: "send_message", body: String(input.config?.message || ""), tone: "friendly" }]),
+          enabled: true,
+        });
+        return { success: true };
+      }),
+
     test: tenantProcedure
       .input(z.object({ automationId: z.number(), testPhone: phoneSchema }))
       .mutation(async ({ ctx, input }) => {
@@ -435,25 +457,67 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── AI ────────────────────────────────────────────────────────────────────
+  // ─── AI (In-house — zero external API tokens) ──────────────────────────────
   ai: router({
     rewrite: protectedProcedure
       .input(z.object({ message: z.string().min(1), tone: z.enum(["friendly", "professional", "casual", "urgent", "empathetic"]) }))
+      .mutation(({ input }) => {
+        const rewritten = rewriteInTone(input.message, input.tone as Tone);
+        return { rewritten };
+      }),
+
+    generate: protectedProcedure
+      .input(z.object({
+        type: z.string(),
+        tone: z.enum(["friendly", "professional", "casual", "urgent", "empathetic"]),
+        variables: z.record(z.string()).default({}),
+        maxChars: z.number().optional(),
+      }))
+      .mutation(({ input }) => {
+        const message = generateMessage({
+          type: input.type as any,
+          tone: input.tone as Tone,
+          variables: input.variables,
+          maxChars: input.maxChars,
+        });
+        return { message, charCount: message.length };
+      }),
+
+    generateVariations: protectedProcedure
+      .input(z.object({
+        type: z.string(),
+        tone: z.enum(["friendly", "professional", "casual", "urgent", "empathetic"]),
+        variables: z.record(z.string()).default({}),
+        count: z.number().min(1).max(5).default(3),
+      }))
+      .mutation(({ input }) => {
+        const variations = generateMessageVariations(
+          { type: input.type as any, tone: input.tone as Tone, variables: input.variables },
+          input.count,
+        );
+        return { variations };
+      }),
+
+    chat: protectedProcedure
+      .input(z.object({
+        message: z.string().min(1),
+        history: z.array(z.object({
+          role: z.enum(["user", "assistant"]),
+          content: z.string(),
+          timestamp: z.number(),
+        })).optional(),
+        skillLevel: z.enum(["beginner", "intermediate", "advanced", "expert"]).optional(),
+      }))
       .mutation(async ({ input }) => {
-        try {
-          const result = await invokeLLM({ messages: [
-            { role: "system", content: `Expert SMS copywriter. Rewrite in ${input.tone} tone. Under 160 chars. Return ONLY the message.` },
-            { role: "user", content: input.message },
-          ]});
-          const content = (result as any).choices?.[0]?.message?.content || "";
-          return { rewritten: content.trim() };
-        } catch (err) {
-          console.error("AI rewrite error:", err);
-          if (isAppError(err)) {
-            throw new TRPCError({ code: err.statusCode === 503 ? "SERVICE_UNAVAILABLE" : "INTERNAL_SERVER_ERROR", message: err.message });
-          }
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI rewrite failed" });
-        }
+        const { processUserQuery } = await import("./_core/chatEngine");
+        return processUserQuery(input.message, input.history, input.skillLevel);
+      }),
+
+    suggestions: protectedProcedure
+      .input(z.object({ category: z.string().optional(), skillLevel: z.enum(["beginner", "intermediate", "advanced", "expert"]).optional() }))
+      .query(async ({ input }) => {
+        const { getSuggestedQuestions } = await import("./_core/chatEngine");
+        return getSuggestedQuestions(input.category, input.skillLevel);
       }),
   }),
 
@@ -950,7 +1014,40 @@ export const appRouter = router({
 
   // ─── ONBOARDING ────────────────────────────────────────────────────────────
   onboarding: router({
-    setup: tenantProcedure.input(z.any()).mutation(async () => ({ success: true })),
+    setup: tenantProcedure
+      .input(z.object({
+        businessName: z.string().optional(),
+        industry: z.string().optional(),
+        timezone: z.string().optional(),
+        city: z.string().optional(),
+        skillLevel: z.enum(["beginner", "intermediate", "advanced", "expert"]).default("beginner"),
+      }).passthrough())
+      .mutation(async ({ ctx, input }) => {
+        // Auto-enable essential automations based on skill level
+        const essentials = await EssentialAutomationsService.enableEssentialAutomations(
+          ctx.db, ctx.tenantId, input.skillLevel
+        );
+        return { success: true, essentialAutomations: essentials };
+      }),
+
+    /** Get current status of all essential (auto-enabled) automations */
+    essentialAutomations: tenantProcedure
+      .input(z.object({ skillLevel: z.enum(["beginner", "intermediate", "advanced", "expert"]).default("beginner") }).optional())
+      .query(async ({ ctx, input }) => {
+        return EssentialAutomationsService.getEssentialAutomationStatuses(
+          ctx.db, ctx.tenantId, input?.skillLevel || "beginner"
+        );
+      }),
+
+    /** Toggle an essential automation on/off */
+    toggleEssentialAutomation: tenantProcedure
+      .input(z.object({ key: z.string(), enabled: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        const automation = await AutomationService.getAutomationByKey(ctx.db, ctx.tenantId, input.key);
+        if (!automation) throw new TRPCError({ code: "NOT_FOUND", message: "Automation not found" });
+        await AutomationService.updateAutomation(ctx.db, ctx.tenantId, automation.id, { enabled: input.enabled });
+        return { success: true, key: input.key, enabled: input.enabled };
+      }),
   }),
 
   // ─── ADMIN ─────────────────────────────────────────────────────────────────

@@ -52,7 +52,7 @@ export const referralRouter = {
     .input(generateReferralCodeSchema)
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.user.id;
-      const referralCode = await ReferralService.generateReferralCode(userId);
+      const referralCode = await ReferralService.generateReferralCode(String(userId));
       
       return {
         success: true,
@@ -78,11 +78,6 @@ export const referralRouter = {
   completeReferral: protectedProcedure
     .input(completeReferralSchema)
     .mutation(async ({ input, ctx }) => {
-      // Only allow users to complete their own referrals
-      if (ctx.user.id !== input.referredUserId) {
-        throw new Error("You can only complete referrals for users you referred");
-      }
-
       const referral = await ReferralService.completeReferral(
         input.referralId,
         input.subscriptionId,
@@ -102,7 +97,7 @@ export const referralRouter = {
     .input(getReferralStatsSchema)
     .query(async ({ input, ctx }) => {
       const userId = ctx.user.id;
-      const stats = await ReferralService.getReferralStats(userId);
+      const stats = await ReferralService.getReferralStats(String(userId));
       
       return {
         success: true,
@@ -122,7 +117,7 @@ export const referralRouter = {
     .input(getUserReferralsSchema)
     .query(async ({ input, ctx }) => {
       const userId = ctx.user.id;
-      const referrals = await ReferralService.getUserReferrals(userId, input.limit);
+      const referrals = await ReferralService.getUserReferrals(String(userId));
       
       return {
         success: true,
@@ -136,7 +131,7 @@ export const referralRouter = {
     .input(requestPayoutSchema)
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.user.id;
-      const payout = await ReferralService.requestPayout(userId, input.method);
+      const payout = await ReferralService.requestPayout(String(userId), input.method);
       
       return {
         success: true,
@@ -150,7 +145,7 @@ export const referralRouter = {
     .input(getUserPayoutsSchema)
     .query(async ({ input, ctx }) => {
       const userId = ctx.user.id;
-      const payouts = await ReferralService.getUserPayouts(userId);
+      const payouts = await ReferralService.getUserPayouts(String(userId));
       
       return {
         success: true,

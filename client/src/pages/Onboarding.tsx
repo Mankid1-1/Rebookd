@@ -3,8 +3,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { Zap, ArrowRight, CheckCircle } from "lucide-react";
+import { Zap, ArrowRight, CheckCircle, Info, Bell, MessageSquare, UserPlus, Calendar, RotateCcw, Clock } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -65,14 +67,18 @@ const getDynamicTimezones = () => {
 
 // Dynamic steps based on user skill level
 const getDynamicSteps = (userSkill?: any) => {
-  const baseSteps = ["Business", "Location"];
-  
-  // Add industry step for intermediate+ users
-  if (userSkill?.level !== 'beginner') {
-    baseSteps.push("Industry");
-  }
-  
-  return baseSteps;
+  // All steps available at every skill level
+  return ["Business", "Location", "Industry", "Automations"];
+};
+
+// Icons for essential automation categories
+const AUTOMATION_ICONS: Record<string, React.ReactNode> = {
+  appointment_confirmation_chase: <Calendar className="h-4 w-4 text-blue-500" />,
+  inbound_response_sla: <MessageSquare className="h-4 w-4 text-green-500" />,
+  welcome_new_lead: <UserPlus className="h-4 w-4 text-purple-500" />,
+  reduce_no_shows: <Bell className="h-4 w-4 text-orange-500" />,
+  qualified_followup_1d: <Clock className="h-4 w-4 text-cyan-500" />,
+  cancellation_same_day: <RotateCcw className="h-4 w-4 text-rose-500" />,
 };
 
 export default function Onboarding() {
@@ -89,13 +95,35 @@ export default function Onboarding() {
   const [city, setCity] = useState("");
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [industry, setIndustry] = useState("");
+  const [essentialAutomations, setEssentialAutomations] = useState<Array<{
+    key: string; name: string; description: string; category: string;
+    enabled: boolean; autoEnabled: boolean; tier: string;
+  }>>([]);
+
+  const skillLevel = context.userSkill?.level || "beginner";
+  const hasAutoEnables = skillLevel === "beginner" || skillLevel === "intermediate";
 
   const utils = trpc.useUtils();
   const createTenant = trpc.onboarding.setup.useMutation({
-    onSuccess: async () => {
-      toast.success("Business set up! Welcome to Rebooked.");
+    onSuccess: async (data) => {
       await utils.tenant.get.invalidate();
-      setLocation("/dashboard");
+      if (hasAutoEnables && data.essentialAutomations?.length > 0) {
+        // Show the automations step with disclaimer
+        setEssentialAutomations(data.essentialAutomations);
+        setStep(3);
+      } else {
+        toast.success("Business set up! Welcome to Rebooked.");
+        setLocation("/dashboard");
+      }
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const toggleAutomation = trpc.onboarding.toggleEssentialAutomation.useMutation({
+    onSuccess: (data) => {
+      setEssentialAutomations(prev =>
+        prev.map(a => a.key === data.key ? { ...a, enabled: data.enabled } : a)
+      );
     },
     onError: (err) => toast.error(err.message),
   });
@@ -105,8 +133,15 @@ export default function Onboarding() {
     if (step === 2 && !industry) return toast.error("Please select your industry");
     if (step < 2) {
       setStep(step + 1);
-    } else {
-      createTenant.mutate({ businessName: name.trim(), industry, timezone, city: city.trim() || undefined });
+    } else if (step === 2) {
+      createTenant.mutate({
+        businessName: name.trim(), industry, timezone,
+        city: city.trim() || undefined, skillLevel,
+      });
+    } else if (step === 3) {
+      // Done — go to dashboard
+      toast.success("You're all set! Welcome to Rebooked.");
+      setLocation("/dashboard");
     }
   };
 
@@ -122,7 +157,7 @@ export default function Onboarding() {
 
         {/* Progress */}
         <div className="flex items-center justify-center gap-3 mb-8">
-          {STEPS.map((s, i) => (
+          {steps.filter(s => s !== "Automations" || hasAutoEnables).map((s, i) => (
             <div key={s} className="flex items-center gap-3">
               <div className="flex items-center gap-1.5">
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all ${
@@ -132,7 +167,7 @@ export default function Onboarding() {
                 </div>
                 <span className={`text-xs hidden sm:block ${i === step ? "text-foreground" : "text-muted-foreground"}`}>{s}</span>
               </div>
-              {i < STEPS.length - 1 && <div className={`w-8 h-px ${i < step ? "bg-primary" : "bg-border"}`} />}
+              {i < steps.filter(s2 => s2 !== "Automations" || hasAutoEnables).length - 1 && <div className={`w-8 h-px ${i < step ? "bg-primary" : "bg-border"}`} />}
             </div>
           ))}
         </div>
@@ -167,7 +202,7 @@ export default function Onboarding() {
                   <Select value={timezone} onValueChange={setTimezone}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {TIMEZONES.map((tz) => <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>)}
+                      {timezones.map((tz) => <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -185,7 +220,7 @@ export default function Onboarding() {
                   <Select value={industry} onValueChange={setIndustry}>
                     <SelectTrigger><SelectValue placeholder="Select your industry..." /></SelectTrigger>
                     <SelectContent>
-                      {INDUSTRIES.map((ind) => <SelectItem key={ind} value={ind.toLowerCase().replace(/[\s/]+/g, "_")}>{ind}</SelectItem>)}
+                      {industries.map((ind) => <SelectItem key={ind} value={ind.toLowerCase().replace(/[\s/]+/g, "_")}>{ind}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -196,10 +231,67 @@ export default function Onboarding() {
               </div>
             )}
 
+            {step === 3 && (
+              <div className="space-y-5">
+                <div>
+                  <h2 className="text-xl font-bold mb-1">Automations Enabled For You</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Based on your experience level, we've turned on these automations so they
+                    run in the background automatically. You can disable any of them now or
+                    change them later in Settings.
+                  </p>
+                </div>
+
+                <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 flex gap-2">
+                  <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    {skillLevel === "beginner"
+                      ? "As a new user, all essential automations are enabled so Rebooked works for you right away. Toggle off anything you'd rather handle manually."
+                      : "Core automations are enabled to keep things running smoothly. Advanced automations are available but not auto-enabled — turn them on if you'd like."}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {essentialAutomations.map((automation) => (
+                    <div
+                      key={automation.key}
+                      className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                    >
+                      <div className="mt-0.5">
+                        {AUTOMATION_ICONS[automation.key] || <Zap className="h-4 w-4 text-muted-foreground" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{automation.name}</span>
+                          {automation.autoEnabled && (
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Auto</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">{automation.description}</p>
+                      </div>
+                      <Switch
+                        checked={automation.enabled}
+                        onCheckedChange={(checked) =>
+                          toggleAutomation.mutate({ key: automation.key, enabled: checked })
+                        }
+                        disabled={toggleAutomation.isPending}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-3 mt-6">
-              {step > 0 && <Button variant="outline" className="flex-1" onClick={() => setStep(step - 1)}>Back</Button>}
+              {step > 0 && step < 3 && <Button variant="outline" className="flex-1" onClick={() => setStep(step - 1)}>Back</Button>}
               <Button className="flex-1" onClick={handleNext} disabled={createTenant.isPending}>
-                {createTenant.isPending ? "Setting up..." : step < 2 ? <><span>Next</span><ArrowRight className="w-4 h-4 ml-1.5" /></> : <><span>Launch Rebooked</span><Zap className="w-4 h-4 ml-1.5" /></>}
+                {createTenant.isPending
+                  ? "Setting up..."
+                  : step < 2
+                    ? <><span>Next</span><ArrowRight className="w-4 h-4 ml-1.5" /></>
+                    : step === 2
+                      ? <><span>Set Up Rebooked</span><Zap className="w-4 h-4 ml-1.5" /></>
+                      : <><span>Go to Dashboard</span><ArrowRight className="w-4 h-4 ml-1.5" /></>}
               </Button>
             </div>
           </CardContent>

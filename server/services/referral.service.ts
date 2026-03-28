@@ -11,6 +11,7 @@
 
 import type { Db } from "../_core/context";
 import { getDb } from "../db";
+import { logger } from "../_core/logger";
 import { TRPCError } from "@trpc/server";
 import { and, eq, isNull, lte, count, sum, desc, sql, ne } from "drizzle-orm";
 import { referrals, referralPayouts, users } from "../../drizzle/schema";
@@ -346,6 +347,12 @@ export async function processMonthlyPayouts(db: Db): Promise<{
     } catch (error: any) {
       console.error(`Failed to process payout for referral ${referral.id}:`, error);
       failed++;
+      await db.insert(systemErrorLogs).values({
+          type: 'billing',
+          message: `Failed to process payout for referral ${referral.id}`,
+          detail: error instanceof Error ? error.message : String(error),
+          tenantId: tenantId,
+      }).catch((logErr) => logger.error("Failed to log referral payout error", { error: String(logErr) }));
     }
   }
 

@@ -29,7 +29,7 @@ import {
   ArrowUp,
   ArrowDown,
   Calendar,
-  PieChart,
+  PieChart as PieChartIcon,
   BarChart3,
 } from "lucide-react";
 
@@ -292,7 +292,7 @@ const getDynamicChartColors = () => {
         <Card className="border-border bg-card">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <PieChart className="w-5 h-5 text-primary" />
+              <PieChartIcon className="w-5 h-5 text-primary" />
               Lead Status Distribution
             </CardTitle>
           </CardHeader>

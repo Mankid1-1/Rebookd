@@ -84,12 +84,19 @@ export function requestLoggingMiddleware(req: Request, res: Response, next: Next
 
 // ─── Rate Limiting Middleware ──────────────────────────────────────────────────
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+const MAX_RATE_LIMIT_ENTRIES = 10_000;
 
-// Prevent unbounded memory growth: purge expired entries every 60s
+// Cleanup expired rate limit entries every 60 seconds
 setInterval(() => {
   const now = Date.now();
-  for (const [key, entry] of rateLimitStore) {
-    if (entry.resetTime <= now) rateLimitStore.delete(key);
+  for (const [key, val] of rateLimitStore) {
+    if (val.resetTime <= now) rateLimitStore.delete(key);
+  }
+  // Hard cap: if still too large, evict oldest entries
+  if (rateLimitStore.size > MAX_RATE_LIMIT_ENTRIES) {
+    const excess = rateLimitStore.size - MAX_RATE_LIMIT_ENTRIES;
+    const keys = rateLimitStore.keys();
+    for (let i = 0; i < excess; i++) keys.next().value && rateLimitStore.delete(keys.next().value as string);
   }
 }, 60_000).unref();
 
@@ -186,11 +193,11 @@ export function trustProxyMiddleware(req: Request, res: Response, next: NextFunc
   // Get real IP from X-Forwarded-For header (set by reverse proxy like Nginx)
   if (req.headers['x-forwarded-for']) {
     const ips = (req.headers['x-forwarded-for'] as string).split(',');
-    req.ip = ips[0].trim();
+    (req as any).ip = ips[0].trim();
   }
 
   if (req.headers['x-forwarded-proto']) {
-    req.protocol = req.headers['x-forwarded-proto'] as any;
+    (req as any).protocol = req.headers['x-forwarded-proto'] as any;
   }
 
   next();

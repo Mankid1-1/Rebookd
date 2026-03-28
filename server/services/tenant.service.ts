@@ -26,8 +26,14 @@ export async function getAllTenants(db: Db, page = 1, limit = 50) {
   return { rows, total: Number(countRows[0]?.count ?? 0) };
 }
 
-export async function updateTenant(db: Db, id: number, data: Partial<{ name: string; timezone: string }>) {
-  await db.update(tenants).set({ ...data, updatedAt: new Date() }).where(eq(tenants.id, id));
+export async function updateTenant(db: Db, id: number, data: Partial<{ name: string; timezone: string; industry: string; settings: Record<string, any> }>) {
+  const { settings: newSettings, ...rest } = data;
+  const updateData: Record<string, any> = { ...rest, updatedAt: new Date() };
+  if (newSettings) {
+    const existing = await db.select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, id)).limit(1);
+    updateData.settings = { ...(existing[0]?.settings ?? {}), ...newSettings };
+  }
+  await db.update(tenants).set(updateData).where(eq(tenants.id, id));
 }
 
 export async function getSubscriptionByTenantId(db: Db, tenantId: number) {
@@ -81,6 +87,27 @@ export async function getAllPlans(db: Db) {
   return db.select().from(plans).orderBy(plans.priceMonthly);
 }
 
+export async function getPlanForTenant(db: Db, tenantId: number) {
+  const sub = await getSubscriptionByTenantId(db, tenantId);
+  if (!sub?.planId) return null;
+  const result = await db.select().from(plans).where(eq(plans.id, sub.planId)).limit(1);
+  return result[0] ?? null;
+}
+
+export async function getTenantPlanLimits(db: Db, tenantId: number) {
+  const plan = await getPlanForTenant(db, tenantId);
+  if (!plan) return { maxAutomations: 0, maxMessages: 0, maxSeats: 1, planSlug: "free", planName: "No Plan", hasAiRewrite: false };
+  const isFullPlan = plan.slug === "rebooked" || plan.maxAutomations >= 9999;
+  return {
+    maxAutomations: plan.maxAutomations,
+    maxMessages: plan.maxMessages,
+    maxSeats: plan.maxSeats,
+    planSlug: plan.slug,
+    planName: plan.name,
+    hasAiRewrite: isFullPlan,
+  };
+}
+
 export async function getPhoneNumbersByTenantId(db: Db, tenantId: number) {
   return db
     .select()
@@ -108,4 +135,16 @@ export async function setDefaultPhoneNumber(db: Db, tenantId: number, id: number
 export async function setInboundPhoneNumber(db: Db, tenantId: number, id: number) {
   await db.update(phoneNumbers).set({ isInbound: false }).where(and(eq(phoneNumbers.tenantId, tenantId), isNull(phoneNumbers.deletedAt)));
   await db.update(phoneNumbers).set({ isInbound: true }).where(and(eq(phoneNumbers.id, id), eq(phoneNumbers.tenantId, tenantId), isNull(phoneNumbers.deletedAt)));
+}
+
+export async function getSettings(db: Db, tenantId: number): Promise<Record<string, any>> {
+  const tenant = await getTenantById(db, tenantId);
+  return (tenant?.settings as Record<string, any>) ?? {};
+}
+
+export async function updateFeatureConfig(db: Db, tenantId: number, key: string, config: Record<string, any>) {
+  const current = await getSettings(db, tenantId);
+  const merged = { ...current, [key]: config };
+  await db.update(tenants).set({ settings: merged, updatedAt: new Date() }).where(eq(tenants.id, tenantId));
+  return merged;
 }

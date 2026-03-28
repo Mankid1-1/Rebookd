@@ -20,7 +20,7 @@ import {
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
 
 interface UserProfile {

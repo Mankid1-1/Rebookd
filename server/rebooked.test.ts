@@ -76,7 +76,7 @@ vi.mock("./_core/llm", () => ({
   }),
 }));
 
-vi.mock("./services/eventBus", () => ({
+vi.mock("./services/event-bus.service", () => ({
   emitEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -91,15 +91,24 @@ function makeCtx(overrides: Partial<TrpcContext> = {}): TrpcContext {
       name: "Test User",
       loginMethod: "manus",
       role: "user",
+      emailVerifiedAt: new Date(),
+      passwordHash: "",
+      tenantId: 1,
+      active: true,
+      accountType: "business" as const,
+      tenantRole: "owner" as const,
+      stripeCustomerId: "",
       createdAt: new Date(),
       updatedAt: new Date(),
       lastSignedIn: new Date(),
+      skillLevel: "basic" as const,
+      skillLevelSetAt: null,
     },
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
     res: {
       clearCookie: vi.fn(),
     } as unknown as TrpcContext["res"],
-    db: makeMockDb(),
+    db: makeMockDb() as any,
     ...overrides,
   };
 }
@@ -113,9 +122,18 @@ function makeAdminCtx(): TrpcContext {
       name: "Admin User",
       loginMethod: "manus",
       role: "admin",
+      emailVerifiedAt: new Date(),
+      passwordHash: "",
+      tenantId: 1,
+      active: true,
+      accountType: "business" as const,
+      tenantRole: "owner" as const,
+      stripeCustomerId: "",
       createdAt: new Date(),
       updatedAt: new Date(),
       lastSignedIn: new Date(),
+      skillLevel: "basic" as const,
+      skillLevelSetAt: null,
     },
   });
 }

@@ -1,4 +1,4 @@
-import DashboardLayout from "@/components/DashboardLayout";
+import DashboardLayout from "@/components/layout/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,7 +43,7 @@ export default function SmartScheduling() {
 
   useEffect(() => {
     if (settings?.smartSchedulingConfig) {
-      setConfig(settings.smartSchedulingConfig);
+      setConfig(settings.smartSchedulingConfig as any);
     }
   }, [settings]);
 

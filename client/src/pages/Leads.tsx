@@ -1,6 +1,7 @@
-import DashboardLayout from "@/components/DashboardLayout";
+import DashboardLayout from "@/components/layout/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useState, useEffect } from "react";
+import { useLocale } from "@/contexts/LocaleContext";
 import { AddLeadDialog } from "@/components/leads/AddLeadDialog";
 import { LeadsFilter } from "@/components/leads/LeadsFilter";
 import { LeadsTable } from "@/components/leads/LeadsTable";
@@ -25,6 +26,7 @@ import {
 } from "lucide-react";
 
 export default function Leads() {
+  const { t } = useLocale();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -48,7 +50,7 @@ export default function Leads() {
   });
 
   const { data: dashData } = trpc.analytics.dashboard.useQuery(undefined, { retry: false });
-  const statusCounts = (dashData?.statusBreakdown ?? []).reduce(
+  const statusCounts: Record<string, number> = (dashData?.statusBreakdown ?? []).reduce(
     (acc: Record<string, number>, s: any) => ({ ...acc, [s.status]: s.count }),
     {} as Record<string, number>
   );
@@ -61,7 +63,7 @@ export default function Leads() {
     switch (action) {
       case "add-lead":
         // Open add lead dialog
-        document.querySelector('[data-testid="add-lead-button"]')?.click();
+        (document.querySelector('[data-testid="add-lead-button"]') as HTMLElement)?.click();
         break;
       case "send-message":
         // Navigate to compose message
@@ -81,7 +83,7 @@ export default function Leads() {
         break;
       case "search-leads":
         // Focus search input
-        document.querySelector('[data-testid="search-input"]')?.focus();
+        (document.querySelector('[data-testid="search-input"]') as HTMLElement)?.focus();
         break;
     }
   };
@@ -102,7 +104,7 @@ export default function Leads() {
           <div className="space-y-1">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                Leads
+                {t('sidebar.leads')}
               </h1>
               <HelpTooltip 
                 content="Manage all your potential customers and track their journey through your sales pipeline"
@@ -120,7 +122,7 @@ export default function Leads() {
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm">
               <Download className="h-4 w-4 mr-2" />
-              Export
+              {t('common.export')}
             </Button>
             <AddLeadDialog />
           </div>
@@ -216,9 +218,11 @@ export default function Leads() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <LeadsFilter 
-                  value={statusFilter} 
-                  onChange={setStatusFilter} 
+                <LeadsFilter
+                  search=""
+                  onSearchChange={() => {}}
+                  statusFilter={statusFilter}
+                  onStatusFilterChange={setStatusFilter}
                   statusCounts={statusCounts}
                 />
                 {(search || statusFilter !== "all") && (
@@ -243,7 +247,7 @@ export default function Leads() {
         <LeadsTable
           leads={leads}
           isLoading={isLoading}
-          onAddClick={() => document.querySelector('[data-testid="add-lead-button"]')?.click()}
+          onAddClick={() => (document.querySelector('[data-testid="add-lead-button"]') as HTMLElement)?.click()}
           isFiltered={!!(search || statusFilter !== "all")}
           onClearFilters={() => {
             setSearch("");
@@ -254,11 +258,10 @@ export default function Leads() {
         {/* Pagination */}
         {totalPages > 1 && (
           <LeadsPagination
-            currentPage={page}
+            page={page}
             totalPages={totalPages}
             onPageChange={setPage}
             total={total}
-            limit={20}
           />
         )}
 

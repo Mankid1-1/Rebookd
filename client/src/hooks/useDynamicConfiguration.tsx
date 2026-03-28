@@ -36,21 +36,13 @@ export function useDynamicStatuses() {
       { value: "lost", label: "Lost", color: "bg-red-500", order: 5, enabled: true },
     ];
     
-    // Advanced users get more status options
-    if (context.currentComplexity === 'advanced' || context.currentComplexity === 'expert') {
-      baseStatuses.push(
-        { value: "unsubscribed", label: "Unsubscribed", color: "bg-gray-500", order: 6, enabled: true },
-        { value: "followup_scheduled", label: "Follow-up Scheduled", color: "bg-orange-500", order: 7, enabled: true }
-      );
-    }
-    
-    // Experts get custom status creation capability
-    if (context.currentComplexity === 'expert') {
-      baseStatuses.push(
-        { value: "custom", label: "Custom Status", color: "bg-indigo-500", order: 8, enabled: true }
-      );
-    }
-    
+    // All statuses available at every skill level
+    baseStatuses.push(
+      { value: "unsubscribed", label: "Unsubscribed", color: "bg-gray-500", order: 6, enabled: true },
+      { value: "followup_scheduled", label: "Follow-up Scheduled", color: "bg-orange-500", order: 7, enabled: true },
+      { value: "custom", label: "Custom Status", color: "bg-indigo-500", order: 8, enabled: true }
+    );
+
     return baseStatuses;
   }, [tenantConfig, context.currentComplexity]);
 }
@@ -84,47 +76,39 @@ export function useDynamicAutomationNodes() {
       }
     ];
     
-    // Add nodes based on user skill level
-    if (context.userSkill.level !== 'beginner') {
-      baseNodes.push(
-        {
-          type: 'trigger',
-          name: 'No-Show',
-          description: 'Trigger when an appointment is missed',
-          icon: <Calendar className="h-4 w-4" />,
-          category: 'Triggers',
-          config: { gracePeriod: 15, notifyStaff: true },
-          requiredSkill: 'intermediate'
-        }
-      );
-    }
-    
-    // Add advanced actions for skilled users
-    if (context.userSkill.level === 'advanced' || context.userSkill.level === 'expert') {
-      baseNodes.push(
-        {
-          type: 'action',
-          name: 'Create Task',
-          description: 'Create follow-up task for staff',
-          icon: <CheckCircle className="h-4 w-4" />,
-          category: 'Actions',
-          config: { assignee: '', priority: 'medium', dueInHours: 24 },
-          requiredSkill: 'advanced'
-        },
-        {
-          type: 'action',
-          name: 'Update Lead',
-          description: 'Update lead status or information',
-          icon: <Users className="h-4 w-4" />,
-          category: 'Actions',
-          config: { field: '', value: '' },
-          requiredSkill: 'advanced'
-        }
-      );
-    }
-    
+    // All nodes available at every skill level
+    baseNodes.push(
+      {
+        type: 'trigger',
+        name: 'No-Show',
+        description: 'Trigger when an appointment is missed',
+        icon: <Calendar className="h-4 w-4" />,
+        category: 'Triggers',
+        config: { gracePeriod: 15, notifyStaff: true },
+        requiredSkill: 'intermediate'
+      },
+      {
+        type: 'action',
+        name: 'Create Task',
+        description: 'Create follow-up task for staff',
+        icon: <CheckCircle className="h-4 w-4" />,
+        category: 'Actions',
+        config: { assignee: '', priority: 'medium', dueInHours: 24 },
+        requiredSkill: 'advanced'
+      },
+      {
+        type: 'action',
+        name: 'Update Lead',
+        description: 'Update lead status or information',
+        icon: <Users className="h-4 w-4" />,
+        category: 'Actions',
+        config: { field: '', value: '' },
+        requiredSkill: 'advanced'
+      }
+    );
+
     // Add integration nodes based on available integrations
-    if (availableIntegrations?.length > 0 && context.userSkill.level === 'expert') {
+    if (availableIntegrations?.length > 0) {
       availableIntegrations.forEach(integration => {
         baseNodes.push({
           type: 'integration',
@@ -137,14 +121,9 @@ export function useDynamicAutomationNodes() {
         });
       });
     }
-    
-    // Filter nodes based on user skill level
-    return baseNodes.filter(node => {
-      const skillLevels = ['beginner', 'intermediate', 'advanced', 'expert'];
-      const userSkillIndex = skillLevels.indexOf(context.userSkill.level);
-      const nodeSkillIndex = skillLevels.indexOf(node.requiredSkill);
-      return userSkillIndex >= nodeSkillIndex;
-    });
+
+    // All nodes available regardless of skill level
+    return baseNodes;
   }, [userPermissions, availableIntegrations, context.userSkill.level]);
 }
 
@@ -191,8 +170,8 @@ export function useDynamicQuickActions() {
       });
     }
     
-    // Campaign actions for advanced users
-    if (context.userSkill.level !== 'beginner' && userPermissions?.canCreateCampaigns) {
+    // All actions available at every skill level
+    if (userPermissions?.canCreateCampaigns) {
       actions.push({
         id: "send-campaign",
         title: "Send Campaign",
@@ -202,20 +181,16 @@ export function useDynamicQuickActions() {
         shortcut: "E"
       });
     }
-    
-    // Analytics for users who have explored it
-    if (context.userSkill.experience.featureUsage['analytics'] > 0) {
-      actions.push({
-        id: "view-analytics",
-        title: "Analytics",
-        description: "View performance metrics and insights",
-        icon: <BarChart3 className="h-5 w-5" />,
-        action: () => onAction("view-analytics")
-      });
-    }
-    
-    // Automation for expert users
-    if (context.userSkill.level === 'expert' && userPermissions?.canCreateAutomations) {
+
+    actions.push({
+      id: "view-analytics",
+      title: "Analytics",
+      description: "View performance metrics and insights",
+      icon: <BarChart3 className="h-5 w-5" />,
+      action: () => onAction("view-analytics")
+    });
+
+    if (userPermissions?.canCreateAutomations) {
       actions.push({
         id: "create-automation",
         title: "Create Automation",
@@ -254,21 +229,13 @@ export function useDynamicDashboardMetrics() {
       );
     }
     
-    // Advanced metrics for experienced users
-    if (context.userSkill.experience.totalSessions > 10) {
-      metrics.push(
-        { id: 'responseTime', title: 'Avg Response Time', icon: <Clock />, enabled: true },
-        { id: 'conversionRate', title: 'Conversion Rate', icon: <TrendingUp />, enabled: true }
-      );
-    }
-    
-    // Expert metrics
-    if (context.userSkill.level === 'expert') {
-      metrics.push(
-        { id: 'customerLifetimeValue', title: 'Customer LTV', icon: <DollarSign />, enabled: true },
-        { id: 'campaignROI', title: 'Campaign ROI', icon: <BarChart3 />, enabled: true }
-      );
-    }
+    // All metrics available at every skill level
+    metrics.push(
+      { id: 'responseTime', title: 'Avg Response Time', icon: <Clock />, enabled: true },
+      { id: 'conversionRate', title: 'Conversion Rate', icon: <TrendingUp />, enabled: true },
+      { id: 'customerLifetimeValue', title: 'Customer LTV', icon: <DollarSign />, enabled: true },
+      { id: 'campaignROI', title: 'Campaign ROI', icon: <BarChart3 />, enabled: true }
+    );
     
     return metrics.filter(metric => metric.enabled);
   }, [user, tenantConfig, context]);
@@ -318,18 +285,18 @@ export function useDynamicFeatureAvailability() {
       messaging: userPermissions?.canMessage || false,
       leads: userPermissions?.canViewLeads || false,
       
-      // Progressive features based on skill
-      analytics: context.userSkill.experience.featureUsage['dashboard'] > 10,
-      campaigns: context.userSkill.level !== 'beginner' && userPermissions?.canCreateCampaigns,
-      automation: context.userSkill.level === 'expert' && userPermissions?.canCreateAutomations,
+      // All features available regardless of skill level
+      analytics: true,
+      campaigns: userPermissions?.canCreateCampaigns || false,
+      automation: userPermissions?.canCreateAutomations || false,
       
       // Business rule features
       revenue: user?.role === 'admin' || user?.role === 'manager',
       userManagement: user?.role === 'admin',
       
       // Feature flag controlled features
-      betaFeatures: featureFlags?.enableBetaFeatures && context.userSkill.level === 'expert',
-      advancedReporting: featureFlags?.enableAdvancedReporting && context.userSkill.behavior.efficiencyScore > 60
+      betaFeatures: featureFlags?.enableBetaFeatures || false,
+      advancedReporting: featureFlags?.enableAdvancedReporting || false
     };
     
     return features;

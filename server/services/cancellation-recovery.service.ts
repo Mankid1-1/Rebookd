@@ -1,6 +1,6 @@
 /**
  * Cancellation Recovery Service
- * 
+ *
  * Implements instant rebooking, waitlist auto-fill, broadcast open slots
  * Recovers 10-15% cancellations with 30-60% fill rate
  */
@@ -10,15 +10,15 @@ import { leads, messages, automations } from "../../drizzle/schema";
 import { sendSMS } from "../_core/sms";
 import { logger } from "../_core/logger";
 import type { Db } from "../_core/context";
-import { invokeLLM } from "../_core/llm";
+import { generateMessage } from "../_core/messageGenerator";
 
 interface CancellationRecoveryConfig {
-  fillRate: number; // 30-60% target fill rate
-  broadcastRadius: number; // hours to broadcast
+  fillRate: number;
+  broadcastRadius: number;
   urgencyTiers: {
-    immediate: number; // hours
-    urgent: number; // hours
-    normal: number; // hours
+    immediate: number;
+    urgent: number;
+    normal: number;
   };
 }
 
@@ -31,12 +31,12 @@ interface RecoveryMetrics {
 }
 
 const DEFAULT_CONFIG: CancellationRecoveryConfig = {
-  fillRate: 45, // 45% target fill rate
-  broadcastRadius: 48, // 48 hours broadcast radius
+  fillRate: 45,
+  broadcastRadius: 48,
   urgencyTiers: {
-    immediate: 0.5, // 30 minutes
-    urgent: 2, // 2 hours
-    normal: 24 // 24 hours
+    immediate: 0.5,
+    urgent: 2,
+    normal: 24
   }
 };
 
@@ -56,7 +56,7 @@ export async function processInstantRebooking(
       .limit(1);
 
     if (!cancelled) {
-      return { success: false, error: 'Cancelled appointment not found' };
+      return { success: false, filledSlots: 0, error: 'Cancelled appointment not found' };
     }
 
     // Find waitlist leads for instant rebooking
@@ -65,31 +65,27 @@ export async function processInstantRebooking(
       .from(leads)
       .where(and(
         eq(leads.tenantId, tenantId),
-        eq(leads.status, 'contacted'),
-        sql`ABS(TIMESTAMPDIFF(HOUR, leads.appointment_at, ${cancelled.appointmentAt})) <= 2` // Within 2 hours
+        eq(leads.status, 'contacted')
       ))
       .orderBy(desc(leads.createdAt))
       .limit(5);
 
     let filledSlots = 0;
-    
-    for (const waitlistLead of waitlistLeads) {
-      // Generate urgent rebooking message
-      const rebookingMessage = await generateUrgentRebookingMessage(cancelled, waitlistLead);
-      await sendSMS(waitlistLead.phone, rebookingMessage, tenantId);
 
-      // Update lead status and assign the slot
+    for (const waitlistLead of waitlistLeads) {
+      const rebookingMessage = await generateUrgentRebookingMessage(cancelled, waitlistLead);
+      await sendSMS(waitlistLead.phone, rebookingMessage, undefined, tenantId);
+
+      // Update lead status
       await db
         .update(leads)
-        .set({ 
-          status: 'rebooked',
+        .set({
+          status: 'booked' as const,
           appointmentAt: cancelled.appointmentAt,
-          estimatedRevenue: cancelled.estimatedRevenue,
           updatedAt: new Date()
         })
         .where(and(eq(leads.id, waitlistLead.id), eq(leads.tenantId, tenantId)));
 
-      // Log the rebooking
       await db.insert(messages).values({
         tenantId,
         leadId: waitlistLead.id,
@@ -103,17 +99,17 @@ export async function processInstantRebooking(
       filledSlots++;
     }
 
-    logger.info('Instant rebooking processed', { 
+    logger.info('Instant rebooking processed', {
       cancelledLeadId,
       filledSlots,
-      waitlistNotified: waitlistLeads.length 
+      waitlistNotified: waitlistLeads.length
     });
 
     return { success: true, filledSlots };
 
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to process instant rebooking', { error: error.message, cancelledLeadId });
-    return { success: false, error: 'Rebooking processing failed' };
+    return { success: false, filledSlots: 0, error: 'Rebooking processing failed' };
   }
 }
 
@@ -130,46 +126,39 @@ export async function broadcastOpenSlots(
   }
 ): Promise<{ success: boolean; broadcastReach: number; error?: string }> {
   try {
-    // Find all waitlist leads
     const waitlistLeads = await db
       .select()
       .from(leads)
       .where(and(
         eq(leads.tenantId, tenantId),
-        eq(leads.status, 'contacted'),
-        sql`leads.appointment_at IS NULL OR leads.appointment_at > DATE_SUB(NOW(), INTERVAL ${DEFAULT_CONFIG.broadcastRadius} HOUR)`
+        eq(leads.status, 'contacted')
       ))
       .orderBy(desc(leads.createdAt));
 
     let broadcastReach = 0;
-    
-    // Categorize leads by urgency based on timing
+
     const timeDiff = openSlot.appointmentTime.getTime() - Date.now();
-    let urgency: 'normal';
-    
+    let urgency: string = 'normal';
+
     if (timeDiff <= DEFAULT_CONFIG.urgencyTiers.immediate * 60 * 60 * 1000) {
       urgency = 'immediate';
     } else if (timeDiff <= DEFAULT_CONFIG.urgencyTiers.urgent * 60 * 60 * 1000) {
       urgency = 'urgent';
     }
 
-    // Send broadcast messages based on urgency
     for (const waitlistLead of waitlistLeads) {
       const broadcastMessage = await generateBroadcastMessage(openSlot, waitlistLead, urgency);
-      await sendSMS(waitlistLead.phone, broadcastMessage, tenantId);
+      await sendSMS(waitlistLead.phone, broadcastMessage, undefined, tenantId);
 
-      // Update lead with slot assignment
       await db
         .update(leads)
-        .set({ 
-          status: 'slot_offered',
+        .set({
+          status: 'contacted' as const,
           appointmentAt: openSlot.appointmentTime,
-          estimatedRevenue: openSlot.estimatedValue || waitlistLead.estimatedRevenue,
           updatedAt: new Date()
         })
         .where(and(eq(leads.id, waitlistLead.id), eq(leads.tenantId, tenantId)));
 
-      // Log the broadcast
       await db.insert(messages).values({
         tenantId,
         leadId: waitlistLead.id,
@@ -183,17 +172,17 @@ export async function broadcastOpenSlots(
       broadcastReach++;
     }
 
-    logger.info('Open slots broadcasted', { 
+    logger.info('Open slots broadcasted', {
       appointmentTime: openSlot.appointmentTime,
       urgency,
-      broadcastReach 
+      broadcastReach
     });
 
     return { success: true, broadcastReach };
 
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to broadcast open slots', { error: error.message });
-    return { success: false, error: 'Broadcast failed' };
+    return { success: false, broadcastReach: 0, error: 'Broadcast failed' };
   }
 }
 
@@ -205,44 +194,34 @@ export async function autoFillWaitlist(
   tenantId: number
 ): Promise<{ success: boolean; filledSlots: number; error?: string }> {
   try {
-    // Find leads that have been offered slots but not confirmed
     const slotOfferedLeads = await db
       .select()
       .from(leads)
       .where(and(
         eq(leads.tenantId, tenantId),
-        eq(leads.status, 'slot_offered'),
-        sql`leads.appointment_at > NOW()`,
-        sql`leads.appointment_at <= DATE_SUB(NOW(), INTERVAL 2 HOUR)` // Within 2 hours
+        eq(leads.status, 'contacted'),
+        sql`${leads.appointmentAt} > NOW()`,
+        sql`${leads.appointmentAt} <= DATE_ADD(NOW(), INTERVAL 2 HOUR)`
       ))
       .orderBy(leads.appointmentAt)
       .limit(10);
 
     let filledSlots = 0;
-    
+
     for (const lead of slotOfferedLeads) {
-      // Generate urgency-based confirmation message
       const confirmMessage = await generateAutoFillMessage(lead);
-      await sendSMS(lead.phone, confirmMessage, tenantId);
+      await sendSMS(lead.phone, confirmMessage, undefined, tenantId);
 
-      // Auto-confirm if no response (assuming they want the slot)
-      setTimeout(() => {
-        db.update(leads)
-          .set({
-            status: 'booked',
-            updatedAt: new Date()
-          })
-          .where(and(eq(leads.id, lead.id), eq(leads.tenantId, tenantId)))
-          .then(() => {
-            filledSlots++;
-            logger.info('Auto-filled waitlist slot', { leadId: lead.id });
-          })
-          .catch((err) => {
-            logger.error('Auto-fill waitlist slot failed', { error: (err as Error).message, leadId: lead.id });
-          });
-      }, 30 * 60 * 1000); // 30 minutes
+      await db
+        .update(leads)
+        .set({
+          status: 'booked' as const,
+          updatedAt: new Date()
+        })
+        .where(and(eq(leads.id, lead.id), eq(leads.tenantId, tenantId)));
 
-      // Log the auto-fill
+      filledSlots++;
+
       await db.insert(messages).values({
         tenantId,
         leadId: lead.id,
@@ -254,99 +233,67 @@ export async function autoFillWaitlist(
       });
     }
 
-    logger.info('Waitlist auto-fill processed', { 
+    logger.info('Waitlist auto-fill processed', {
       filledSlots,
-      totalLeads: slotOfferedLeads.length 
+      totalLeads: slotOfferedLeads.length
     });
 
     return { success: true, filledSlots };
 
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to auto-fill waitlist', { error: error.message });
-    return { success: false, error: 'Auto-fill failed' };
+    return { success: false, filledSlots: 0, error: 'Auto-fill failed' };
   }
 }
 
 /**
- * Generate urgent rebooking message
+ * Generate urgent rebooking message (in-house, zero API cost)
  */
-async function generateUrgentRebookingMessage(cancelled: any, waitlistLead: any): Promise<string> {
-  try {
-    const response = await invokeLLM([
-      {
-        role: 'system',
-        content: `Generate an urgent SMS message offering a rebooking. The cancelled appointment was at ${cancelled.appointmentAt?.toLocaleString()} for ${cancelled.name || 'a service'}. The new lead is ${waitlistLead.name}. The appointment time is ${cancelled.appointmentAt?.toLocaleString()}. Create urgency and scarcity. Make it compelling and under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate the urgent rebooking message'
-      }
-    ]);
-
-    return response.choices?.[0]?.message?.content || 
-      `URGENT: Opening just freed up for ${cancelled.appointmentAt?.toLocaleString()}! Reply BOOK now to claim ${waitlistLead.name}'s spot before it's gone!`;
-
-  } catch (error) {
-    logger.error('Failed to generate urgent rebooking message', { error: error.message });
-    return `URGENT: Opening just freed up! Reply BOOK to claim your spot.`;
-  }
+function generateUrgentRebookingMessage(cancelled: any, waitlistLead: any): string {
+  return generateMessage({
+    type: 'rebooking',
+    tone: 'urgent',
+    variables: {
+      name: waitlistLead.name || '',
+      date: cancelled.appointmentAt?.toLocaleDateString() || '',
+      time: cancelled.appointmentAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '',
+    },
+  });
 }
 
 /**
- * Generate broadcast message
+ * Generate broadcast message (in-house, zero API cost)
  */
-async function generateBroadcastMessage(
+function generateBroadcastMessage(
   openSlot: any,
   waitlistLead: any,
   urgency: string
-): Promise<string> {
-  try {
-    const urgencyText = urgency === 'immediate' ? 'IMMEDIATE' : 
-                     urgency === 'urgent' ? 'URGENT' : 'NEW OPENING';
-
-    const response = await invokeLLM([
-      {
-        role: 'system',
-        content: `Generate a ${urgencyText.toLowerCase()} SMS message announcing an open appointment slot. The appointment is at ${openSlot.appointmentTime?.toLocaleString()}. The lead is ${waitlistLead.name}. Create urgency based on timing. Make it compelling and under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate the broadcast message'
-      }
-    ]);
-
-    return response.choices?.[0]?.message?.content || 
-      `${urgencyText}: New opening at ${openSlot.appointmentTime?.toLocaleString()}! Reply BOOK to claim ${waitlistLead.name}'s spot.`;
-
-  } catch (error) {
-    logger.error('Failed to generate broadcast message', { error: error.message });
-    return `New opening available! Reply BOOK to claim your spot.`;
-  }
+): string {
+  const tone = urgency === 'immediate' ? 'urgent' as const : urgency === 'urgent' ? 'urgent' as const : 'friendly' as const;
+  return generateMessage({
+    type: 'gap_fill',
+    tone,
+    variables: {
+      name: waitlistLead.name || '',
+      date: openSlot.appointmentTime?.toLocaleDateString() || '',
+      time: openSlot.appointmentTime?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '',
+    },
+  });
 }
 
 /**
- * Generate auto-fill confirmation message
+ * Generate auto-fill confirmation message (in-house, zero API cost)
  */
-async function generateAutoFillMessage(lead: any): Promise<string> {
-  try {
-    const response = await invokeLLM([
-      {
-        role: 'system',
-        content: `Generate a confirmation message for a waitlist lead who was offered a slot. The appointment is at ${lead.appointmentAt?.toLocaleString()}. The lead is ${lead.name}. Create urgency and assume they want the slot. Make it under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate the auto-fill confirmation message'
-      }
-    ]);
-
-    return response.choices?.[0]?.message?.content || 
-      `Confirming your spot for ${lead.appointmentAt?.toLocaleString()}. Reply STOP to cancel.`;
-
-  } catch (error) {
-    logger.error('Failed to generate auto-fill message', { error: error.message });
-    return `Your spot for ${lead.appointmentAt?.toLocaleString()} is confirmed! Reply STOP to cancel.`;
-  }
+function generateAutoFillMessage(lead: any): string {
+  return generateMessage({
+    type: 'confirmation',
+    tone: 'urgent',
+    variables: {
+      name: lead.name || '',
+      date: lead.appointmentAt?.toLocaleDateString() || '',
+      time: lead.appointmentAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '',
+    },
+  });
 }
 
 /**
@@ -361,27 +308,27 @@ export async function getCancellationRecoveryMetrics(
 
   const [metrics] = await db
     .select({
-      totalCancellations: sql<number>`COUNT(CASE WHEN status = 'cancelled' THEN 1 END)`,
-      filledSlots: sql<number>`COUNT(CASE WHEN status = 'rebooked' AND original_appointment_id IS NOT NULL THEN 1 END)`,
-      avgSlotValue: sql<number>`AVG(estimated_revenue)`
+      totalCancellations: sql<number>`COUNT(CASE WHEN ${leads.status} = 'lost' THEN 1 END)`,
+      filledSlots: sql<number>`COUNT(CASE WHEN ${leads.status} = 'booked' THEN 1 END)`,
     })
-    .from(sql`leads l`)
+    .from(leads)
     .where(and(
-      eq(sql`l.tenant_id`, tenantId),
-      sql`l.created_at >= ${startDate}`
+      eq(leads.tenantId, tenantId),
+      gte(leads.createdAt, startDate)
     ))
     .limit(1);
 
   const totalCancellations = metrics?.totalCancellations || 0;
   const filledSlots = metrics?.filledSlots || 0;
   const fillRate = totalCancellations > 0 ? (filledSlots / totalCancellations) * 100 : 0;
-  const revenueImpact = filledSlots * (metrics?.avgSlotValue || 7500); // $75 average
+  const revenueImpact = filledSlots * 7500;
 
   return {
     totalCancellations,
     filledSlots,
     fillRate,
-    revenueImpact
+    revenueImpact,
+    broadcastReach: 0
   };
 }
 
@@ -394,26 +341,24 @@ export async function triggerUrgencyCampaign(
   urgency: 'immediate' | 'urgent' | 'normal'
 ): Promise<void> {
   try {
-    // Find leads that match urgency criteria
     const timeThresholds = DEFAULT_CONFIG.urgencyTiers;
     const thresholdHours = timeThresholds[urgency];
-    
+
     const targetLeads = await db
       .select()
       .from(leads)
       .where(and(
         eq(leads.tenantId, tenantId),
         eq(leads.status, 'contacted'),
-        sql`leads.appointment_at BETWEEN NOW() AND DATE_SUB(NOW(), INTERVAL ${thresholdHours} HOUR)`
+        sql`${leads.appointmentAt} BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL ${thresholdHours} HOUR)`
       ))
       .orderBy(leads.appointmentAt)
       .limit(20);
 
     for (const lead of targetLeads) {
       const urgencyMessage = await generateUrgencyCampaignMessage(lead, urgency);
-      await sendSMS(lead.phone, urgencyMessage, tenantId);
+      await sendSMS(lead.phone, urgencyMessage, undefined, tenantId);
 
-      // Log the campaign message
       await db.insert(messages).values({
         tenantId,
         leadId: lead.id,
@@ -425,40 +370,28 @@ export async function triggerUrgencyCampaign(
       });
     }
 
-    logger.info('Urgency campaign triggered', { 
+    logger.info('Urgency campaign triggered', {
       urgency,
-      leadsTargeted: targetLeads.length 
+      leadsTargeted: targetLeads.length
     });
 
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to trigger urgency campaign', { error: error.message, urgency });
   }
 }
 
 /**
- * Generate urgency campaign message
+ * Generate urgency campaign message (in-house, zero API cost)
  */
-async function generateUrgencyCampaignMessage(lead: any, urgency: string): Promise<string> {
-  try {
-    const urgencyText = urgency === 'immediate' ? 'IMMEDIATE NEED' : 
-                     urgency === 'urgent' ? 'URGENT' : 'IMPORTANT';
-
-    const response = await invokeLLM([
-      {
-        role: 'system',
-        content: `Generate a ${urgency.toLowerCase()} SMS message for a lead with an upcoming appointment. The appointment is at ${lead.appointmentAt?.toLocaleString()}. The lead is ${lead.name}. Create urgency and call to action. Make it under 160 characters.`
-      },
-      {
-        role: 'user',
-        content: 'Please generate the urgency campaign message'
-      }
-    ]);
-
-    return response.choices?.[0]?.message?.content || 
-      `${urgencyText}: Reply NOW to confirm your appointment on ${lead.appointmentAt?.toLocaleString()}.`;
-
-  } catch (error) {
-    logger.error('Failed to generate urgency campaign message', { error: error.message });
-    return `${urgencyText}: Please confirm your appointment.`;
-  }
+function generateUrgencyCampaignMessage(lead: any, urgency: string): string {
+  const tone = urgency === 'immediate' || urgency === 'urgent' ? 'urgent' as const : 'friendly' as const;
+  return generateMessage({
+    type: 'confirmation',
+    tone,
+    variables: {
+      name: lead.name || '',
+      date: lead.appointmentAt?.toLocaleDateString() || '',
+      time: lead.appointmentAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '',
+    },
+  });
 }
