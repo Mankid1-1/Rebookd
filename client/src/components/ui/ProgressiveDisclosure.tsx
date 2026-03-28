@@ -137,14 +137,14 @@ const COMPLEXITY_LEVELS: Record<UIComplexity, ComplexityLevel> = {
   essential: {
     name: 'essential',
     displayName: 'Essential',
-    description: 'Only the most important features visible',
+    description: 'Simplified view — all features available with guided help',
     features: {
-      showAdvancedOptions: false,
-      showExperimentalFeatures: false,
-      showDeveloperTools: false,
-      showDetailedMetrics: false,
-      showCustomizationOptions: false,
-      showShortcuts: false,
+      showAdvancedOptions: true,
+      showExperimentalFeatures: true,
+      showDeveloperTools: true,
+      showDetailedMetrics: true,
+      showCustomizationOptions: true,
+      showShortcuts: true,
       showTooltips: true,
       showContextualHelp: true,
     },
@@ -158,11 +158,11 @@ const COMPLEXITY_LEVELS: Record<UIComplexity, ComplexityLevel> = {
   standard: {
     name: 'standard',
     displayName: 'Standard',
-    description: 'Balanced feature set for regular use',
+    description: 'Balanced view with all features accessible',
     features: {
-      showAdvancedOptions: false,
-      showExperimentalFeatures: false,
-      showDeveloperTools: false,
+      showAdvancedOptions: true,
+      showExperimentalFeatures: true,
+      showDeveloperTools: true,
       showDetailedMetrics: true,
       showCustomizationOptions: true,
       showShortcuts: true,
@@ -179,11 +179,11 @@ const COMPLEXITY_LEVELS: Record<UIComplexity, ComplexityLevel> = {
   advanced: {
     name: 'advanced',
     displayName: 'Advanced',
-    description: 'Most features including advanced options',
+    description: 'Full features with streamlined presentation',
     features: {
       showAdvancedOptions: true,
-      showExperimentalFeatures: false,
-      showDeveloperTools: false,
+      showExperimentalFeatures: true,
+      showDeveloperTools: true,
       showDetailedMetrics: true,
       showCustomizationOptions: true,
       showShortcuts: true,
@@ -200,7 +200,7 @@ const COMPLEXITY_LEVELS: Record<UIComplexity, ComplexityLevel> = {
   expert: {
     name: 'expert',
     displayName: 'Expert',
-    description: 'All features including experimental and developer tools',
+    description: 'All features with compact, power-user layout',
     features: {
       showAdvancedOptions: true,
       showExperimentalFeatures: true,

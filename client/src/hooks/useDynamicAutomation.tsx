@@ -55,51 +55,40 @@ export function useDynamicAutomationTemplates() {
       }
     ];
     
-    // Add intermediate templates based on user performance
-    if (context.userSkill.level !== 'beginner' && automationPerformance) {
-      const automationSuccessRate = automationPerformance.successRate || 0.5;
-      
-      if (automationSuccessRate > 0.4) {
-        baseTemplates.push(
-          {
-            key: "appointment_reminder_2h",
-            name: "2-Hour Reminder",
-            category: "appointment" as const,
-            icon: "Clock",
-            description: "Last-chance reminder 2 hours before appointment",
-            defaultMessage: "Hey {{name}}! Your appointment at {{business}} is in 2 hours ({{time}}).",
-            configFields: [
-              { key: "delayHours", label: "Send before appointment", type: "number" as const, unit: "hours", defaultValue: 2 },
-              { key: "message", label: "Message", type: "textarea" as const, defaultValue: "Hey {{name}}! Appointment in 2 hours at {{time}}." }
-            ],
-            planRequired: "starter" as const,
-            recommended: automationSuccessRate > 0.6,
-            requiredSkill: "intermediate" as const,
-            successRate: 0.75
-          },
-          {
-            key: "no_show_follow_up",
-            name: "No-Show Check-In",
-            category: "no_show" as const,
-            icon: "UserX",
-            description: "Sends caring follow-up when client misses appointment",
-            defaultMessage: "Hi {{name}}, we noticed you weren't able to make your appointment today. Everything okay?",
-            configFields: [
-              { key: "delayMinutes", label: "Send after no-show", type: "number" as const, unit: "minutes", defaultValue: 60 },
-              { key: "message", label: "Message", type: "textarea" as const, defaultValue: "Hi {{name}}, noticed you missed your appointment. Everything okay?" }
-            ],
-            planRequired: "starter" as const,
-            recommended: userMetrics?.noShowRate > 0.1,
-            requiredSkill: "intermediate" as const,
-            successRate: 0.60
-          }
-        );
-      }
-    }
-    
-    // Add advanced templates for skilled users
-    if (context.userSkill.level === 'advanced' || context.userSkill.level === 'expert') {
-      baseTemplates.push(
+    // All templates available at every skill level
+    baseTemplates.push(
+      {
+        key: "appointment_reminder_2h",
+        name: "2-Hour Reminder",
+        category: "appointment" as const,
+        icon: "Clock",
+        description: "Last-chance reminder 2 hours before appointment",
+        defaultMessage: "Hey {{name}}! Your appointment at {{business}} is in 2 hours ({{time}}).",
+        configFields: [
+          { key: "delayHours", label: "Send before appointment", type: "number" as const, unit: "hours", defaultValue: 2 },
+          { key: "message", label: "Message", type: "textarea" as const, defaultValue: "Hey {{name}}! Appointment in 2 hours at {{time}}." }
+        ],
+        planRequired: "starter" as const,
+        recommended: (automationPerformance?.successRate || 0.5) > 0.6,
+          requiredSkill: "intermediate" as const,
+          successRate: 0.75
+        },
+        {
+          key: "no_show_follow_up",
+          name: "No-Show Check-In",
+          category: "no_show" as const,
+          icon: "UserX",
+          description: "Sends caring follow-up when client misses appointment",
+          defaultMessage: "Hi {{name}}, we noticed you weren't able to make your appointment today. Everything okay?",
+          configFields: [
+            { key: "delayMinutes", label: "Send after no-show", type: "number" as const, unit: "minutes", defaultValue: 60 },
+            { key: "message", label: "Message", type: "textarea" as const, defaultValue: "Hi {{name}}, noticed you missed your appointment. Everything okay?" }
+          ],
+          planRequired: "starter" as const,
+          recommended: userMetrics?.noShowRate > 0.1,
+          requiredSkill: "intermediate" as const,
+          successRate: 0.60
+        },
         {
           key: "no_show_rebooking",
           name: "No-Show Rebook Offer",
@@ -131,13 +120,7 @@ export function useDynamicAutomationTemplates() {
           recommended: userMetrics?.cancellationRate > 0.05,
           requiredSkill: "advanced" as const,
           successRate: 0.55
-        }
-      );
-    }
-    
-    // Add expert templates with AI optimization
-    if (context.userSkill.level === 'expert') {
-      baseTemplates.push(
+        },
         {
           key: "ai_optimized_reminder",
           name: "AI-Optimized Reminder",
@@ -180,9 +163,8 @@ export function useDynamicAutomationTemplates() {
           requiredSkill: "expert" as const,
           successRate: 0.70
         }
-      );
-    }
-    
+    );
+
     // Adapt templates based on user's actual performance
     const adaptedTemplates = baseTemplates.map(template => {
       let adaptedTemplate = { ...template };
@@ -214,19 +196,8 @@ export function useDynamicAutomationTemplates() {
       return adaptedTemplate;
     });
     
-    // Filter templates based on user skill level and plan
-    return adaptedTemplates.filter(template => {
-      const skillLevels = ['beginner', 'intermediate', 'advanced', 'expert'];
-      const userSkillIndex = skillLevels.indexOf(context.userSkill.level);
-      const requiredSkillIndex = skillLevels.indexOf(template.requiredSkill);
-      
-      // Check skill level requirement
-      if (userSkillIndex < requiredSkillIndex) return false;
-      
-      // Check plan requirement (would check user's actual plan in real implementation)
-      // For now, assume all users have access based on skill level
-      return true;
-    });
+    // All templates available at every skill level
+    return adaptedTemplates;
   }, [userMetrics, automationPerformance, tenantConfig, context.userSkill.level]);
 }
 

@@ -113,40 +113,34 @@ export const getLeadsQuickActions = (
     }
   ];
 
-  // Add advanced actions for intermediate+ users
-  if (userSkill?.level !== 'beginner') {
-    baseActions.push({
+  // All actions available at every skill level
+  baseActions.push(
+    {
       id: "schedule-appointment",
       title: "Schedule Appointment",
       description: "Book appointment with lead",
       icon: <Calendar className="h-5 w-5" />,
       action: () => onAction("schedule-appointment"),
       shortcut: "A"
-    });
-  }
-
-  // Add expert actions for advanced users
-  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
-    baseActions.push(
-      {
-        id: "make-call",
-        title: "Make Call",
-        description: "Initiate phone call to lead",
-        icon: <Phone className="h-5 w-5" />,
-        action: () => onAction("make-call"),
-        shortcut: "C"
-      },
-      {
-        id: "import-leads",
-        title: "Import Leads",
-        description: "Bulk import leads from CSV file",
-        icon: <Download className="h-5 w-5" />,
-        action: () => onAction("import-leads"),
-        badge: "Bulk",
-        shortcut: "I"
-      }
-    );
-  }
+    },
+    {
+      id: "make-call",
+      title: "Make Call",
+      description: "Initiate phone call to lead",
+      icon: <Phone className="h-5 w-5" />,
+      action: () => onAction("make-call"),
+      shortcut: "C"
+    },
+    {
+      id: "import-leads",
+      title: "Import Leads",
+      description: "Bulk import leads from CSV file",
+      icon: <Download className="h-5 w-5" />,
+      action: () => onAction("import-leads"),
+      badge: "Bulk",
+      shortcut: "I"
+    }
+  );
 
   // Business-specific actions
   if (businessType?.includes('medical') || businessType?.includes('clinic')) {
@@ -193,29 +187,25 @@ export const getDashboardQuickActions = (
     }
   ];
 
-  // Add task management for intermediate+ users
-  if (userSkill?.level !== 'beginner') {
-    baseActions.push({
+  // All actions available at every skill level
+  baseActions.push(
+    {
       id: "today-tasks",
       title: "Today's Tasks",
       description: "View and complete today's follow-ups",
       icon: <Zap className="h-5 w-5" />,
       action: () => onAction("today-tasks"),
       badge: counts?.tasks && counts.tasks > 0 ? `${counts.tasks} Tasks` : undefined
-    });
-  }
-
-  // Add advanced actions for expert users
-  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
-    baseActions.push({
+    },
+    {
       id: "add-lead",
       title: "Add Lead",
       description: "Add a new lead to your system",
       icon: <Plus className="h-5 w-5" />,
       action: () => onAction("add-lead"),
       badge: mostUsed.includes("add-lead") ? "Frequent" : undefined
-    });
-  }
+    }
+  );
 
   // Business-specific actions
   if (businessType?.includes('medical') || businessType?.includes('clinic')) {
@@ -230,44 +220,40 @@ export const getDashboardQuickActions = (
     });
   }
 
-  // Add expert actions for advanced users
-  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
-    baseActions.push({
+  baseActions.push(
+    {
       id: "search-leads",
       title: "Advanced Search",
       description: "Find leads with advanced filters",
       icon: <Search className="h-5 w-5" />,
       action: () => onAction("search-leads"),
       shortcut: "S"
-    });
-    
-    baseActions.push({
+    },
+    {
       id: "send-campaign",
       title: "Send Campaign",
       description: "Launch SMS/email marketing campaign",
       icon: <Mail className="h-5 w-5" />,
       action: () => onAction("send-campaign"),
       shortcut: "E"
-    });
-    
-    baseActions.push({
+    },
+    {
       id: "run-automation",
       title: "Run Automation",
       description: "Trigger automated follow-up sequence",
       icon: <Zap className="h-5 w-5" />,
       action: () => onAction("run-automation"),
       badge: mostUsed.includes("run-automation") ? "Smart" : undefined
-    });
-    
-    baseActions.push({
+    },
+    {
       id: "view-analytics",
       title: "View Analytics",
       description: "Check performance metrics and reports",
       icon: <Filter className="h-5 w-5" />,
       action: () => onAction("view-analytics"),
       shortcut: "R"
-    });
-  }
+    }
+  );
 
   return baseActions;
 };

@@ -25,21 +25,13 @@ const getDynamicQuickReplies = (userSkill?: any, businessType?: string) => {
     "Hey {{name}}, just a friendly reminder about your upcoming appointment!",
   ];
 
-  // Add advanced replies for intermediate+ users
-  if (userSkill?.level !== 'beginner') {
-    baseReplies.push(
-      "Hi {{name}}, thanks for getting back to us! We'd love to help.",
-      "Hi {{name}}, following up on your inquiry. How can we assist you today?"
-    );
-  }
-
-  // Add expert replies for advanced users
-  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
-    baseReplies.push(
-      "Hi {{name}}, I noticed you haven't responded. Is there a better time to connect?",
-      "Hi {{name}}, we have a special offer available this week. Would you like to hear more?"
-    );
-  }
+  // All replies available at every skill level
+  baseReplies.push(
+    "Hi {{name}}, thanks for getting back to us! We'd love to help.",
+    "Hi {{name}}, following up on your inquiry. How can we assist you today?",
+    "Hi {{name}}, I noticed you haven't responded. Is there a better time to connect?",
+    "Hi {{name}}, we have a special offer available this week. Would you like to hear more?"
+  );
 
   // Business-specific replies
   if (businessType?.includes('medical') || businessType?.includes('clinic')) {

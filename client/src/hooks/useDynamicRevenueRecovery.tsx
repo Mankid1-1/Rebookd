@@ -83,14 +83,8 @@ export function useDynamicLeakageDetection() {
         }
       }
       
-      // Adjust based on user skill level
-      if (context.userSkill.level === 'expert') {
-        adaptedRecoveryActions.push("advanced_analytics", "custom_workflow", "ai_optimization");
-      } else if (context.userSkill.level === 'beginner') {
-        adaptedRecoveryActions = adaptedRecoveryActions.filter(action => 
-          !action.includes("advanced") && !action.includes("custom") && !action.includes("ai")
-        );
-      }
+      // All recovery actions available at every skill level
+      adaptedRecoveryActions.push("advanced_analytics", "custom_workflow", "ai_optimization");
       
       return {
         ...leakage,
@@ -209,29 +203,21 @@ export function useDynamicRecoveryStrategies() {
       }
     }
     
-    // Adapt strategies based on user skill level
-    if (context.userSkill.level === 'expert') {
-      strategies.push({
-        id: 'custom_recovery_workflows',
-        category: "automation" as const,
-        priority: "medium" as const,
-        title: "Custom Recovery Workflows",
-        description: "Build custom recovery workflows for specific business scenarios",
-        expectedImpact: 30,
-        implementationEffort: "high" as const,
-        requiredSkill: "expert" as const,
-        successRate: 0.75
-      });
-    }
-    
-    // Filter strategies based on user skill level and sort by priority
+    // All strategies available at every skill level
+    strategies.push({
+      id: 'custom_recovery_workflows',
+      category: "automation" as const,
+      priority: "medium" as const,
+      title: "Custom Recovery Workflows",
+      description: "Build custom recovery workflows for specific business scenarios",
+      expectedImpact: 30,
+      implementationEffort: "high" as const,
+      requiredSkill: "expert" as const,
+      successRate: 0.75
+    });
+
+    // Sort by priority (no skill-level filtering)
     return strategies
-      .filter(strategy => {
-        const skillLevels = ['beginner', 'intermediate', 'advanced', 'expert'];
-        const userSkillIndex = skillLevels.indexOf(context.userSkill.level);
-        const requiredSkillIndex = skillLevels.indexOf(strategy.requiredSkill);
-        return userSkillIndex >= requiredSkillIndex;
-      })
       .sort((a, b) => {
         const priorityOrder = { critical: 4, high: 3, medium: 2, low: 1 };
         return priorityOrder[b.priority] - priorityOrder[a.priority];

@@ -11,7 +11,7 @@ import { leads, messages, automations, tenants } from "../../drizzle/schema";
 import { sendSMS } from "../_core/sms";
 import { logger } from "../_core/logger";
 import type { Db } from "../_core/context";
-import { invokeLLM } from "../_core/llm";
+import { generateMessage } from "../_core/messageGenerator";
 import { encryptMessage, messageEncryption } from "../_core/message-encryption";
 
 interface LeadCaptureConfig {
@@ -208,22 +208,12 @@ async function triggerAIChatAutomation(
       return;
     }
 
-    // Generate AI response
-    const aiResponse = await invokeLLM({
-      messages: [
-        {
-          role: 'system',
-          content: `You are a helpful AI assistant for a business. Respond naturally to engage the customer and encourage booking. Be conversational and helpful. Keep responses under 160 characters.`
-        },
-        {
-          role: 'user',
-          content: `Customer inquired via web form. Engage them and encourage booking.`
-        }
-      ]
+    // Generate in-house response (zero API cost)
+    const aiMessage = generateMessage({
+      type: 'lead_capture',
+      tone: 'friendly',
+      variables: { name: '', business: '' },
     });
-
-    const aiMessage = (aiResponse.choices?.[0]?.message?.content as string) ||
-      "Thanks for your interest! How can I help you book your appointment today?";
 
     // Send AI response via SMS
     await sendSMS(phoneNumber, aiMessage, undefined, tenantId);

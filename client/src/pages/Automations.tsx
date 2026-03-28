@@ -1,17 +1,21 @@
-import DashboardLayout from "@/components/layout/DashboardLayout";
+import DashboardLayout from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import {
-  Zap, Clock, MessageSquare,
+  Bot, Zap, Settings2, ChevronDown, ChevronUp, Clock, MessageSquare,
   CalendarCheck, UserX, XCircle, RotateCcw, Bell, Star, AlertTriangle,
   ThumbsUp, Gift, RefreshCw, Info
 } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
-import { AutomationRow } from "@/components/automations/AutomationRow";
-import { ConfigureDialog } from "@/components/automations/ConfigureDialog";
-import type { AutomationCategory, AutomationKey, AutomationTemplate } from "@/components/automations/types";
 import { 
   useDynamicAutomationTemplates,
   useDynamicAutomationRecommendations,
@@ -20,14 +24,13 @@ import {
   useProgressiveDisclosureContext,
   trackFeatureUsage
 } from "@/hooks/useDynamicAutomation";
-import { useAuth } from "@/hooks/useAuth";
-import { useLocale } from "@/contexts/LocaleContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 // Dynamic automation catalogue based on user skill and business type
 const getDynamicAutomationCatalogue = (userSkill?: any, businessType?: string) => {
   const isDarkMode = document.documentElement.classList.contains('dark');
   
-  const baseTemplates: any[] = [
+  const baseTemplates = [
     {
       key: "appointment_reminder_24h",
       name: "24-Hour Reminder",
@@ -50,57 +53,49 @@ const getDynamicAutomationCatalogue = (userSkill?: any, businessType?: string) =
     }
   ];
 
-  // Add advanced automations for intermediate+ users
-  if (userSkill?.level !== 'beginner') {
-    baseTemplates.push(
-      {
-        key: "cancellation_rebooking",
-        name: "Cancellation Rebooking", 
-        description: "Offer rebooking when appointments are cancelled",
-        category: "cancellation" as const,
-        icon: <RotateCcw className="h-4 w-4" />,
-        recommended: true,
-        impact: "medium" as const,
-        setupComplexity: "medium" as const,
-      },
-      {
-        key: "post_appointment_feedback",
-        name: "Post-Appointment Feedback",
-        description: "Request feedback after appointments",
-        category: "follow_up" as const,
-        icon: <ThumbsUp className="h-4 w-4" />,
-        recommended: false,
-        impact: "low" as const,
-        setupComplexity: "low" as const,
-      }
-    );
-  }
-
-  // Add expert automations for advanced users
-  if (userSkill?.level === 'expert' || userSkill?.level === 'advanced') {
-    baseTemplates.push(
-      {
-        key: "win_back_90d",
-        name: "90-Day Win-Back",
-        description: "Re-engage clients after 90 days of inactivity",
-        category: "reactivation" as const,
-        icon: <Gift className="h-4 w-4" />,
-        recommended: false,
-        impact: "medium" as const,
-        setupComplexity: "high" as const,
-      },
-      {
-        key: "birthday_promo",
-        name: "Birthday Promotion",
-        description: "Send special offers on client birthdays",
-        category: "loyalty" as const,
-        icon: <Star className="h-4 w-4" />,
-        recommended: false,
-        impact: "low" as const,
-        setupComplexity: "medium" as const,
-      }
-    );
-  }
+  // All automation templates available at every skill level
+  baseTemplates.push(
+    {
+      key: "cancellation_rebooking",
+      name: "Cancellation Rebooking",
+      description: "Offer rebooking when appointments are cancelled",
+      category: "cancellation" as const,
+      icon: <RotateCcw className="h-4 w-4" />,
+      recommended: true,
+      impact: "medium" as const,
+      setupComplexity: "medium" as const,
+    },
+    {
+      key: "post_appointment_feedback",
+      name: "Post-Appointment Feedback",
+      description: "Request feedback after appointments",
+      category: "follow_up" as const,
+      icon: <ThumbsUp className="h-4 w-4" />,
+      recommended: false,
+      impact: "low" as const,
+      setupComplexity: "low" as const,
+    },
+    {
+      key: "win_back_90d",
+      name: "90-Day Win-Back",
+      description: "Re-engage clients after 90 days of inactivity",
+      category: "reactivation" as const,
+      icon: <Gift className="h-4 w-4" />,
+      recommended: false,
+      impact: "medium" as const,
+      setupComplexity: "high" as const,
+    },
+    {
+      key: "birthday_promo",
+      name: "Birthday Promotion",
+      description: "Send special offers on client birthdays",
+      category: "loyalty" as const,
+      icon: <Star className="h-4 w-4" />,
+      recommended: false,
+      impact: "low" as const,
+      setupComplexity: "medium" as const,
+    }
+  );
 
   // Business-specific automations
   if (businessType?.includes('medical') || businessType?.includes('clinic')) {
@@ -149,6 +144,42 @@ const getDynamicCategoryConfig = () => {
     scale: isDarkMode ? "bg-purple-500/20 text-purple-300 border-purple-500/30" : "bg-purple-500/15 text-purple-400 border-purple-500/30",
   };
 };
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type AutomationKey =
+  | "appointment_reminder_24h" | "appointment_reminder_2h" | "appointment_confirmation"
+  | "appointment_confirmation_chase"
+  | "no_show_follow_up" | "no_show_rebooking"
+  | "cancellation_same_day" | "cancellation_rebooking" | "cancellation_rebooking_48h" | "cancellation_rebooking_7d"
+  | "post_appointment_feedback" | "post_appointment_upsell" | "next_visit_prompt"
+  | "win_back_30d" | "win_back_90d" | "vip_winback_45d" | "vip_winback_90d"
+  | "new_lead_welcome" | "lead_follow_up_3d" | "lead_follow_up_7d" | "qualified_followup_1d" | "qualified_followup_3d" | "inbound_response_sla" | "delivery_failure_retry" | "waitlist_fill"
+  | "birthday_promo" | "loyalty_milestone";
+
+type AutomationCategory = "appointment" | "no_show" | "cancellation" | "follow_up" | "reactivation" | "welcome" | "loyalty";
+
+interface ConfigField {
+  key: string;
+  label: string;
+  type: "number" | "text" | "textarea" | "select";
+  placeholder?: string;
+  options?: { value: string; label: string }[];
+  unit?: string;
+  defaultValue: string | number;
+}
+
+interface AutomationTemplate {
+  key: AutomationKey;
+  name: string;
+  category: AutomationCategory;
+  icon: React.ElementType;
+  description: string;
+  defaultMessage: string;
+  configFields: ConfigField[];
+  planRequired: "starter" | "growth" | "scale";
+  recommended?: boolean;
+}
 
 // ─── Catalogue ────────────────────────────────────────────────────────────────
 
@@ -519,6 +550,51 @@ const CATALOGUE: AutomationTemplate[] = [
   },
 ];
 
+// ─── Config ───────────────────────────────────────────────────────────────────
+
+const CATEGORY_CONFIG: Record<AutomationCategory, { label: string; bg: string }> = {
+  appointment: { label: "Appointment", bg: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
+  no_show: { label: "No-Show", bg: "bg-red-500/15 text-red-300 border-red-500/30" },
+  cancellation: { label: "Cancellation", bg: "bg-orange-500/15 text-orange-300 border-orange-500/30" },
+  follow_up: { label: "Follow-Up", bg: "bg-blue-500/15 text-blue-300 border-blue-500/30" },
+  reactivation: { label: "Re-Engagement", bg: "bg-purple-500/15 text-purple-300 border-purple-500/30" },
+  welcome: { label: "Welcome", bg: "bg-yellow-500/15 text-yellow-300 border-yellow-500/30" },
+  loyalty: { label: "Loyalty", bg: "bg-pink-500/15 text-pink-300 border-pink-500/30" },
+};
+
+// ─── One-Click Safe Keys ──────────────────────────────────────────────────────
+// These automations use only standard variables ({{name}}, {{business}}, {{time}}, {{date}}, {{phone}})
+// and have sensible numeric defaults — safe to auto-configure with zero user input.
+const ONE_CLICK_SAFE_KEYS = new Set<AutomationKey>([
+  "appointment_reminder_24h", "appointment_reminder_2h", "appointment_confirmation",
+  "appointment_confirmation_chase",
+  "no_show_follow_up", "no_show_rebooking",
+  "cancellation_same_day", "cancellation_rebooking", "cancellation_rebooking_48h", "cancellation_rebooking_7d",
+  "waitlist_fill",
+  "new_lead_welcome", "lead_follow_up_3d", "lead_follow_up_7d",
+  "qualified_followup_1d", "qualified_followup_3d",
+  "inbound_response_sla", "delivery_failure_retry",
+  "next_visit_prompt",
+  "win_back_30d", "vip_winback_45d", "vip_winback_90d",
+]);
+
+function getDefaultConfig(template: AutomationTemplate): Record<string, string | number> {
+  const config: Record<string, string | number> = {};
+  template.configFields.forEach((f) => { config[f.key] = f.defaultValue; });
+  return config;
+}
+
+/** Returns only the timing/numeric config fields (not message textareas) */
+function getTimingFields(template: AutomationTemplate): ConfigField[] {
+  return template.configFields.filter(f => f.type === "number");
+}
+
+const PLAN_BADGE: Record<string, string> = {
+  starter: "bg-slate-500/20 text-slate-300 border-slate-500/30",
+  growth: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+  scale: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+};
+
 const CATEGORIES: Array<{ key: AutomationCategory | "all"; label: string }> = [
   { key: "all", label: "All" },
   { key: "appointment", label: "Appointments" },
@@ -530,10 +606,329 @@ const CATEGORIES: Array<{ key: AutomationCategory | "all"; label: string }> = [
   { key: "loyalty", label: "Loyalty" },
 ];
 
+// ─── Configure Dialog ─────────────────────────────────────────────────────────
+
+function ConfigureDialog({
+  template,
+  savedConfig,
+  open,
+  onClose,
+  onSave,
+}: {
+  template: AutomationTemplate;
+  savedConfig?: Record<string, string | number>;
+  open: boolean;
+  onClose: () => void;
+  onSave: (config: Record<string, string | number>) => void;
+}) {
+  const [config, setConfig] = useState<Record<string, string | number>>(() => {
+    const defaults: Record<string, string | number> = {};
+    template.configFields.forEach((f) => { defaults[f.key] = savedConfig?.[f.key] ?? f.defaultValue; });
+    return defaults;
+  });
+
+  const Icon = template.icon;
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-primary/10">
+              <Icon className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <DialogTitle className="text-base">{template.name}</DialogTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">{template.description}</p>
+            </div>
+          </div>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          {template.configFields.map((field) => (
+            <div key={field.key} className="space-y-1.5">
+              <Label className="text-xs font-medium">
+                {field.label}
+                {field.unit && <span className="text-muted-foreground ml-1">({field.unit})</span>}
+              </Label>
+              {field.type === "textarea" ? (
+                <div>
+                  <Textarea
+                    className="text-sm resize-none min-h-[90px]"
+                    value={config[field.key] as string}
+                    onChange={(e) => setConfig((p) => ({ ...p, [field.key]: e.target.value }))}
+                    placeholder={field.placeholder}
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Variables: {"{{name}}"}, {"{{business}}"}, {"{{time}}"}, {"{{date}}"}, {"{{phone}}"}
+                  </p>
+                    {config[field.key] && String(config[field.key]).length > 10 && (
+                      <div className="mt-2 p-2.5 bg-muted/40 rounded-lg border border-border">
+                        <p className="text-[10px] text-muted-foreground font-medium mb-1">Preview</p>
+                        <p className="text-xs text-foreground/80 leading-relaxed">
+                          {String(config[field.key]).replace(/\{\{name\}\}/g, "Jane").replace(/\{\{business\}\}/g, "Your Business").replace(/\{\{time\}\}/g, "2:00 PM").replace(/\{\{date\}\}/g, "Mon Mar 24").replace(/\{\{phone\}\}/g, "+1 555 0000000")}
+                        </p>
+                      </div>
+                    )}
+                </div>
+              ) : field.type === "select" ? (
+                <Select
+                  value={String(config[field.key])}
+                  onValueChange={(v) => setConfig((p) => ({ ...p, [field.key]: v }))}
+                >
+                  <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {field.options?.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  type={field.type}
+                  className="text-sm"
+                  value={config[field.key] as string}
+                  onChange={(e) => setConfig((p) => ({ ...p, [field.key]: field.type === "number" ? (parseFloat(e.target.value) || 0) : e.target.value }))}
+                  placeholder={field.placeholder}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+          <Button size="sm" onClick={() => { onSave(config); onClose(); }}>Save configuration</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Automation Row ────────────────────────────────────────────────────────────
+
+function AutomationRow({
+  template,
+  saved,
+  onToggle,
+  onConfigure,
+  onOneClickEnable,
+  onQuickSetup,
+  isToggling,
+  isOneClickPending,
+  skillLevel,
+}: {
+  template: AutomationTemplate;
+  saved?: { id?: number; enabled: boolean; runCount: number; errorCount?: number; config?: Record<string, string | number> };
+  onToggle: (enabled: boolean) => void;
+  onConfigure: () => void;
+  onOneClickEnable: () => void;
+  onQuickSetup: (config: Record<string, string | number>) => void;
+  isToggling?: boolean;
+  isOneClickPending?: boolean;
+  skillLevel: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [showQuickSetup, setShowQuickSetup] = useState(false);
+  const [quickConfig, setQuickConfig] = useState<Record<string, string | number>>(() => getDefaultConfig(template));
+  const [testPhone, setTestPhone] = useState("");
+  const testMutation = trpc.automations.test.useMutation({
+    onSuccess: () => {
+      setTestPhone("");
+      toast.success("Test automation sent");
+    },
+    onError: (err) => {
+      toast.error(err.message);
+    },
+  });
+
+  const Icon = template.icon;
+  const isEnabled = saved?.enabled ?? false;
+  const cat = CATEGORY_CONFIG[template.category];
+  const isSafeForOneClick = ONE_CLICK_SAFE_KEYS.has(template.key);
+  const isNotYetConfigured = !saved;
+  const timingFields = getTimingFields(template);
+
+  // Determine which action button to show based on skill level
+  const renderActionButton = () => {
+    // Already configured — always show settings gear
+    if (!isNotYetConfigured) {
+      return (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+          onClick={onConfigure}
+          title="Configure this automation"
+        >
+          <Settings2 className="w-3.5 h-3.5" />
+        </Button>
+      );
+    }
+
+    // Beginner + safe → one-click "Enable" button
+    if (skillLevel === "beginner" && isSafeForOneClick) {
+      return (
+        <Button
+          size="sm"
+          className="h-8 px-3 text-xs"
+          onClick={onOneClickEnable}
+          disabled={isOneClickPending}
+        >
+          {isOneClickPending ? "Enabling..." : <><Zap className="w-3 h-3 mr-1" />Enable</>}
+        </Button>
+      );
+    }
+
+    // Intermediate + safe → "Quick Setup" with inline timing
+    if (skillLevel === "intermediate" && isSafeForOneClick) {
+      return (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 px-2.5 text-xs text-primary border-primary/30 hover:bg-primary/5"
+          onClick={() => setShowQuickSetup(!showQuickSetup)}
+        >
+          <Zap className="w-3 h-3 mr-1" />Quick Setup
+        </Button>
+      );
+    }
+
+    // Advanced/expert or not safe → full "Configure" button
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 px-2.5 text-xs text-primary border-primary/30 hover:bg-primary/5"
+        onClick={onConfigure}
+        title="Configure this automation"
+      >
+        <Settings2 className="w-3 h-3 mr-1" />Configure
+      </Button>
+    );
+  };
+
+  return (
+    <Card className={`border transition-all ${isEnabled ? "border-primary/20 bg-card" : "border-border bg-card/60"}`}>
+      <CardContent className="p-0">
+        <div className="flex items-center gap-4 p-4">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isEnabled ? "bg-primary/10" : "bg-muted"}`}>
+            <Icon className={`w-4 h-4 ${isEnabled ? "text-primary" : "text-muted-foreground"}`} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-medium text-sm">{template.name}</span>
+              {template.recommended && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-yellow-500/10 text-yellow-400 border-yellow-500/30">★ Recommended</Badge>
+              )}
+              {isSafeForOneClick && isNotYetConfigured && skillLevel === "beginner" && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-500/10 text-green-400 border-green-500/30">One-click</Badge>
+              )}
+              <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${cat.bg}`}>{cat.label}</Badge>
+              <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${PLAN_BADGE[template.planRequired]}`}>{template.planRequired}</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{template.description}</p>
+            {saved && (
+              <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                Ran {saved.runCount} times{saved.errorCount ? ` · ${saved.errorCount} errors` : ""}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {renderActionButton()}
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground" onClick={() => setExpanded(!expanded)}>
+              {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </Button>
+            <div className="flex items-center gap-2 pl-2 border-l border-border">
+              <span className="text-xs text-muted-foreground">{isToggling ? "..." : isEnabled ? "On" : "Off"}</span>
+              <Switch checked={isEnabled} onCheckedChange={onToggle} disabled={isToggling} />
+            </div>
+          </div>
+        </div>
+
+        {/* Intermediate Quick Setup inline panel */}
+        {showQuickSetup && isNotYetConfigured && (
+          <div className="px-4 pb-4 border-t border-border/50 pt-3">
+            <div className="bg-primary/5 border border-primary/10 rounded-lg p-3 space-y-3">
+              <p className="text-xs font-medium">Quick Setup — adjust timing or just enable with defaults</p>
+              {timingFields.length > 0 && (
+                <div className="flex flex-wrap gap-3">
+                  {timingFields.map((field) => (
+                    <div key={field.key} className="flex items-center gap-2">
+                      <Label className="text-xs text-muted-foreground whitespace-nowrap">{field.label}</Label>
+                      <Input
+                        type="number"
+                        className="text-xs w-20 h-7"
+                        value={quickConfig[field.key] as number}
+                        onChange={(e) => setQuickConfig(prev => ({ ...prev, [field.key]: parseFloat(e.target.value) || 0 }))}
+                      />
+                      {field.unit && <span className="text-xs text-muted-foreground">{field.unit}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="bg-muted/30 rounded p-2">
+                <p className="text-[10px] text-muted-foreground font-medium mb-1">Message preview</p>
+                <p className="text-xs text-foreground/70 leading-relaxed">{template.defaultMessage.replace(/\{\{name\}\}/g, "Jane").replace(/\{\{business\}\}/g, "Your Business").replace(/\{\{time\}\}/g, "2:00 PM").replace(/\{\{date\}\}/g, "Mon Mar 24").replace(/\{\{phone\}\}/g, "+1 555 0000000")}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" className="text-xs h-7" onClick={() => { onQuickSetup(quickConfig); setShowQuickSetup(false); }} disabled={isOneClickPending}>
+                  {isOneClickPending ? "Enabling..." : <><Zap className="w-3 h-3 mr-1" />Enable</>}
+                </Button>
+                <Button variant="ghost" size="sm" className="text-xs h-7 text-muted-foreground" onClick={onConfigure}>
+                  Full config
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {expanded && (
+          <div className="px-4 pb-4 border-t border-border/50 pt-3">
+            <div className="bg-muted/30 rounded-lg p-3">
+              <p className="text-xs font-medium text-muted-foreground mb-1.5">Default message preview</p>
+              <p className="text-xs text-foreground/80 leading-relaxed">{template.defaultMessage}</p>
+            </div>
+            {saved?.config && Object.keys(saved.config).filter(k => k !== "message").length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {Object.entries(saved.config).filter(([k]) => k !== "message").map(([k, v]) => (
+                  <div key={k} className="flex items-center gap-1 bg-muted/50 rounded px-2 py-1 text-xs">
+                    <span className="text-muted-foreground capitalize">{k.replace(/([A-Z])/g, " $1").toLowerCase()}:</span>
+                    <span className="font-medium">{String(v)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4 border-t border-border pt-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Test this automation</p>
+              <div className="flex gap-2">
+                <Input
+                  value={testPhone}
+                  onChange={(e) => setTestPhone(e.target.value)}
+                  placeholder="Phone (e.g. +15551112222)"
+                  className="text-xs"
+                />
+                <Button
+                  size="sm"
+                  disabled={!testPhone || !saved?.id || testMutation.isPending}
+                  onClick={() => {
+                    if (!saved?.id || !testPhone) return;
+                    testMutation.mutate({ automationId: saved.id, testPhone: testPhone.trim() });
+                  }}
+                >
+                  {testMutation.isPending ? "Sending..." : "Send Test"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Automations() {
-  const { t } = useLocale();
   const { context, trackFeatureUsage } = useProgressiveDisclosureContext();
   const { user } = useAuth();
   const { data: tenant } = trpc.tenant.get.useQuery();
@@ -603,19 +998,71 @@ export default function Automations() {
   const configTemplate = configTarget ? CATALOGUE.find((t) => t.key === configTarget) : null;
 
   const configuredCount = CATALOGUE.filter((t) => savedMap[t.key]?.triggerConfig).length;
+  const skillLevel = context.userSkill?.level || "beginner";
+
+  // One-click enable: create + configure + enable in one call
+  const [oneClickPendingKey, setOneClickPendingKey] = useState<string | null>(null);
+  const quickEnableMutation = trpc.automations.quickEnable.useMutation({
+    onSuccess: () => {
+      utils.automations.list.invalidate();
+    },
+  });
+
+  const handleOneClickEnable = (template: AutomationTemplate, config?: Record<string, string | number>) => {
+    setOneClickPendingKey(template.key);
+    const defaults = config || getDefaultConfig(template);
+    quickEnableMutation.mutate(
+      { key: template.key, config: defaults },
+      {
+        onSuccess: () => {
+          setOneClickPendingKey(null);
+          toast.success(`${template.name} enabled`);
+          trackFeatureUsage('automation_one_click_enabled');
+        },
+        onError: (err) => {
+          setOneClickPendingKey(null);
+          toast.error(err.message);
+        },
+      }
+    );
+  };
+
+  // Batch enable all recommended one-click-safe automations
+  const [batchEnabling, setBatchEnabling] = useState(false);
+  const recommendedOneClick = CATALOGUE.filter(t => t.recommended && ONE_CLICK_SAFE_KEYS.has(t.key) && !savedMap[t.key]?.enabled);
+
+  const handleEnableAllRecommended = async () => {
+    setBatchEnabling(true);
+    for (const template of recommendedOneClick) {
+      try {
+        await quickEnableMutation.mutateAsync({ key: template.key, config: getDefaultConfig(template) });
+      } catch { /* continue with next */ }
+    }
+    setBatchEnabling(false);
+    utils.automations.list.invalidate();
+    toast.success(`${recommendedOneClick.length} automations enabled`);
+    trackFeatureUsage('automation_batch_enabled');
+  };
 
   return (
     <DashboardLayout>
       <div className="p-6 space-y-5 max-w-4xl mx-auto">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold">{t('automationsPage.title')}</h1>
+            <h1 className="text-2xl font-bold">Automations</h1>
             <p className="text-muted-foreground text-sm mt-1">
               {enabledCount} active · {configuredCount} configured · {CATALOGUE.length} total
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" onClick={() => setShowTemplatePicker(true)}>Create automation</Button>
+            {/* Beginner: "Enable All Recommended" batch button */}
+            {skillLevel === "beginner" && recommendedOneClick.length > 0 && (
+              <Button size="sm" onClick={handleEnableAllRecommended} disabled={batchEnabling}>
+                <Zap className="w-3.5 h-3.5 mr-1.5" />
+                {batchEnabling ? "Enabling..." : `Enable ${recommendedOneClick.length} recommended`}
+              </Button>
+            )}
+            <Button size="sm" variant={skillLevel === "beginner" ? "outline" : "default"} onClick={() => setShowTemplatePicker(true)}>Create automation</Button>
             <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
               <Info className="w-3.5 h-3.5 shrink-0" />
               <span>When this happens → Then do this</span>
@@ -633,25 +1080,37 @@ export default function Automations() {
               <div className="flex-1">
                 <p className="text-sm font-medium mb-1">No automations active yet</p>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                  Start with recommended automations for your skill level. Each takes under a minute to configure.
+                  {skillLevel === "beginner"
+                    ? "Hit \"Enable\" on any automation below to activate it instantly with smart defaults. Or enable all recommended ones at once."
+                    : skillLevel === "intermediate"
+                      ? "Use \"Quick Setup\" to configure timing, or jump into full configuration. Recommended automations are marked."
+                      : "Configure each automation to your exact specifications. Recommended automations are marked with ★."
+                  }
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  {dynamicRecommendations.slice(0, 3).map((rec, index) => {
-                    const template = dynamicTemplates.find(t => 
-                      rec.automationKeys.includes(t.key)
-                    );
-                    if (!template) return null;
-                    return (
-                      <button
-                        key={rec.automationKeys[0]}
-                        onClick={() => setConfigTarget(rec.automationKeys[0] as AutomationKey)}
-                        className="text-xs px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all font-medium"
-                      >
-                        {template.name} →
-                      </button>
-                    );
-                  })}
-                </div>
+                {skillLevel === "beginner" && recommendedOneClick.length > 0 ? (
+                  <Button size="sm" onClick={handleEnableAllRecommended} disabled={batchEnabling}>
+                    <Zap className="w-3.5 h-3.5 mr-1.5" />
+                    {batchEnabling ? "Enabling..." : `Enable all ${recommendedOneClick.length} recommended automations`}
+                  </Button>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {dynamicRecommendations.slice(0, 3).map((rec) => {
+                      const tmpl = dynamicTemplates.find(t =>
+                        rec.automationKeys.includes(t.key)
+                      );
+                      if (!tmpl) return null;
+                      return (
+                        <button
+                          key={rec.automationKeys[0]}
+                          onClick={() => setConfigTarget(rec.automationKeys[0] as AutomationKey)}
+                          className="text-xs px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all font-medium"
+                        >
+                          {tmpl.name} →
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -715,7 +1174,11 @@ export default function Automations() {
                   toggleMutation.mutate({ key: template.key, enabled });
                 }}
                 onConfigure={() => setConfigTarget(template.key)}
+                onOneClickEnable={() => handleOneClickEnable(template)}
+                onQuickSetup={(config) => handleOneClickEnable(template, config)}
                 isToggling={togglingKey === template.key}
+                isOneClickPending={oneClickPendingKey === template.key}
+                skillLevel={skillLevel}
               />
             );
           })}
