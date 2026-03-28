@@ -4,6 +4,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import { ErrorBoundary } from "./components/layout/ErrorBoundary";
 import { CookieConsent } from "./components/CookieConsent";
+import { LiveUpdateBanner } from "./components/LiveUpdateBanner";
 import { LocaleOnboardingModal } from "./components/LanguageSelector";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LocaleProvider } from "./contexts/LocaleContext";
@@ -241,6 +242,7 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
+      <LiveUpdateBanner />
       <ThemeProvider defaultTheme="dark">
         <LocaleProvider>
           <TooltipProvider>

@@ -20,6 +20,7 @@ import { registerSecurityMiddleware } from "./security";
 import { readFileSync } from "fs";
 import { trafficGateMiddleware, setShutdownRef } from "./traffic-gate";
 import { validateEnv } from "./env";
+import { BUILD_VERSION } from "../../shared/version";
 
 // Graceful shutdown state — shared with traffic gate
 const shutdownState = { value: false };
@@ -252,6 +253,12 @@ async function startServer() {
     });
   });
 
+  // ─── Version endpoint (live-update system) ──────────────────────────────
+  app.get("/api/version", (_req, res) => {
+    res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.json({ version: BUILD_VERSION });
+  });
+
   app.get("/ready", async (_req, res) => {
     const dbOk = await pingDb();
     let workerHealthy = false;
@@ -344,7 +351,14 @@ async function startServer() {
   }
 
   server.listen(port, () => {
-    logger.info("Server started", { port, env: process.env.NODE_ENV });
+    logger.info("Server started", { port, env: process.env.NODE_ENV, version: BUILD_VERSION });
+
+    // Tell PM2 cluster this worker is ready to accept traffic.
+    // This enables zero-downtime reload: PM2 waits for 'ready' before
+    // killing the old instance, so there is always a live worker.
+    if (typeof process.send === "function") {
+      process.send("ready");
+    }
   });
 
   // Register graceful shutdown handlers after server starts
