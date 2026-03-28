@@ -1,5 +1,5 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import { FeatureConfigPage } from "@/components/layout/FeatureConfigPage";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useFeatureConfig } from "@/hooks/useFeatureConfig";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,7 +51,7 @@ export default function AfterHours() {
 
   useEffect(() => {
     if (settings?.afterHoursConfig) {
-      setConfig(settings.afterHoursConfig);
+      setConfig(settings.afterHoursConfig as any);
     }
   }, [settings]);
 
@@ -86,13 +86,10 @@ export default function AfterHours() {
     const [currentHour, currentMinute] = currentTimeInTimezone.split(':').map(Number);
     
     // Get current day in the configured timezone
-    const currentDayInTimezone = new Intl.DateTimeFormat('en-US', {
-      timeZone: businessHours.timezone,
-      weekday: 'numeric',
-    }).format(now);
-    
-    // Convert to 0-6 format (Sunday = 0)
-    const currentDay = currentDayInTimezone === '7' ? 0 : parseInt(currentDayInTimezone);
+    const currentDayInTimezone = new Date(now.toLocaleString('en-US', { timeZone: businessHours.timezone })).getDay();
+
+    // 0-6 format (Sunday = 0)
+    const currentDay = currentDayInTimezone;
     
     // Check if weekend
     const isWeekend = currentDay === 0 || currentDay === 6; // Sunday or Saturday

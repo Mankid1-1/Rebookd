@@ -46,7 +46,7 @@ export default function WaitingList() {
 
   useEffect(() => {
     if (settings?.waitingListConfig) {
-      setConfig(settings.waitingListConfig);
+      setConfig(settings.waitingListConfig as any);
     }
   }, [settings]);
 

@@ -89,6 +89,95 @@ export const referralRouter = router({
     }));
   }),
 
+  // Aliases used by Referrals.tsx (different naming convention)
+  getReferralStats: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.user!.id;
+
+    const existing = await ctx.db
+      .select({ referralCode: referrals.referralCode })
+      .from(referrals)
+      .where(eq(referrals.referrerId, userId))
+      .limit(1);
+
+    const allReferrals = await ctx.db
+      .select()
+      .from(referrals)
+      .where(and(eq(referrals.referrerId, userId), sql`${referrals.referredUserId} != 0`));
+
+    const completedPayouts = await ctx.db
+      .select()
+      .from(referralPayouts)
+      .where(and(eq(referralPayouts.userId, userId), eq(referralPayouts.status, "completed")));
+
+    const pendingPayouts = await ctx.db
+      .select()
+      .from(referralPayouts)
+      .where(and(eq(referralPayouts.userId, userId), eq(referralPayouts.status, "pending")));
+
+    const totalEarned = completedPayouts.reduce((sum, p) => sum + p.amount, 0);
+    const pendingAmount = pendingPayouts.reduce((sum, p) => sum + p.amount, 0);
+
+    return {
+      stats: {
+        referralCode: existing[0]?.referralCode ?? null,
+        totalReferrals: allReferrals.length,
+        completedReferrals: allReferrals.filter(r => r.status === "completed").length,
+        totalEarned: totalEarned / 100,
+        availableForPayout: pendingAmount / 100,
+      },
+    };
+  }),
+
+  getUserReferrals: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.user!.id;
+
+    const myReferrals = await ctx.db
+      .select()
+      .from(referrals)
+      .where(and(eq(referrals.referrerId, userId), sql`${referrals.referredUserId} != 0`))
+      .orderBy(desc(referrals.createdAt));
+
+    return {
+      referrals: myReferrals.map(r => ({
+        id: String(r.id),
+        code: r.referralCode,
+        createdAt: r.createdAt.toISOString(),
+        status: r.status,
+        rewardAmount: r.rewardAmount / 100,
+      })),
+    };
+  }),
+
+  generateReferralCode: protectedProcedure.mutation(async ({ ctx }) => {
+    const userId = ctx.user!.id;
+
+    const existing = await ctx.db
+      .select({ referralCode: referrals.referralCode })
+      .from(referrals)
+      .where(eq(referrals.referrerId, userId))
+      .limit(1);
+
+    if (existing.length > 0) {
+      return { code: existing[0].referralCode };
+    }
+
+    const code = `RB-${randomUUID().slice(0, 8).toUpperCase()}`;
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 365);
+
+    await ctx.db.insert(referrals).values({
+      referrerId: userId,
+      referredUserId: 0,
+      referralCode: code,
+      status: "pending",
+      rewardAmount: 5000, // $50.00 in cents
+      rewardCurrency: "USD",
+      expiresAt,
+    });
+
+    return { code };
+  }),
+
   leaderboard: protectedProcedure.query(async ({ ctx }) => {
     const results = await ctx.db
       .select({

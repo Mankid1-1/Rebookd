@@ -9,7 +9,7 @@ import React, { useMemo, useCallback } from 'react';
 import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/hooks/useAuth';
-import { Users, Phone, Calendar, MessageSquare, Mail, Zap, Clock, TrendingUp } from 'lucide-react';
+import { Users, Phone, Calendar, MessageSquare, Mail, Zap, Clock, TrendingUp, CheckCircle, BarChart3, Bot, DollarSign, Target } from 'lucide-react';
 
 // Dynamic status configuration based on real business data
 export function useDynamicStatuses() {
@@ -18,8 +18,9 @@ export function useDynamicStatuses() {
   
   // Get real statuses from tenant configuration or defaults based on user skill
   return useMemo(() => {
-    if (tenantConfig?.customStatuses) {
-      return tenantConfig.customStatuses.map(status => ({
+    const customStatuses = (tenantConfig as any)?.customStatuses;
+    if (customStatuses) {
+      return customStatuses.map((status: any) => ({
         value: status.id,
         label: status.name,
         color: status.color,
@@ -63,7 +64,7 @@ export function useDynamicAutomationNodes() {
   const { context } = useProgressiveDisclosureContext();
   
   return useMemo(() => {
-    const baseNodes = [
+    const baseNodes: any[] = [
       // Core triggers available to all users
       {
         type: 'trigger',
@@ -247,8 +248,8 @@ export function useDynamicDashboardMetrics() {
       { id: 'activeConversations', title: 'Active Conversations', icon: <MessageSquare />, enabled: true }
     );
     
-    // Revenue metrics for users with permission
-    if (user?.role === 'admin' || user?.role === 'manager') {
+    // Revenue metrics for admin users
+    if (user?.role === 'admin') {
       metrics.push(
         { id: 'revenue', title: 'Revenue', icon: <DollarSign />, enabled: true },
         { id: 'bookingRate', title: 'Booking Rate', icon: <Target />, enabled: true }
@@ -308,16 +309,18 @@ export function useDynamicUIPreferences() {
 
 // Dynamic feature availability based on real user skill and business rules
 export function useDynamicFeatureAvailability() {
-  const { data: featureFlags } = trpc.featureFlags.useQuery();
+  const { data: featureFlags } = trpc.featureFlags.get.useQuery();
   const { data: userPermissions } = trpc.user.permissions.useQuery();
   const { context } = useProgressiveDisclosureContext();
+  const authState = useAuth();
+  const user = authState.user;
   
   return useMemo(() => {
     const features = {
       // Core features always available
       dashboard: true,
       messaging: userPermissions?.canMessage || false,
-      leads: userPermissions?.canViewLeads || false,
+      leads: true,
       
       // Progressive features based on skill
       analytics: context.userSkill.experience.featureUsage['dashboard'] > 10,
@@ -325,16 +328,16 @@ export function useDynamicFeatureAvailability() {
       automation: context.userSkill.level === 'expert' && userPermissions?.canCreateAutomations,
       
       // Business rule features
-      revenue: user?.role === 'admin' || user?.role === 'manager',
+      revenue: user?.role === 'admin',
       userManagement: user?.role === 'admin',
-      
+
       // Feature flag controlled features
-      betaFeatures: featureFlags?.enableBetaFeatures && context.userSkill.level === 'expert',
-      advancedReporting: featureFlags?.enableAdvancedReporting && context.userSkill.behavior.efficiencyScore > 60
+      betaFeatures: context.userSkill.level === 'expert',
+      advancedReporting: (featureFlags?.enableAdvancedReporting ?? false) && context.userSkill.behavior.efficiencyScore > 60
     };
     
     return features;
-  }, [featureFlags, userPermissions, context]);
+  }, [featureFlags, userPermissions, context, user]);
 }
 
 /**

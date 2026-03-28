@@ -36,12 +36,12 @@ export default function BookingConversion() {
   const { data: settings } = trpc.tenant.settings.useQuery(undefined, { retry: false });
   const updateConfig = trpc.tenant.updateBookingConversionConfig.useMutation({
     onSuccess: () => toast.success("Booking conversion configuration updated"),
-    onError: (err: Error) => toast.error(err.message)
+    onError: (err: any) => toast.error(err.message)
   });
 
   useEffect(() => {
     if (settings?.bookingConversionConfig) {
-      setConfig(settings.bookingConversionConfig);
+      setConfig(settings.bookingConversionConfig as any);
     }
   }, [settings]);
 

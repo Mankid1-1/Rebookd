@@ -32,6 +32,7 @@ import {
   Rocket,
   Check,
   PartyPopper,
+  Shield,
 } from "lucide-react";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
@@ -43,6 +44,7 @@ import type { LucideIcon } from "lucide-react";
 
 const STEP_LABELS = [
   "Business",
+  "Experience",
   "Location",
   "Industry",
   "Details",
@@ -179,29 +181,39 @@ export default function Onboarding() {
   const [website, setWebsite] = useState("");
   const [referralSource, setReferralSource] = useState("");
 
-  // Step 2 - Location
+  // Step 2 - Experience Level
+  const [skillLevel, setSkillLevel] = useState<"basic" | "intermediate" | "advanced">("basic");
+
+  // Step 3 - Location
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
   const [timezone, setTimezone] = useState(
     Intl.DateTimeFormat().resolvedOptions().timeZone
   );
 
-  // Step 3 - Industry
+  // Step 4 - Industry
   const [industry, setIndustry] = useState("");
 
-  // Step 4 - Business Details
+  // Step 5 - Business Details
   const [avgAppointmentValue, setAvgAppointmentValue] = useState(75);
   const [monthlyNoShows, setMonthlyNoShows] = useState(8);
   const [monthlyCancellations, setMonthlyCancellations] = useState(12);
   const [monthlyAppointments, setMonthlyAppointments] = useState(150);
 
-  // Step 5 - Launch
+  // Step 6 - Launch
   const [showConfetti, setShowConfetti] = useState(false);
 
   // tRPC
   const utils = trpc.useUtils();
+  const setSkillLevelMutation = trpc.auth.setSkillLevel.useMutation();
   const createTenant = trpc.onboarding.setup.useMutation({
     onSuccess: async () => {
+      // Save the chosen skill level alongside tenant creation
+      try {
+        await setSkillLevelMutation.mutateAsync({ level: skillLevel });
+      } catch {
+        // Non-critical — proceed regardless
+      }
       setShowConfetti(true);
       toast.success("Welcome to Rebooked! Your business is live.");
       await utils.tenant.get.invalidate();
@@ -233,16 +245,18 @@ export default function Onboarding() {
         }
         return true;
       case 1:
-        return true; // All optional
+        return true; // Skill level always has a default
       case 2:
+        return true; // Location all optional
+      case 3:
         if (!industry) {
           toast.error("Please select your industry.");
           return false;
         }
         return true;
-      case 3:
-        return true; // All have defaults
       case 4:
+        return true; // All have defaults
+      case 5:
         return true;
       default:
         return true;
@@ -412,8 +426,87 @@ export default function Onboarding() {
               </div>
             )}
 
-            {/* ── Step 2: Location ── */}
+            {/* ── Step 2: Experience Level ── */}
             {step === 1 && (
+              <div className="space-y-5">
+                <div>
+                  <h2 className="text-xl font-bold mb-1">
+                    What's your experience level?
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    We'll tailor the interface to match your comfort with business software.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {([
+                    {
+                      value: "basic" as const,
+                      icon: Shield,
+                      title: "Basic",
+                      description: "I'm new to business software. Show me step-by-step guidance.",
+                    },
+                    {
+                      value: "intermediate" as const,
+                      icon: Zap,
+                      title: "Intermediate",
+                      description: "I've used similar tools before. Show me the essentials.",
+                    },
+                    {
+                      value: "advanced" as const,
+                      icon: Rocket,
+                      title: "Advanced",
+                      description: "I'm tech-savvy. Give me full access to everything.",
+                    },
+                  ] as const).map((option) => {
+                    const Icon = option.icon;
+                    const isSelected = skillLevel === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setSkillLevel(option.value)}
+                        aria-pressed={isSelected}
+                        aria-label={`Select ${option.title} experience level`}
+                        className={`group relative flex flex-col items-center gap-2 rounded-xl border p-4 text-center transition-all duration-200 hover:border-primary/50 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+                          isSelected
+                            ? "border-primary bg-primary/10 shadow-sm"
+                            : "border-border bg-card"
+                        }`}
+                      >
+                        {isSelected && (
+                          <div className="absolute top-2 right-2">
+                            <Check className="w-3.5 h-3.5 text-primary" />
+                          </div>
+                        )}
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                          isSelected ? "bg-primary/20" : "bg-muted group-hover:bg-primary/10"
+                        }`}>
+                          <Icon className={`w-5 h-5 transition-colors ${
+                            isSelected ? "text-primary" : "text-muted-foreground group-hover:text-primary"
+                          }`} />
+                        </div>
+                        <span className={`text-sm font-semibold ${
+                          isSelected ? "text-primary" : "text-foreground"
+                        }`}>
+                          {option.title}
+                        </span>
+                        <span className="text-xs text-muted-foreground leading-snug">
+                          {option.description}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <p className="text-xs text-muted-foreground text-center">
+                  You can change this anytime in Settings.
+                </p>
+              </div>
+            )}
+
+            {/* ── Step 3: Location ── */}
+            {step === 2 && (
               <div className="space-y-5">
                 <div>
                   <h2 className="text-xl font-bold mb-1">
@@ -480,8 +573,8 @@ export default function Onboarding() {
               </div>
             )}
 
-            {/* ── Step 3: Industry ── */}
-            {step === 2 && (
+            {/* ── Step 4: Industry ── */}
+            {step === 3 && (
               <div className="space-y-5">
                 <div>
                   <h2 className="text-xl font-bold mb-1">
@@ -535,8 +628,8 @@ export default function Onboarding() {
               </div>
             )}
 
-            {/* ── Step 4: Business Details ── */}
-            {step === 3 && (
+            {/* ── Step 5: Business Details ── */}
+            {step === 4 && (
               <div className="space-y-5">
                 <div>
                   <h2 className="text-xl font-bold mb-1">
@@ -652,8 +745,8 @@ export default function Onboarding() {
               </div>
             )}
 
-            {/* ── Step 5: Launch ── */}
-            {step === 4 && (
+            {/* ── Step 6: Launch ── */}
+            {step === 5 && (
               <div className="space-y-5">
                 <div>
                   <h2 className="text-xl font-bold mb-1">

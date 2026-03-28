@@ -43,7 +43,7 @@ export default function SmartScheduling() {
 
   useEffect(() => {
     if (settings?.smartSchedulingConfig) {
-      setConfig(settings.smartSchedulingConfig);
+      setConfig(settings.smartSchedulingConfig as any);
     }
   }, [settings]);
 

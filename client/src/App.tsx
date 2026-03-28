@@ -7,6 +7,7 @@ import { CookieConsent } from "./components/CookieConsent";
 import { LocaleOnboardingModal } from "./components/LanguageSelector";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LocaleProvider } from "./contexts/LocaleContext";
+import { SkillLevelProvider } from "./contexts/SkillLevelContext";
 import { lazy, Suspense } from "react";
 import { AuthGuard } from "./components/layout/AuthGuard";
 
@@ -244,18 +245,20 @@ function App() {
         <LocaleProvider>
           <TooltipProvider>
             <Toaster richColors position="top-right" />
-            <Suspense fallback={
-              <div className="flex items-center justify-center min-h-screen bg-background">
-                <div className="flex flex-col items-center space-y-4">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                  <div className="text-muted-foreground">Loading Rebooked...</div>
+            <SkillLevelProvider>
+              <Suspense fallback={
+                <div className="flex items-center justify-center min-h-screen bg-background">
+                  <div className="flex flex-col items-center space-y-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    <div className="text-muted-foreground">Loading Rebooked...</div>
+                  </div>
                 </div>
-              </div>
-            }>
-              <Router />
-              <LocaleOnboardingModal />
-              <CookieConsent />
-            </Suspense>
+              }>
+                <Router />
+                <LocaleOnboardingModal />
+                <CookieConsent />
+              </Suspense>
+            </SkillLevelProvider>
           </TooltipProvider>
         </LocaleProvider>
       </ThemeProvider>

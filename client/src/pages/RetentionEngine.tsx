@@ -87,7 +87,7 @@ export default function RetentionEngine() {
 
   useEffect(() => {
     if (settings?.retentionEngineConfig) {
-      setConfig(settings.retentionEngineConfig);
+      setConfig(settings.retentionEngineConfig as any);
     }
   }, [settings]);
 

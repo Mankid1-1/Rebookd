@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { loginSchema } from "../../shared/schemas/leads";
 import { sql, and, eq, gte } from "drizzle-orm";
-import { authRateLimits } from "../../drizzle/schema";
+import { authRateLimits, users } from "../../drizzle/schema";
 import { COOKIE_NAME } from "../../shared/const";
 import { getSessionCookieOptions } from "../_core/cookies";
 import { sendEmail } from "../_core/email";
@@ -87,6 +87,25 @@ async function checkAuthRateLimit(db: Db, email: string): Promise<boolean> {
 
 export const authRouter = router({
   me: publicProcedure.query(async ({ ctx }) => ctx.user ?? null),
+
+  getSkillLevel: protectedProcedure.query(async ({ ctx }) => {
+    const [row] = await ctx.db
+      .select({ skillLevel: users.skillLevel })
+      .from(users)
+      .where(eq(users.id, ctx.user.id))
+      .limit(1);
+    return { skillLevel: row?.skillLevel ?? "basic" } as { skillLevel: "basic" | "intermediate" | "advanced" };
+  }),
+
+  setSkillLevel: protectedProcedure
+    .input(z.object({ level: z.enum(["basic", "intermediate", "advanced"]) }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db
+        .update(users)
+        .set({ skillLevel: input.level, skillLevelSetAt: new Date() })
+        .where(eq(users.id, ctx.user.id));
+      return { success: true };
+    }),
 
   logout: protectedProcedure.mutation(async ({ ctx }) => {
     ctx.res.clearCookie(COOKIE_NAME, {

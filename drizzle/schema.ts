@@ -26,6 +26,8 @@ export const users = mysqlTable("users", {
   accountType: mysqlEnum("accountType", ["business", "referral"]).default("business").notNull(),
   tenantId: int("tenantId"),
   tenantRole: mysqlEnum("tenantRole", ["owner", "employee"]),
+  skillLevel: mysqlEnum("skillLevel", ["basic", "intermediate", "advanced"]).default("basic"),
+  skillLevelSetAt: timestamp("skillLevelSetAt"),
   active: boolean("active").default(true).notNull(),
   stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

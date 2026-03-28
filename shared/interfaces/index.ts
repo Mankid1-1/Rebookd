@@ -58,6 +58,7 @@ export interface Lead {
   createdAt: Date;
   updatedAt: Date;
   appointmentAt?: Date;
+  lastMessageAt?: Date | null;
 }
 
 export interface LeadCreateInput {

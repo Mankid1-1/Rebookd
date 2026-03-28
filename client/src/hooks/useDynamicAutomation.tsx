@@ -5,9 +5,10 @@
  * based on user's automation success rates, conversion patterns, and skill level.
  */
 
+import React from 'react';
 import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
 export { useProgressiveDisclosureContext };
-export function trackFeatureUsage(featureId: string) { /* re-exported via context */ }
+export function trackFeatureUsage(_featureId: string) { /* stub */ }
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -19,7 +20,7 @@ export function useDynamicAutomationTemplates() {
   const { context } = useProgressiveDisclosureContext();
   
   return React.useMemo(() => {
-    const baseTemplates = [
+    const baseTemplates: any[] = [
       // Core appointment automations (available to all users)
       {
         key: "appointment_reminder_24h",
@@ -327,19 +328,20 @@ export function useDynamicAutomationConfig() {
     
     // Adapt configuration based on user behavior patterns
     if (userBehavior) {
-      const { peakHours, responsePatterns, errorPatterns } = userBehavior;
-      
+      const { peakHours, responsePatterns } = userBehavior;
+      const errorPatterns = (userBehavior as any).errorPatterns;
+
       // Adjust timing based on user's peak hours
       if (peakHours && automationKey.includes('reminder')) {
         baseConfig.priority = peakHours.includes(new Date().getHours()) ? "high" : "normal";
       }
-      
+
       // Adjust retry attempts based on user's response patterns
       if (responsePatterns) {
-        const avgResponseTime = responsePatterns.averageResponseTime || 300; // 5 minutes default
+        const avgResponseTime = responsePatterns.avgResponseTimeMinutes * 60 || 300; // convert minutes to seconds
         baseConfig.retryDelay = Math.max(60, avgResponseTime / 2); // Half of average response time
       }
-      
+
       // Adjust timeout based on error patterns
       if (errorPatterns && errorPatterns.timeoutRate > 0.2) {
         baseConfig.timeout = baseConfig.timeout * 1.5; // Increase timeout for users with many timeouts

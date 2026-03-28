@@ -50,7 +50,7 @@ export default function Leads() {
   });
 
   const { data: dashData } = trpc.analytics.dashboard.useQuery(undefined, { retry: false });
-  const statusCounts = (dashData?.statusBreakdown ?? []).reduce(
+  const statusCounts: Record<string, number> = (dashData?.statusBreakdown ?? []).reduce(
     (acc: Record<string, number>, s: any) => ({ ...acc, [s.status]: s.count }),
     {} as Record<string, number>
   );
@@ -63,7 +63,7 @@ export default function Leads() {
     switch (action) {
       case "add-lead":
         // Open add lead dialog
-        document.querySelector('[data-testid="add-lead-button"]')?.click();
+        (document.querySelector('[data-testid="add-lead-button"]') as HTMLElement)?.click();
         break;
       case "send-message":
         // Navigate to compose message
@@ -83,7 +83,7 @@ export default function Leads() {
         break;
       case "search-leads":
         // Focus search input
-        document.querySelector('[data-testid="search-input"]')?.focus();
+        (document.querySelector('[data-testid="search-input"]') as HTMLElement)?.focus();
         break;
     }
   };
@@ -218,9 +218,11 @@ export default function Leads() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <LeadsFilter 
-                  value={statusFilter} 
-                  onChange={setStatusFilter} 
+                <LeadsFilter
+                  search=""
+                  onSearchChange={() => {}}
+                  statusFilter={statusFilter}
+                  onStatusFilterChange={setStatusFilter}
                   statusCounts={statusCounts}
                 />
                 {(search || statusFilter !== "all") && (
@@ -245,7 +247,7 @@ export default function Leads() {
         <LeadsTable
           leads={leads}
           isLoading={isLoading}
-          onAddClick={() => document.querySelector('[data-testid="add-lead-button"]')?.click()}
+          onAddClick={() => (document.querySelector('[data-testid="add-lead-button"]') as HTMLElement)?.click()}
           isFiltered={!!(search || statusFilter !== "all")}
           onClearFilters={() => {
             setSearch("");
@@ -256,11 +258,10 @@ export default function Leads() {
         {/* Pagination */}
         {totalPages > 1 && (
           <LeadsPagination
-            currentPage={page}
+            page={page}
             totalPages={totalPages}
             onPageChange={setPage}
             total={total}
-            limit={20}
           />
         )}
 

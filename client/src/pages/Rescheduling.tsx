@@ -100,7 +100,7 @@ export default function Rescheduling() {
   // ── Load saved config ──
   useEffect(() => {
     if (settings?.reschedulingConfig) {
-      setConfig((prev) => ({ ...prev, ...settings.reschedulingConfig }));
+      setConfig((prev) => ({ ...prev, ...(settings.reschedulingConfig as any) }));
     }
   }, [settings]);
 

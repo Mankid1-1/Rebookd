@@ -747,17 +747,17 @@ async function runCycleInner() {
   if (allAutomations.length === 0) return;
 
   const entitledTenantIds = new Set<number>();
-  for (const tenantId of Array.from(new Set(allAutomations.map(a => a.tenantId)))) {
+  for (const tenantId of Array.from(new Set((allAutomations as any[]).map((a: any) => a.tenantId as number)))) {
     if (await TenantService.tenantHasAutomationAccess(db, tenantId)) {
       entitledTenantIds.add(tenantId);
     }
   }
 
-  const runnableAutomations = allAutomations.filter((automation) => entitledTenantIds.has(automation.tenantId));
+  const runnableAutomations = (allAutomations as any[]).filter((automation: any) => entitledTenantIds.has(automation.tenantId as number));
   if (runnableAutomations.length === 0) return;
 
   // Build phone number cache for all tenants in ONE query
-  const tenantIds = Array.from(new Set(runnableAutomations.map(a => a.tenantId)));
+  const tenantIds: number[] = Array.from(new Set(runnableAutomations.map((a: any) => a.tenantId as number)));
   const phoneCache = await buildPhoneCache(db, tenantIds);
 
   // Build timezone cache for all tenants in ONE query

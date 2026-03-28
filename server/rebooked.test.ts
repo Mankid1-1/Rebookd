@@ -101,6 +101,8 @@ function makeCtx(overrides: Partial<TrpcContext> = {}): TrpcContext {
       createdAt: new Date(),
       updatedAt: new Date(),
       lastSignedIn: new Date(),
+      skillLevel: "basic" as const,
+      skillLevelSetAt: null,
     },
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
     res: {
@@ -130,6 +132,8 @@ function makeAdminCtx(): TrpcContext {
       createdAt: new Date(),
       updatedAt: new Date(),
       lastSignedIn: new Date(),
+      skillLevel: "basic" as const,
+      skillLevelSetAt: null,
     },
   });
 }

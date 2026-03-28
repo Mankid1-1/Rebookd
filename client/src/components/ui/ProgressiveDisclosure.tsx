@@ -16,13 +16,13 @@ import {
   Layers, Grid, List, Sliders, Info,
   User, Clock, BarChart3, Shield,
   Lightbulb, GraduationCap, Award, Star,
+  RotateCcw, AlertCircle, X,
 } from "lucide-react";
 import { toast } from "sonner";
 
 // User skill levels and their characteristics
-export type { UserSkillLevel } from "../../../shared/interfaces";
-export type { UserSkillProfile } from "../../../shared/interfaces";
-
+import type { UserSkillLevel } from "../../../../shared/interfaces";
+export type { UserSkillLevel } from "../../../../shared/interfaces";
 export interface UserSkillProfile {
   level: UserSkillLevel;
   experience: {
@@ -41,10 +41,15 @@ export interface UserSkillProfile {
     adaptationSpeed: 'slow' | 'moderate' | 'fast';
   };
   behavior: {
-    explorationScore: number; // 0-100, how much they explore features
-    efficiencyScore: number; // 0-100, how efficient they are
-    confidenceLevel: number; // 0-100, how confident they seem
-    adaptationWillingness: number; // 0-100, how open to changes
+    explorationScore: number;
+    efficiencyScore: number;
+    confidenceLevel: number;
+    adaptationWillingness: number;
+  };
+  goals?: {
+    primary: string;
+    secondary: string[];
+    progress: Record<string, number>;
   };
 }
 

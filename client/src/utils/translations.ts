@@ -402,7 +402,7 @@ const en = {
 } as const;
 
 export type TranslationKey = keyof typeof en;
-export type Translations = typeof en;
+export type Translations = { [K in keyof typeof en]: string };
 
 // ─── Spanish ────────────────────────────────────────────────────────────────
 

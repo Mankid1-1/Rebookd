@@ -44,7 +44,7 @@ export default function PaymentEnforcement() {
 
   useEffect(() => {
     if (settings?.paymentEnforcementConfig) {
-      setConfig(settings.paymentEnforcementConfig);
+      setConfig(settings.paymentEnforcementConfig as any);
     }
   }, [settings]);
 

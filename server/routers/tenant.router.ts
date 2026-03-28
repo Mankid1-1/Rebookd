@@ -96,7 +96,7 @@ export const tenantRouter = router({
 
   // ─── Feature Settings ───────────────────────────────────────────────
 
-  settings: tenantProcedure.query(async ({ ctx }) => {
+  settings: tenantProcedure.query(async ({ ctx }): Promise<Record<string, unknown>> => {
     return TenantService.getSettings(ctx.db, ctx.tenantId);
   }),
 
@@ -345,6 +345,30 @@ export const tenantRouter = router({
 
         return { success: true };
   }),
+});
+
+// ─── Feature Config Router ────────────────────────────────────────────────────
+// Persists arbitrary per-feature JSON config blobs inside the tenant settings.
+export const featureConfigRouter = router({
+  get: tenantProcedure
+    .input(z.object({ feature: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const settings = await TenantService.getSettings(ctx.db, ctx.tenantId);
+      const config = (settings as Record<string, unknown>)?.[`featureConfig_${input.feature}`] ?? null;
+      return { config };
+    }),
+
+  save: tenantProcedure
+    .input(z.object({ feature: z.string(), config: z.record(z.string(), z.unknown()) }))
+    .mutation(async ({ ctx, input }) => {
+      await TenantService.updateFeatureConfig(
+        ctx.db,
+        ctx.tenantId,
+        `featureConfig_${input.feature}`,
+        input.config,
+      );
+      return { success: true };
+    }),
 });
 
 export const onboardingRouter = router({

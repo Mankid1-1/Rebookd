@@ -54,6 +54,7 @@ import { toast } from "sonner";
 import { RevenueDashboard } from "@/components/analytics/RevenueDashboard";
 import { RevenueLeakageDashboard } from "@/components/analytics/RevenueLeakageDashboard";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useSkillLevel } from "@/contexts/SkillLevelContext";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -171,6 +172,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
   const { t, formatCurrency: fmtCurrencyLocale } = useLocale();
+  const { isBasic } = useSkillLevel();
 
   // ── State ───────────────────────────────────────────────────────────────
   const [period, setPeriod] = useState<TimePeriod>("30d");
@@ -723,7 +725,92 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* ── KPI Stat Cards ─────────────────────────────────────────────── */}
+        {/* ── Getting Started (Basic users only) ────────────────────────── */}
+        {isBasic && (
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-base" style={SPACE_GROTESK}>
+                    Getting Started
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Here are the three best first steps to get value from Rebooked.
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddLead(true)}
+                  className="flex flex-col items-start gap-2 rounded-xl border border-border bg-card p-4 text-left hover:border-primary/40 hover:bg-primary/5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  aria-label="Add your first lead"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                    <Users className="w-4 h-4 text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">Add Your First Lead</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Import or manually add a customer to get started.
+                    </p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLocation("/automations")}
+                  className="flex flex-col items-start gap-2 rounded-xl border border-border bg-card p-4 text-left hover:border-primary/40 hover:bg-primary/5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  aria-label="Set up reminders"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                    <Zap className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">Set Up Reminders</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Enable automated appointment reminders to reduce no-shows.
+                    </p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLocation("/inbox")}
+                  className="flex flex-col items-start gap-2 rounded-xl border border-border bg-card p-4 text-left hover:border-primary/40 hover:bg-primary/5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  aria-label="View your inbox"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                    <MessageSquare className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">View Your Inbox</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      See messages from your customers in one place.
+                    </p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-4 text-center">
+                Want to see more features?{" "}
+                <button
+                  type="button"
+                  className="text-primary underline underline-offset-2 hover:no-underline"
+                  onClick={() => setLocation("/settings")}
+                >
+                  Upgrade your experience level in Settings
+                </button>
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── KPI Stat Cards (Intermediate + Advanced) ───────────────────── */}
+        {!isBasic && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {isLoading
             ? Array.from({ length: 6 }).map((_, i) => (
@@ -765,9 +852,10 @@ export default function Dashboard() {
                 </Card>
               ))}
         </div>
+        )} {/* end !isBasic */}
 
-        {/* ── Revenue Leakage Alerts ──────────────────────────────────────── */}
-        {leakageAlerts.length > 0 && (
+        {/* ── Revenue Leakage Alerts (Intermediate + Advanced) ──────────── */}
+        {!isBasic && leakageAlerts.length > 0 && (
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {leakageAlerts.map((alert) => (
               <Card
@@ -808,8 +896,8 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ── Tabbed Content ─────────────────────────────────────────────── */}
-        <Tabs
+        {/* ── Tabbed Content (Intermediate + Advanced) ───────────────────── */}
+        {!isBasic && <Tabs
           value={activeTab}
           onValueChange={setActiveTab}
           className="space-y-6"
@@ -1465,7 +1553,7 @@ export default function Dashboard() {
               </Card>
             )}
           </TabsContent>
-        </Tabs>
+        </Tabs>} {/* end !isBasic Tabs */}
 
         {/* ── Add Lead Dialog ────────────────────────────────────────────── */}
         <Dialog open={showAddLead} onOpenChange={setShowAddLead}>

@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import path from "node:path";
 import { defineConfig } from "vite";
 
-export default defineConfig({
+const config = {
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -23,8 +23,11 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes("node_modules")) {
-            if (id.includes("react-dom") || id.includes("react/jsx") || id.includes("/react/")) return "vendor-react";
-            if (id.includes("@radix-ui") || id.includes("class-variance-authority") || id.includes("clsx") || id.includes("tailwind-merge")) return "vendor-ui";
+            // Keep React + Radix UI together to avoid circular chunk deps
+            if (
+              id.includes("react-dom") || id.includes("react/jsx") || id.includes("/react/") ||
+              id.includes("@radix-ui") || id.includes("class-variance-authority") || id.includes("clsx") || id.includes("tailwind-merge")
+            ) return "vendor-react";
             if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
             if (id.includes("@stripe") || id.includes("stripe")) return "vendor-stripe";
             if (id.includes("framer-motion")) return "vendor-motion";
@@ -58,4 +61,7 @@ export default defineConfig({
       ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     },
   },
-});
+};
+
+// Cast required because vitest extends vite config with 'test' property
+export default defineConfig(config as any);

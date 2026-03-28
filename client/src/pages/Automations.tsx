@@ -27,7 +27,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 const getDynamicAutomationCatalogue = (userSkill?: any, businessType?: string) => {
   const isDarkMode = document.documentElement.classList.contains('dark');
   
-  const baseTemplates = [
+  const baseTemplates: any[] = [
     {
       key: "appointment_reminder_24h",
       name: "24-Hour Reminder",

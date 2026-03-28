@@ -17,10 +17,12 @@ import {
   AlertTriangle, CheckCircle2, Circle, Loader2, Link2,
   Mail, MessageSquare, Users, UserPlus, CreditCard, Calendar,
   Lock, FileText, Heart, Zap, TrendingUp, Settings as SettingsIcon,
+  Rocket, Check,
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useSkillLevel } from "@/contexts/SkillLevelContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -125,6 +127,7 @@ const SectionHeading = ({ children }: { children: React.ReactNode }) => (
 export default function Settings() {
   const { t } = useLocale();
   const utils = trpc.useUtils();
+  const { skillLevel: currentSkillLevel, setSkillLevel } = useSkillLevel();
   const { data: tenant } = trpc.tenant.get.useQuery(undefined, { retry: false });
   const { data: phones = [] } = trpc.tenant.phoneNumbers.useQuery(undefined, { retry: false });
   const { data: apiKeys = [] } = trpc.apiKeys.list.useQuery(undefined, { retry: false });
@@ -373,6 +376,15 @@ export default function Settings() {
     setClosedDates((prev) => prev.filter((d) => d !== date));
   };
 
+  const handleSkillLevelChange = useCallback(async (level: "basic" | "intermediate" | "advanced") => {
+    try {
+      await setSkillLevel(level);
+      toast.success("Experience level updated");
+    } catch {
+      toast.error("Failed to update experience level");
+    }
+  }, [setSkillLevel]);
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success("Copied to clipboard");
@@ -603,6 +615,80 @@ export default function Settings() {
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Experience Level */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                  <Zap className="w-4 h-4 text-primary" /> Experience Level
+                </CardTitle>
+                <CardDescription>
+                  Controls the level of guidance and features shown throughout the platform. You can change this anytime.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {([
+                    {
+                      value: "basic" as const,
+                      icon: Shield,
+                      title: "Basic",
+                      description: "Step-by-step guidance. Simplified interface.",
+                    },
+                    {
+                      value: "intermediate" as const,
+                      icon: Zap,
+                      title: "Intermediate",
+                      description: "Essential features. Balanced experience.",
+                    },
+                    {
+                      value: "advanced" as const,
+                      icon: Rocket,
+                      title: "Advanced",
+                      description: "Full access to all features and tools.",
+                    },
+                  ] as const).map((option) => {
+                    const Icon = option.icon;
+                    const isSelected = currentSkillLevel === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handleSkillLevelChange(option.value)}
+                        aria-pressed={isSelected}
+                        aria-label={`Set experience level to ${option.title}`}
+                        className={`group relative flex flex-col items-center gap-2 rounded-xl border p-4 text-center transition-all duration-200 hover:border-primary/50 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 w-full ${
+                          isSelected
+                            ? "border-primary bg-primary/10 shadow-sm"
+                            : "border-border bg-card"
+                        }`}
+                      >
+                        {isSelected && (
+                          <div className="absolute top-2 right-2">
+                            <Check className="w-3.5 h-3.5 text-primary" />
+                          </div>
+                        )}
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
+                          isSelected ? "bg-primary/20" : "bg-muted group-hover:bg-primary/10"
+                        }`}>
+                          <Icon className={`w-4.5 h-4.5 transition-colors ${
+                            isSelected ? "text-primary" : "text-muted-foreground group-hover:text-primary"
+                          }`} />
+                        </div>
+                        <span className={`text-sm font-semibold ${
+                          isSelected ? "text-primary" : "text-foreground"
+                        }`}>
+                          {option.title}
+                        </span>
+                        <span className="text-xs text-muted-foreground leading-snug">
+                          {option.description}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>

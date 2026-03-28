@@ -30,6 +30,8 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),
+    skillLevel: "basic" as const,
+    skillLevelSetAt: null,
   };
 
   const ctx: TrpcContext = {

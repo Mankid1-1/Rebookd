@@ -20,12 +20,14 @@ import {
   CheckCircle, AlertTriangle, ArrowUp, ArrowDown, Info
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
-import { 
+import {
   useDynamicRecoveryProbability,
   useDynamicRevenueImpact,
-  useProgressiveDisclosureContext,
-  trackFeatureUsage
 } from '@/hooks/useDynamicRevenueRecovery';
+import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
+
+// Stub for trackFeatureUsage — not yet wired up to a backend event
+function trackFeatureUsage(_feature: string) {}
 
 // Dynamic colors based on user theme
 const getDynamicAnalyticsColors = () => {

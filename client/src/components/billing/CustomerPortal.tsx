@@ -193,7 +193,7 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
     };
     
     return (
-      <Badge variant={variants[status as keyof typeof variants] || 'outline'}>
+      <Badge variant={(variants[status as keyof typeof variants] || 'outline') as any}>
         {status.replace('_', ' ').toUpperCase()}
       </Badge>
     );

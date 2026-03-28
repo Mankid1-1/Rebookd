@@ -5,6 +5,7 @@
  * successful automations, and historical performance data.
  */
 
+import React from 'react';
 import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/hooks/useAuth';
@@ -56,8 +57,7 @@ export function useDynamicLeakageDetection() {
         // Users with low conversion rates get more sensitive detection
         if (conversionRate < 0.3) {
           adaptedDetectionRate *= 1.5; // 50% more sensitive
-          adaptedSeverity = adaptedSeverity === "low" ? "medium" : 
-                          adaptedSeverity === "medium" ? "high" : "critical";
+          adaptedSeverity = adaptedSeverity === "low" ? "medium" : "high";
         }
         // Users with high conversion rates get less sensitive detection
         else if (conversionRate > 0.7) {
@@ -250,7 +250,8 @@ export function useDynamicRecoveryProbability() {
     
     // Adjust based on user's historical recovery success
     if (recoveryHistory) {
-      const typeHistory = recoveryHistory.byType[leakageType];
+      const recoveryHistoryAny = recoveryHistory as any;
+      const typeHistory = recoveryHistoryAny?.byType?.[leakageType];
       if (typeHistory && typeHistory.attempts > 0) {
         baseProbability = typeHistory.successRate;
       }
@@ -364,7 +365,7 @@ export function useDynamicRevenueImpact() {
     
     // Adjust based on market conditions
     if (marketData) {
-      const marketDemand = marketData.demandIndex || 1.0;
+      const marketDemand = (marketData as any).demandIndex || 1.0;
       adjustedImpact *= marketDemand; // Scale by market demand
     }
     

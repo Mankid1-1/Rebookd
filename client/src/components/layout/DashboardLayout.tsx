@@ -60,6 +60,7 @@ import {
   ListOrdered,
   Link2,
   Wrench,
+  Compass,
 } from "lucide-react";
 import * as React from "react";
 import { useLocation } from "wouter";
@@ -68,6 +69,8 @@ import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { LanguageSelector } from "@/components/LanguageSelector";
+import { useSkillLevel } from "@/contexts/SkillLevelContext";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 // ─── Navigation Configuration ────────────────────────────────────────────────
 
@@ -226,6 +229,7 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const isMobile = useIsMobile();
   const isAdmin = user?.role === "admin";
+  const { skillLevel } = useSkillLevel();
 
   const isActive = (path: string) => {
     if (path === "/leads" && location.startsWith("/leads")) return true;
@@ -387,34 +391,66 @@ function DashboardLayoutContent({
             </>
           ) : (
             <>
-              {/* Regular user: flat top nav */}
+              {/* Regular user: flat top nav (always visible) */}
               <SidebarGroup>
                 {renderFlatItems(TOP_NAV)}
               </SidebarGroup>
 
               <div className="mx-4 my-1 border-t border-sidebar-border/50" />
 
-              {/* Services dropdown */}
-              <SidebarGroup>
-                {renderCollapsibleGroup(SERVICES_GROUP)}
-              </SidebarGroup>
+              {/* Services dropdown — Basic sees top 4 only, Intermediate sees top 4, Advanced sees all */}
+              {skillLevel !== "basic" && (
+                <SidebarGroup>
+                  {renderCollapsibleGroup(
+                    skillLevel === "intermediate"
+                      ? { ...SERVICES_GROUP, items: SERVICES_GROUP.items.slice(0, 4) }
+                      : SERVICES_GROUP
+                  )}
+                </SidebarGroup>
+              )}
 
-              {/* Tools dropdown */}
-              <SidebarGroup>
-                {renderCollapsibleGroup(TOOLS_GROUP)}
-              </SidebarGroup>
+              {/* Tools dropdown — Advanced only */}
+              {skillLevel === "advanced" && (
+                <SidebarGroup>
+                  {renderCollapsibleGroup(TOOLS_GROUP)}
+                </SidebarGroup>
+              )}
 
               <div className="mx-4 my-1 border-t border-sidebar-border/50" />
 
-              {/* Analytics (flat) */}
-              <SidebarGroup>
-                {renderFlatItems(BOTTOM_NAV)}
-              </SidebarGroup>
+              {/* Analytics (flat) — Hidden for basic */}
+              {skillLevel !== "basic" && (
+                <SidebarGroup>
+                  {renderFlatItems(BOTTOM_NAV)}
+                </SidebarGroup>
+              )}
 
-              {/* Account dropdown */}
+              {/* Account dropdown (always visible) */}
               <SidebarGroup>
                 {renderCollapsibleGroup(ACCOUNT_GROUP)}
               </SidebarGroup>
+
+              {/* Discover More — Basic only */}
+              {skillLevel === "basic" && (
+                <SidebarGroup className="mt-auto px-2 pb-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => setLocation("/settings")}
+                        className="flex items-center gap-2 w-full rounded-lg px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label="Discover more features"
+                      >
+                        <Compass className="h-4 w-4 shrink-0" />
+                        {!isCollapsed && <span>Discover More</span>}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-[200px] text-xs">
+                      Upgrade your experience level in Settings to see more features
+                    </TooltipContent>
+                  </Tooltip>
+                </SidebarGroup>
+              )}
             </>
           )}
         </SidebarContent>

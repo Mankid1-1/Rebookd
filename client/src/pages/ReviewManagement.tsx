@@ -69,7 +69,7 @@ export default function ReviewManagement() {
 
   useEffect(() => {
     if (settings?.reviewManagementConfig) {
-      setConfig(settings.reviewManagementConfig);
+      setConfig(settings.reviewManagementConfig as any);
     }
   }, [settings]);
 

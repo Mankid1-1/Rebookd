@@ -45,7 +45,7 @@ export default function AdminAutomation() {
 
   useEffect(() => {
     if (settings?.adminAutomationConfig) {
-      setConfig(settings.adminAutomationConfig);
+      setConfig(settings.adminAutomationConfig as any);
     }
   }, [settings]);
 
