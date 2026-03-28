@@ -19,7 +19,7 @@ import { SmartInput, PhoneInput, EmailInput } from "@/components/ui/SmartInput";
 import { HelpTooltip } from "@/components/ui/HelpTooltip";
 import { Badge } from "@/components/ui/badge";
 import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 
 // Dynamic source options based on user skill and business type
 const getDynamicSourceOptions = (userSkill?: any, businessType?: string) => {

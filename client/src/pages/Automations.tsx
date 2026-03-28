@@ -1,4 +1,4 @@
-import DashboardLayout from "@/components/DashboardLayout";
+import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,7 +24,7 @@ import {
   useProgressiveDisclosureContext,
   trackFeatureUsage
 } from "@/hooks/useDynamicAutomation";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useLocale } from "@/contexts/LocaleContext";
 
 // Dynamic automation catalogue based on user skill and business type

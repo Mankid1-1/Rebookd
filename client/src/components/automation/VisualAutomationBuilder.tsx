@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useDynamicAutomationNodes } from '@/hooks/useDynamicConfiguration';
-import { useAuth } from '@/_core/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth';
 import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";

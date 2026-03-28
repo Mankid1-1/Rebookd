@@ -1,5 +1,5 @@
-import DashboardLayout from "@/components/DashboardLayout";
-import { FeatureConfigPage } from "@/components/FeatureConfigPage";
+import DashboardLayout from "@/components/layout/DashboardLayout";
+import { FeatureConfigPage } from "@/components/layout/FeatureConfigPage";
 import { trpc } from "@/lib/trpc";
 import { useFeatureConfig } from "@/hooks/useFeatureConfig";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

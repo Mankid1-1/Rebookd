@@ -8,7 +8,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
 import { trpc } from '@/lib/trpc';
-import { useAuth } from '@/_core/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth';
 import { Users, Phone, Calendar, MessageSquare, Mail, Zap, Clock, TrendingUp } from 'lucide-react';
 
 // Dynamic status configuration based on real business data

@@ -13,7 +13,7 @@ import {
   MousePointer, Zap, Target, BarChart3,
 } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
 import { trpc } from "@/lib/trpc";
 

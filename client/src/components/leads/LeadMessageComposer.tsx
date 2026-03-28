@@ -15,7 +15,7 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 
 // Dynamic quick replies based on user skill and business type
 const getDynamicQuickReplies = (userSkill?: any, businessType?: string) => {

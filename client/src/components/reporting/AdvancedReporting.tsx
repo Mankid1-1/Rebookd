@@ -26,7 +26,7 @@ import {
 import { format, subDays, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
 
 interface ReportData {

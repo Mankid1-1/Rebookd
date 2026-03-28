@@ -1,4 +1,4 @@
-import DashboardLayout from "@/components/DashboardLayout";
+import DashboardLayout from "@/components/layout/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 
 // Dynamic loyalty tiers based on business type and user skill
 const getDynamicLoyaltyTiers = (businessType?: string, userSkill?: any) => {

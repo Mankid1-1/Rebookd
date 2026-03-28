@@ -1,4 +1,4 @@
-import DashboardLayout from "@/components/DashboardLayout";
+import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { trpc } from "@/lib/trpc";
 import { Building2, Search, Shield, MoreHorizontal, Eye, Ban, TrendingUp, DollarSign, Users, Activity, RefreshCw } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 

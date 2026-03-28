@@ -9,7 +9,7 @@ import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisc
 export { useProgressiveDisclosureContext };
 export function trackFeatureUsage(featureId: string) { /* re-exported via context */ }
 import { trpc } from '@/lib/trpc';
-import { useAuth } from '@/_core/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth';
 
 // Dynamic automation templates based on user performance
 export function useDynamicAutomationTemplates() {

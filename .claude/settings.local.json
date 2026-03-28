@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(mkdir -p docs)",
+      "Bash(mv AUDIT-REPORT.md FINAL-AUDIT-REPORT.md IMPLEMENTATION-SUMMARY.md REFERRAL-PAYOUT-DELAY.md REFERRAL-SYSTEM.md STRIPE-LIFECYCLE-MANAGEMENT.md STRIPE-TESTING-GUIDE.md STRIPE_CONNECT_IMPLEMENTATION.md DEPLOYMENT.md WINDOWS-DEPLOYMENT.md DATABASE_SETUP_INSTRUCTIONS.txt DELIVERABLES.txt PRODUCTION_LAUNCH_SUMMARY.txt todo.md docs/)",
+      "Bash(npx tsc:*)",
+      "Bash(xargs sed:*)",
+      "Bash(rmdir client/src/_core)",
+      "Bash(mkdir -p client/src/components/layout)",
+      "Bash(mv client/src/components/AuthGuard.tsx client/src/components/DashboardLayout.tsx client/src/components/DashboardLayoutSkeleton.tsx client/src/components/ErrorBoundary.tsx client/src/components/FeatureConfigPage.tsx client/src/components/SetupChecklist.tsx client/src/components/WelcomeTour.tsx client/src/components/layout/)",
+      "Bash(npx vite:*)",
+      "Bash(sed -i -e 's|from \"\"./ui/button\"\"|from \"\"@/components/ui/button\"\"|g' -e 's|from \"\"./LanguageSelector\"\"|from \"\"@/components/LanguageSelector\"\"|g' client/src/components/layout/DashboardLayout.tsx)",
+      "Bash(sed -i 's|from ''''./ui/skeleton''''|from ''''@/components/ui/skeleton''''|g' client/src/components/layout/DashboardLayoutSkeleton.tsx)"
+    ]
+  }
+}

@@ -1,4 +1,4 @@
-import DashboardLayout from "@/components/DashboardLayout";
+import DashboardLayout from "@/components/layout/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useState, useEffect } from "react";
 import { useLocale } from "@/contexts/LocaleContext";

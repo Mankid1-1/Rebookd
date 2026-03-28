@@ -46,7 +46,7 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
-vi.mock("@/_core/hooks/useAuth", () => ({
+vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({
     user: { id: 1, email: "test@example.com" },
   }),
@@ -89,7 +89,7 @@ vi.mock("@/components/analytics/RevenueDashboard", () => ({
 }));
 
 // Mock DashboardLayout
-vi.mock("@/components/DashboardLayout", () => ({
+vi.mock("@/components/layout/DashboardLayout", () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="dashboard-layout">{children}</div>,
 }));
 

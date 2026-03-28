@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { useLocale } from "@/contexts/LocaleContext";
-import DashboardLayout from "@/components/DashboardLayout";
+import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

@@ -7,7 +7,7 @@
 
 import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
 import { trpc } from '@/lib/trpc';
-import { useAuth } from '@/_core/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth';
 
 // Dynamic leakage detection based on user's historical conversion rates
 export function useDynamicLeakageDetection() {

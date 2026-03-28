@@ -2,13 +2,13 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
-import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ErrorBoundary } from "./components/layout/ErrorBoundary";
 import { CookieConsent } from "./components/CookieConsent";
 import { LocaleOnboardingModal } from "./components/LanguageSelector";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LocaleProvider } from "./contexts/LocaleContext";
 import { lazy, Suspense } from "react";
-import { AuthGuard } from "./components/AuthGuard";
+import { AuthGuard } from "./components/layout/AuthGuard";
 
 // Lazy load heavy components for code splitting
 const Home = lazy(() => import("./pages/Home"));
