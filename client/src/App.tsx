@@ -67,11 +67,13 @@ function Router() {
       {/* Onboarding */}
       <Route path="/onboarding" component={Onboarding} />
 
-      {/* App - Protected Routes */}
+      {/* App - Protected Routes (wrapped in ErrorBoundary per section) */}
       <Route path="/dashboard">
-        <AuthGuard>
-          <Dashboard />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard>
+            <Dashboard />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/leads">
         <AuthGuard>
@@ -191,31 +193,41 @@ function Router() {
         </AuthGuard>
       </Route>
 
-      {/* Admin - Admin Only Routes */}
+      {/* Admin - Admin Only Routes (isolated error boundary) */}
       <Route path="/admin">
-        <AuthGuard adminOnly>
-          <AdminTenants />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard adminOnly>
+            <AdminTenants />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/admin/tenants">
-        <AuthGuard adminOnly>
-          <AdminTenants />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard adminOnly>
+            <AdminTenants />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/admin/users">
-        <AuthGuard adminOnly>
-          <AdminUsers />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard adminOnly>
+            <AdminUsers />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/admin/health">
-        <AuthGuard adminOnly>
-          <AdminSystemHealth />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard adminOnly>
+            <AdminSystemHealth />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/admin/messages">
-        <AuthGuard adminOnly>
-          <AdminMessages />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard adminOnly>
+            <AdminMessages />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
 
       {/* Fallback */}

@@ -3,9 +3,23 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import * as TenantService from "../services/tenant.service";
+import { isAppError } from "./appErrors";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
+  errorFormatter({ shape, error }) {
+    // Convert AppError to structured error response
+    const cause = error.cause;
+    return {
+      ...shape,
+      data: {
+        ...shape.data,
+        appError: isAppError(cause)
+          ? { code: cause.code, retryable: cause.retryable }
+          : undefined,
+      },
+    };
+  },
 });
 
 export const createRouter = t.router;
