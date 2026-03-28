@@ -6,6 +6,7 @@ import { authRateLimits } from "../../drizzle/schema";
 import { COOKIE_NAME } from "../../shared/const";
 import { getSessionCookieOptions } from "../_core/cookies";
 import { sendEmail } from "../_core/email";
+import type { Db } from "../_core/context";
 import { protectedProcedure, tenantProcedure, publicProcedure, router } from "../_core/trpc";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
@@ -51,7 +52,7 @@ async function sendPasswordResetEmail(email: string, token: string) {
 }
 
 // Database-backed auth rate limiting (per email, max 10 attempts / 15 min)
-async function checkAuthRateLimit(db: any, email: string): Promise<boolean> {
+async function checkAuthRateLimit(db: Db, email: string): Promise<boolean> {
   const windowStart = new Date(Date.now() - 15 * 60 * 1000);
   const maxAttempts = 10;
 

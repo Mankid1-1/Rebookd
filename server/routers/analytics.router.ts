@@ -196,7 +196,7 @@ export const analyticsRouter = router({
   calendarIntegrationMetrics: tenantProcedure.query(async ({ ctx }) => {
     const tid = ctx.tenantId;
     const settings = await TenantService.getSettings(ctx.db, tid);
-    const calConfig = (settings?.calendarIntegration as Record<string, any>) ?? {};
+    const calConfig = (settings?.calendarIntegration as Record<string, unknown>) ?? {};
     const connected = [calConfig?.googleCalendarEnabled, calConfig?.outlookEnabled, calConfig?.appleCalendarEnabled].filter(Boolean).length;
     const [bookedRows] = await Promise.all([
       ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), isNotNull(leads.appointmentAt))),

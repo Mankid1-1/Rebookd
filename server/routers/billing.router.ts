@@ -4,12 +4,13 @@ import Stripe from "stripe";
 import { eq } from "drizzle-orm";
 import { subscriptions } from "../../drizzle/schema";
 import { tenantProcedure, publicProcedure, router } from "../_core/trpc";
+import type { Db } from "../_core/context";
 import * as TenantService from "../services/tenant.service";
 import * as BillingService from "../services/billing.service";
 import * as AdminAuditService from "../services/adminAudit.service";
 
 async function auditAdminRead(
-  ctx: { db: any; user: { id: number; email?: string | null }; req: { path?: string } },
+  ctx: { db: Db; user: { id: number; email?: string | null }; req: { path?: string } },
   action: string,
   metadata?: Record<string, unknown>,
 ) {
@@ -70,7 +71,7 @@ export const billingRouter = router({
       let customerId: string | undefined;
       if (subRow?.stripeId) {
         const stripeSub = await stripe.subscriptions.retrieve(subRow.stripeId).catch(() => null);
-        customerId = (stripeSub as any)?.customer;
+        customerId = typeof stripeSub?.customer === "string" ? stripeSub.customer : undefined;
       }
       if (!customerId) return { url: null, error: "No active subscription found. Please subscribe to a plan first." };
       const portal = await stripe.billingPortal.sessions.create({

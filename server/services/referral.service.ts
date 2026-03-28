@@ -293,7 +293,7 @@ export async function processScheduledPayouts(): Promise<{ processed: number; to
       await db.insert(systemErrorLogs).values({
           type: 'billing',
           message: `Failed to process payout for referral ${referral.id}`,
-          detail: error.message,
+          detail: error instanceof Error ? error.message : String(error),
           tenantId: tenantId,
       });
     }

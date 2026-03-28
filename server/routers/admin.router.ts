@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { paginationSchema } from "../../shared/schemas/leads";
+import type { Db } from "../_core/context";
 import { adminProcedure, router } from "../_core/trpc";
 import * as TenantService from "../services/tenant.service";
 import * as UserService from "../services/user.service";
@@ -15,7 +16,7 @@ function clampAdminPagination(input?: { page?: number; limit?: number }) {
 }
 
 async function auditAdminRead(
-  ctx: { db: any; user: { id: number; email?: string | null }; req: { path?: string } },
+  ctx: { db: Db; user: { id: number; email?: string | null }; req: { path?: string } },
   action: string,
   metadata?: Record<string, unknown>,
 ) {
@@ -38,8 +39,8 @@ export const adminRouter = router({
       const { rows, total } = await TenantService.getAllTenants(ctx.db, page, limit);
       // Enrich tenants with plan info from subscriptions
       const allPlans = await TenantService.getAllPlans(ctx.db);
-      const planMap = new Map(allPlans.map((p: any) => [p.id, p.slug]));
-      const enriched = await Promise.all(rows.map(async (t: any) => {
+      const planMap = new Map(allPlans.map((p) => [p.id, p.slug]));
+      const enriched = await Promise.all(rows.map(async (t) => {
         try {
           const sub = await TenantService.getSubscriptionByTenantId(ctx.db, t.id);
           const planSlug = sub?.planId ? (planMap.get(sub.planId) ?? "free") : "free";

@@ -13,7 +13,7 @@
 import "dotenv/config";
 import { and, desc, eq, gt, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { getDb } from "./db";
-import { automations, leads, messages, phoneNumbers, subscriptions, tenants } from "../drizzle/schema";
+import { automations, leads, messages, phoneNumbers, subscriptions, tenants, type Automation, type Lead } from "../drizzle/schema";
 import { sendSMS, resolveTemplate } from "./_core/sms";
 import { logger } from "./_core/logger";
 import { captureException } from "./_core/sentry";
@@ -219,22 +219,22 @@ async function fireAutomation(
   });
 }
 
-function getActionMessage(auto: any): string | null {
+function getActionMessage(auto: Automation): string | null {
   const actions = auto.actions as Array<{ type: string; body: string }> | null;
   if (!actions?.length) return null;
   return actions.find(a => a.type === "send_message" || a.type === "sms")?.body ?? null;
 }
 
-function cfg(auto: any, key: string, fallback: number): number {
+function cfg(auto: Automation, key: string, fallback: number): number {
   const v = (auto.triggerConfig as Record<string, unknown> | null)?.[key];
   return typeof v === "number" ? v : typeof v === "string" ? parseFloat(v) || fallback : fallback;
 }
 
-function leadTags(lead: any): string[] {
+function leadTags(lead: Lead): string[] {
   return Array.isArray(lead.tags) ? lead.tags.filter((tag: unknown): tag is string => typeof tag === "string") : [];
 }
 
-function leadHasTag(lead: any, tag: string): boolean {
+function leadHasTag(lead: Lead, tag: string): boolean {
   return leadTags(lead).includes(tag);
 }
 
@@ -258,7 +258,7 @@ async function hasOutboundSince(db: Db, leadId: number, since: Date) {
   return rows.length > 0;
 }
 
-async function isVipLead(db: Db, leadId: number, lead: any) {
+async function isVipLead(db: Db, leadId: number, lead: Lead) {
   if (leadHasTag(lead, "vip")) return true;
   const counts = await db
     .select({ count: sql<number>`count(*)` })
@@ -271,7 +271,7 @@ async function isVipLead(db: Db, leadId: number, lead: any) {
 // Each function fetches ALL matching leads across all tenants in ONE query,
 // then filters by tenantId in memory — eliminates the N+1 per-tenant loop.
 
-async function processNewLeadWelcome(db: Db, auto: any, fromNumber: string | undefined) {
+async function processNewLeadWelcome(db: Db, auto: Automation, fromNumber: string | undefined) {
   const newLeads = await db
     .select()
     .from(leads)
@@ -290,7 +290,7 @@ async function processNewLeadWelcome(db: Db, auto: any, fromNumber: string | und
   }
 }
 
-async function processFollowUp(db: Db, auto: any, fromNumber: string | undefined, delayDays: number) {
+async function processFollowUp(db: Db, auto: Automation, fromNumber: string | undefined, delayDays: number) {
   const target = ago(days(delayDays));
   const window = ago(days(delayDays + 1));
   const stale = await db
@@ -312,7 +312,7 @@ async function processFollowUp(db: Db, auto: any, fromNumber: string | undefined
   }
 }
 
-async function processAppointmentReminder(db: Db, auto: any, fromNumber: string | undefined, delayHours: number, tenantTimezone: string) {
+async function processAppointmentReminder(db: Db, auto: Automation, fromNumber: string | undefined, delayHours: number, tenantTimezone: string) {
   // Convert current time to tenant's timezone to compute the correct UTC window.
   // We find the UTC offset for the tenant's timezone and shift the window accordingly.
   const nowUtc = Date.now();
@@ -348,7 +348,7 @@ async function processAppointmentReminder(db: Db, auto: any, fromNumber: string 
   }
 }
 
-async function processNoShow(db: Db, auto: any, fromNumber: string | undefined, delayMinutes: number) {
+async function processNoShow(db: Db, auto: Automation, fromNumber: string | undefined, delayMinutes: number) {
   const windowStart = ago(mins(delayMinutes + 1));
   const windowEnd   = ago(mins(delayMinutes - 1));
   const noShows = await db
@@ -371,7 +371,7 @@ async function processNoShow(db: Db, auto: any, fromNumber: string | undefined, 
   }
 }
 
-async function processWinBack(db: Db, auto: any, fromNumber: string | undefined, delayDays: number) {
+async function processWinBack(db: Db, auto: Automation, fromNumber: string | undefined, delayDays: number) {
   const target = ago(days(delayDays));
   const window = ago(days(delayDays + 1));
   const lapsed = await db
@@ -394,7 +394,7 @@ async function processWinBack(db: Db, auto: any, fromNumber: string | undefined,
   }
 }
 
-async function processPostAppointment(db: Db, auto: any, fromNumber: string | undefined, delayHours: number) {
+async function processPostAppointment(db: Db, auto: Automation, fromNumber: string | undefined, delayHours: number) {
   const target = ago(hours(delayHours));
   const window = ago(hours(delayHours + 1));
   const completed = await db
@@ -417,7 +417,7 @@ async function processPostAppointment(db: Db, auto: any, fromNumber: string | un
   }
 }
 
-async function processConfirmationChase(db: Db, auto: any, fromNumber: string | undefined, delayHours: number, tenantTimezone: string) {
+async function processConfirmationChase(db: Db, auto: Automation, fromNumber: string | undefined, delayHours: number, tenantTimezone: string) {
   const nowUtc = Date.now();
   const tzOffset = getTzOffsetMs(tenantTimezone);
   const windowStart = new Date(nowUtc + hours(delayHours) - mins(1) - tzOffset);
@@ -444,7 +444,7 @@ async function processConfirmationChase(db: Db, auto: any, fromNumber: string | 
   }
 }
 
-async function processInboundResponseSla(db: Db, auto: any, fromNumber: string | undefined, delayMinutes: number) {
+async function processInboundResponseSla(db: Db, auto: Automation, fromNumber: string | undefined, delayMinutes: number) {
   const windowStart = ago(mins(delayMinutes + 1));
   const windowEnd = ago(mins(delayMinutes - 1));
   const recentInbound = await db
@@ -470,7 +470,7 @@ async function processInboundResponseSla(db: Db, auto: any, fromNumber: string |
   }
 }
 
-async function processQualifiedFollowUp(db: Db, auto: any, fromNumber: string | undefined, delayDays: number) {
+async function processQualifiedFollowUp(db: Db, auto: Automation, fromNumber: string | undefined, delayDays: number) {
   const target = ago(days(delayDays));
   const window = ago(days(delayDays + 1));
   const qualified = await db
@@ -493,7 +493,7 @@ async function processQualifiedFollowUp(db: Db, auto: any, fromNumber: string | 
   }
 }
 
-async function processDeliveryFailureRecovery(db: Db, auto: any, fromNumber: string | undefined, delayMinutes: number) {
+async function processDeliveryFailureRecovery(db: Db, auto: Automation, fromNumber: string | undefined, delayMinutes: number) {
   const windowStart = ago(mins(delayMinutes + 1));
   const windowEnd = ago(mins(delayMinutes - 1));
   const failedRows = await db
@@ -521,7 +521,7 @@ async function processDeliveryFailureRecovery(db: Db, auto: any, fromNumber: str
   }
 }
 
-async function processCancellationRescue(db: Db, auto: any, fromNumber: string | undefined, delayHours: number) {
+async function processCancellationRescue(db: Db, auto: Automation, fromNumber: string | undefined, delayHours: number) {
   const target = ago(hours(delayHours));
   const window = ago(hours(delayHours + 24));
   const cancelled = await db
@@ -544,7 +544,7 @@ async function processCancellationRescue(db: Db, auto: any, fromNumber: string |
   }
 }
 
-async function processWaitlistFill(db: Db, auto: any, fromNumber: string | undefined, candidateWindowDays: number) {
+async function processWaitlistFill(db: Db, auto: Automation, fromNumber: string | undefined, candidateWindowDays: number) {
   const cancellations = await db
     .select()
     .from(leads)
@@ -575,7 +575,7 @@ async function processWaitlistFill(db: Db, auto: any, fromNumber: string | undef
   }
 }
 
-async function processVipWinBack(db: Db, auto: any, fromNumber: string | undefined, delayDays: number) {
+async function processVipWinBack(db: Db, auto: Automation, fromNumber: string | undefined, delayDays: number) {
   const target = ago(days(delayDays));
   const window = ago(days(delayDays + 7));
   const lapsed = await db

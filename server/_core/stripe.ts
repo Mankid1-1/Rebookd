@@ -35,8 +35,8 @@ export function registerStripeWebhook(app: Express) {
       let event: Stripe.Event;
       try {
         event = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
-      } catch (err: any) {
-        return res.status(400).send(`Webhook Error: ${err?.message || "invalid payload"}`);
+      } catch (err) {
+        return res.status(400).send(`Webhook Error: ${err instanceof Error ? err.message : "invalid payload"}`);
       }
 
       try {
@@ -55,7 +55,7 @@ export function registerStripeWebhook(app: Express) {
             const existing = await db.select().from(subscriptions).where(eq(subscriptions.tenantId, tenantId)).limit(1);
             const payload = {
               stripeId: stripeSubId,
-              status: (sub?.status || "active") as any,
+              status: (sub?.status || "active") as "active" | "trialing" | "past_due" | "canceled" | "unpaid",
               planId,
               currentPeriodStart: sub?.current_period_start ? new Date(sub.current_period_start * 1000) : undefined,
               currentPeriodEnd: sub?.current_period_end ? new Date(sub.current_period_end * 1000) : undefined,
@@ -84,8 +84,8 @@ export function registerStripeWebhook(app: Express) {
             });
             await db.update(subscriptions).set({
               status: event.type === "invoice.payment_failed" ? "past_due" : "active",
-              currentPeriodStart: (invoice as any).period_start ? new Date((invoice as any).period_start * 1000) : undefined,
-              currentPeriodEnd: (invoice as any).period_end ? new Date((invoice as any).period_end * 1000) : undefined,
+              currentPeriodStart: (invoice as Stripe.Invoice & { period_start?: number }).period_start ? new Date((invoice as Stripe.Invoice & { period_start?: number }).period_start! * 1000) : undefined,
+              currentPeriodEnd: (invoice as Stripe.Invoice & { period_end?: number }).period_end ? new Date((invoice as Stripe.Invoice & { period_end?: number }).period_end! * 1000) : undefined,
             }).where(eq(subscriptions.id, subscription.id));
             break;
           }
@@ -122,7 +122,7 @@ export function registerStripeWebhook(app: Express) {
             await db
               .update(subscriptions)
               .set({
-                status: sub.status as any,
+                status: sub.status as "active" | "trialing" | "past_due" | "canceled" | "unpaid",
                 currentPeriodStart: sub.current_period_start ? new Date(sub.current_period_start * 1000) : undefined,
                 currentPeriodEnd: sub.current_period_end ? new Date(sub.current_period_end * 1000) : undefined,
                 trialEndsAt: sub.trial_end ? new Date(sub.trial_end * 1000) : undefined,

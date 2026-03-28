@@ -35,7 +35,9 @@ export async function getDb() {
         ...(dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1') ? {} : { ssl: { rejectUnauthorized: false } }),
       });
 
-      _db = drizzle(_pool, { schema, mode: "default" }) as any;
+      // The cast is needed because getDb() returns the Db alias (MySql2Database<schema>)
+      // but drizzle() infers a slightly different generic signature.
+      _db = drizzle(_pool, { schema, mode: "default" }) as ReturnType<typeof drizzle<typeof schema>>;
       return _db;
     } catch (error) {
       console.warn('MySQL connection failed, falling back to SQLite:', error);
@@ -48,7 +50,8 @@ export async function getDb() {
   }
   console.log('Using SQLite for development');
   const sqlite = new Database('./rebooked-dev.db');
-  _db = drizzleSqlite(sqlite, { schema }) as any;
+  // SQLite fallback for dev - cast to MySQL Db type since all callers expect it
+  _db = drizzleSqlite(sqlite, { schema }) as unknown as ReturnType<typeof drizzle<typeof schema>>;
   return _db;
 }
 

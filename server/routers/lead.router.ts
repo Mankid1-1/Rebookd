@@ -78,7 +78,7 @@ export const leadsRouter = router({
             { role: "system", content: `Rewrite in ${input.tone} tone. Under 160 chars. Return only text.` },
             { role: "user", content: input.body },
           ]});
-          const content = (result as any).choices?.[0]?.message?.content || "";
+          const content = (typeof result.choices?.[0]?.message?.content === "string" ? result.choices[0].message.content : "") || "";
           finalBody = content.trim() || finalBody;
         } catch (err) {
           if (!isAppError(err)) {
@@ -94,7 +94,7 @@ export const leadsRouter = router({
         input.idempotencyKey,
       );
       await emitEvent({ type: "message.sent", tenantId: ctx.tenantId, data: { leadId: input.leadId, body: finalBody }, userId: ctx.user.id, timestamp: new Date() });
-      return { success: res.success, errorCode: (res as any).errorCode, deduplicated: (res as any).deduplicated };
+      return { success: res.success, errorCode: "errorCode" in res ? res.errorCode : undefined, deduplicated: "deduplicated" in res ? res.deduplicated : undefined };
     }),
 
   markNoShow: tenantProcedure

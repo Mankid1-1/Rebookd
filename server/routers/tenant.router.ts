@@ -35,7 +35,7 @@ export const tenantRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const { email, phone, website, address, city, stateRegion, zipCode, ...coreFields } = input;
-      const settingsFields: Record<string, any> = {};
+      const settingsFields: Record<string, string | undefined> = {};
       if (email !== undefined) settingsFields.email = email;
       if (phone !== undefined) settingsFields.phone = phone;
       if (website !== undefined) settingsFields.website = website;
@@ -101,91 +101,91 @@ export const tenantRouter = router({
   }),
 
   updateNoShowRecoveryConfig: tenantProcedure
-    .input(z.record(z.string(), z.any()))
+    .input(z.record(z.string(), z.unknown()))
     .mutation(async ({ ctx, input }) => {
       await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "noShowRecovery", input);
       return { success: true };
     }),
 
   updateCancellationRecoveryConfig: tenantProcedure
-    .input(z.record(z.string(), z.any()))
+    .input(z.record(z.string(), z.unknown()))
     .mutation(async ({ ctx, input }) => {
       await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "cancellationRecovery", input);
       return { success: true };
     }),
 
   updateRetentionEngineConfig: tenantProcedure
-    .input(z.record(z.string(), z.any()))
+    .input(z.record(z.string(), z.unknown()))
     .mutation(async ({ ctx, input }) => {
       await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "retentionEngine", input);
       return { success: true };
     }),
 
   updateSmartSchedulingConfig: tenantProcedure
-    .input(z.record(z.string(), z.any()))
+    .input(z.record(z.string(), z.unknown()))
     .mutation(async ({ ctx, input }) => {
       await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "smartScheduling", input);
       return { success: true };
     }),
 
   updateBookingConversionConfig: tenantProcedure
-    .input(z.record(z.string(), z.any()))
+    .input(z.record(z.string(), z.unknown()))
     .mutation(async ({ ctx, input }) => {
       await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "bookingConversion", input);
       return { success: true };
     }),
 
   updateLeadCaptureConfig: tenantProcedure
-    .input(z.record(z.string(), z.any()))
+    .input(z.record(z.string(), z.unknown()))
     .mutation(async ({ ctx, input }) => {
       await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "leadCapture", input);
       return { success: true };
     }),
 
   updatePaymentEnforcementConfig: tenantProcedure
-    .input(z.record(z.string(), z.any()))
+    .input(z.record(z.string(), z.unknown()))
     .mutation(async ({ ctx, input }) => {
       await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "paymentEnforcement", input);
       return { success: true };
     }),
 
   updateAfterHoursConfig: tenantProcedure
-    .input(z.record(z.string(), z.any()))
+    .input(z.record(z.string(), z.unknown()))
     .mutation(async ({ ctx, input }) => {
       await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "afterHours", input);
       return { success: true };
     }),
 
   updateAdminAutomationConfig: tenantProcedure
-    .input(z.record(z.string(), z.any()))
+    .input(z.record(z.string(), z.unknown()))
     .mutation(async ({ ctx, input }) => {
       await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "adminAutomation", input);
       return { success: true };
     }),
 
   updateCalendarIntegrationConfig: tenantProcedure
-    .input(z.record(z.string(), z.any()))
+    .input(z.record(z.string(), z.unknown()))
     .mutation(async ({ ctx, input }) => {
       await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "calendarIntegration", input);
       return { success: true };
     }),
 
   updateWaitingListConfig: tenantProcedure
-    .input(z.record(z.string(), z.any()))
+    .input(z.record(z.string(), z.unknown()))
     .mutation(async ({ ctx, input }) => {
       await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "waitingList", input);
       return { success: true };
     }),
 
   updateReviewManagementConfig: tenantProcedure
-    .input(z.record(z.string(), z.any()))
+    .input(z.record(z.string(), z.unknown()))
     .mutation(async ({ ctx, input }) => {
       await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "reviewManagement", input);
       return { success: true };
     }),
 
   updateReschedulingConfig: tenantProcedure
-    .input(z.record(z.string(), z.any()))
+    .input(z.record(z.string(), z.unknown()))
     .mutation(async ({ ctx, input }) => {
       await TenantService.updateFeatureConfig(ctx.db, ctx.tenantId, "rescheduling", input);
       return { success: true };
@@ -214,7 +214,7 @@ export const tenantRouter = router({
       .input(z.object({ email: z.string().email() }))
       .mutation(async ({ ctx, input }) => {
         // Only owners can invite
-        const caller = await ctx.db.select({ tenantRole: users.tenantRole }).from(users).where(eq(users.id, ctx.user.id)).then((r: any[]) => r[0]);
+        const caller = await ctx.db.select({ tenantRole: users.tenantRole }).from(users).where(eq(users.id, ctx.user.id)).then((r) => r[0]);
         if (caller && caller.tenantRole === "employee") {
           throw new TRPCError({ code: "FORBIDDEN", message: "Only the account owner can invite team members" });
         }
@@ -227,13 +227,13 @@ export const tenantRouter = router({
         }
 
         // Check if already a member of this tenant
-        const existing = await ctx.db.select({ id: users.id }).from(users).where(and(eq(users.email, input.email), eq(users.tenantId, ctx.tenantId))).then((r: any[]) => r[0]);
+        const existing = await ctx.db.select({ id: users.id }).from(users).where(and(eq(users.email, input.email), eq(users.tenantId, ctx.tenantId))).then((r) => r[0]);
         if (existing) {
           throw new TRPCError({ code: "CONFLICT", message: "This user is already a team member" });
         }
 
         // Check for existing pending invitation
-        const existingInvite = await ctx.db.select({ id: tenantInvitations.id }).from(tenantInvitations).where(and(eq(tenantInvitations.email, input.email), eq(tenantInvitations.tenantId, ctx.tenantId), gte(tenantInvitations.expiresAt, new Date()))).then((r: any[]) => r[0]);
+        const existingInvite = await ctx.db.select({ id: tenantInvitations.id }).from(tenantInvitations).where(and(eq(tenantInvitations.email, input.email), eq(tenantInvitations.tenantId, ctx.tenantId), gte(tenantInvitations.expiresAt, new Date()))).then((r) => r[0]);
         if (existingInvite) {
           throw new TRPCError({ code: "CONFLICT", message: "An invitation is already pending for this email" });
         }
@@ -269,7 +269,7 @@ export const tenantRouter = router({
       .input(z.object({ userId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         // Only owners can remove
-        const caller = await ctx.db.select({ tenantRole: users.tenantRole }).from(users).where(eq(users.id, ctx.user.id)).then((r: any[]) => r[0]);
+        const caller = await ctx.db.select({ tenantRole: users.tenantRole }).from(users).where(eq(users.id, ctx.user.id)).then((r) => r[0]);
         if (caller && caller.tenantRole === "employee") {
           throw new TRPCError({ code: "FORBIDDEN", message: "Only the account owner can remove team members" });
         }
@@ -280,7 +280,7 @@ export const tenantRouter = router({
         }
 
         // Verify the user belongs to this tenant
-        const target = await ctx.db.select({ id: users.id, tenantId: users.tenantId }).from(users).where(eq(users.id, input.userId)).then((r: any[]) => r[0]);
+        const target = await ctx.db.select({ id: users.id, tenantId: users.tenantId }).from(users).where(eq(users.id, input.userId)).then((r) => r[0]);
         if (!target || target.tenantId !== ctx.tenantId) {
           throw new TRPCError({ code: "NOT_FOUND", message: "User not found in your team" });
         }
@@ -306,7 +306,7 @@ export const tenantRouter = router({
     cancelInvite: tenantProcedure
       .input(z.object({ invitationId: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const caller = await ctx.db.select({ tenantRole: users.tenantRole }).from(users).where(eq(users.id, ctx.user.id)).then((r: any[]) => r[0]);
+        const caller = await ctx.db.select({ tenantRole: users.tenantRole }).from(users).where(eq(users.id, ctx.user.id)).then((r) => r[0]);
         if (caller && caller.tenantRole === "employee") {
           throw new TRPCError({ code: "FORBIDDEN", message: "Only the account owner can cancel invitations" });
         }
@@ -318,12 +318,12 @@ export const tenantRouter = router({
     resendInvite: tenantProcedure
       .input(z.object({ invitationId: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const caller = await ctx.db.select({ tenantRole: users.tenantRole }).from(users).where(eq(users.id, ctx.user.id)).then((r: any[]) => r[0]);
+        const caller = await ctx.db.select({ tenantRole: users.tenantRole }).from(users).where(eq(users.id, ctx.user.id)).then((r) => r[0]);
         if (caller && caller.tenantRole === "employee") {
           throw new TRPCError({ code: "FORBIDDEN", message: "Only the account owner can resend invitations" });
         }
 
-        const invitation = await ctx.db.select().from(tenantInvitations).where(and(eq(tenantInvitations.id, input.invitationId), eq(tenantInvitations.tenantId, ctx.tenantId))).then((r: any[]) => r[0]);
+        const invitation = await ctx.db.select().from(tenantInvitations).where(and(eq(tenantInvitations.id, input.invitationId), eq(tenantInvitations.tenantId, ctx.tenantId))).then((r) => r[0]);
         if (!invitation) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Invitation not found" });
         }

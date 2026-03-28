@@ -16,7 +16,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 export interface WebhookEvent {
   type: string;
   data: {
-    object: any;
+    object: Record<string, unknown> & { id?: string };
   };
 }
 
@@ -111,7 +111,7 @@ export async function processStripeWebhook(event: WebhookEvent): Promise<void> {
     
   } catch (error) {
     console.error(`Webhook processing failed for ${event.type}:`, error);
-    await logWebhookEvent(event, 'failed', error.message);
+    await logWebhookEvent(event, 'failed', error instanceof Error ? error.message : String(error));
     throw error;
   }
 }
@@ -510,7 +510,7 @@ async function logWebhookEvent(event: WebhookEvent, status: string, error?: stri
   await (db as any).insert('webhook_events').values({
     id: crypto.randomUUID(),
     eventType: event.type,
-    eventId: (event.data.object as any).id,
+    eventId: event.data.object.id ?? "",
     status,
     error,
     payload: JSON.stringify(event),
@@ -518,7 +518,14 @@ async function logWebhookEvent(event: WebhookEvent, status: string, error?: stri
   });
 }
 
-async function logPaymentEvent(paymentData: any): Promise<void> {
+async function logPaymentEvent(paymentData: {
+  customerId: string;
+  subscriptionId: string;
+  amount: number;
+  status: string;
+  invoiceId: string;
+  createdAt: Date;
+}): Promise<void> {
   const db = await getDb();
   
   await (db as any).insert('payment_events').values({

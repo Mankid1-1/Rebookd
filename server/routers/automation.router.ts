@@ -6,6 +6,7 @@ import { invokeLLM } from "../_core/llm";
 import * as AutomationService from "../services/automation.service";
 import * as TenantService from "../services/tenant.service";
 import { runAutomationsForEvent } from "../services/automationRunner";
+import type { EventType } from "../../shared/events";
 import { automationTemplates } from "../../shared/templates";
 import { isAppError } from "../_core/appErrors";
 
@@ -29,7 +30,7 @@ export const automationsRouter = router({
         // Check plan automation limits
         const limits = await TenantService.getTenantPlanLimits(ctx.db, ctx.tenantId);
         const allAutomations = await AutomationService.getAutomations(ctx.db, ctx.tenantId);
-        const enabledCount = allAutomations.filter((a: any) => a.enabled).length;
+        const enabledCount = allAutomations.filter((a) => a.enabled).length;
         if (enabledCount >= limits.maxAutomations) {
           throw new TRPCError({
             code: "FORBIDDEN",
@@ -45,7 +46,7 @@ export const automationsRouter = router({
     }),
 
   configureByKey: tenantProcedure
-    .input(z.object({ key: z.string(), config: z.record(z.string(), z.any()) }))
+    .input(z.object({ key: z.string(), config: z.record(z.string(), z.unknown()) }))
     .mutation(async ({ ctx, input }) => {
       // Check trial status before configuring automations
       const entitled = await TenantService.tenantHasAutomationAccess(ctx.db, ctx.tenantId);
@@ -83,20 +84,22 @@ export const automationsRouter = router({
 
       const template = automationTemplates.find(t => t.key === input.templateKey);
       if (!template) throw new TRPCError({ code: "NOT_FOUND" });
-      const triggerMapping: Record<string, string> = {
+      type AutoTriggerType = "new_lead" | "inbound_message" | "status_change" | "time_delay" | "appointment_reminder" | "custom";
+      const triggerMapping: Record<string, AutoTriggerType> = {
         "lead.created": "new_lead",
         "appointment.booked": "appointment_reminder",
         "appointment.no_show": "time_delay",
         "appointment.cancelled": "appointment_reminder",
         "message.received": "inbound_message",
       };
+      type AutoCategory = "follow_up" | "reactivation" | "appointment" | "welcome" | "custom" | "no_show" | "cancellation" | "loyalty";
       await AutomationService.upsertAutomationByKey(ctx.db, ctx.tenantId, template.key, {
         name: template.name,
-        category: template.category as any,
-        triggerType: triggerMapping[template.trigger] as any || "custom",
+        category: template.category as AutoCategory,
+        triggerType: triggerMapping[template.trigger] || "custom",
         triggerConfig: {},
         conditions: [],
-        actions: template.steps as any,
+        actions: template.steps as Array<Record<string, unknown>>,
         enabled: true,
       });
       return { success: true };
@@ -107,7 +110,7 @@ export const automationsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const auto = await AutomationService.getAutomationById(ctx.db, ctx.tenantId, input.automationId);
       if (!auto) throw new TRPCError({ code: "NOT_FOUND" });
-      await runAutomationsForEvent({ type: auto.triggerType as any, tenantId: ctx.tenantId, data: { phone: input.testPhone, first_name: "Test User" }, timestamp: new Date() });
+      await runAutomationsForEvent({ type: auto.triggerType as EventType, tenantId: ctx.tenantId, data: { phone: input.testPhone, first_name: "Test User" }, timestamp: new Date() });
       return { success: true, message: "Test sequence fired" };
     }),
 });
@@ -125,7 +128,7 @@ export const aiRouter = router({
           { role: "system", content: `Expert SMS copywriter. Rewrite in ${input.tone} tone. Under 160 chars. Return ONLY the message.` },
           { role: "user", content: input.message },
         ]});
-        const content = (result as any).choices?.[0]?.message?.content || "";
+        const content = (typeof result.choices?.[0]?.message?.content === "string" ? result.choices[0].message.content : "") || "";
         return { rewritten: content.trim() };
       } catch (err) {
         console.error("AI rewrite error:", err);
