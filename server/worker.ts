@@ -71,6 +71,33 @@ function getTzOffsetMs(timezone: string): number {
   }
 }
 
+/**
+ * Given a target UTC time and a recipient timezone, return the next valid
+ * send time that respects TCPA quiet hours (8am-9pm in recipient TZ).
+ * If the target time is already valid, returns it unchanged.
+ */
+function getNextValidSendTime(utcTime: Date, recipientTimezone: string): Date {
+  const offset = getTzOffsetMs(recipientTimezone);
+  const localTime = new Date(utcTime.getTime() + offset);
+  const localHour = localTime.getHours();
+
+  // TCPA: no SMS before 8am or after 9pm in recipient timezone
+  if (localHour >= 8 && localHour < 21) return utcTime; // Already valid
+
+  // If too late (9pm+), push to next day 8am
+  if (localHour >= 21) {
+    const nextMorning = new Date(localTime);
+    nextMorning.setDate(nextMorning.getDate() + 1);
+    nextMorning.setHours(8, 0, 0, 0);
+    return new Date(nextMorning.getTime() - offset);
+  }
+
+  // If too early (before 8am), push to 8am today
+  const thisMorning = new Date(localTime);
+  thisMorning.setHours(8, 0, 0, 0);
+  return new Date(thisMorning.getTime() - offset);
+}
+
 // ─── Idempotency ──────────────────────────────────────────────────────────────
 
 /**

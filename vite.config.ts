@@ -19,6 +19,19 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("react-dom") || id.includes("react/jsx") || id.includes("/react/")) return "vendor-react";
+            if (id.includes("@radix-ui") || id.includes("class-variance-authority") || id.includes("clsx") || id.includes("tailwind-merge")) return "vendor-ui";
+            if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
+            if (id.includes("@stripe") || id.includes("stripe")) return "vendor-stripe";
+            if (id.includes("framer-motion")) return "vendor-motion";
+          }
+        },
+      },
+    },
   },
   server: {
     host: true,
