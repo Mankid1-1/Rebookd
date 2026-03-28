@@ -170,27 +170,35 @@ export function setupWebSocket(server: HttpServer) {
 
     // Handle incoming frames (just for pong/close, we don't expect client messages)
     socket.on("data", (data: Buffer) => {
-      if (data.length < 2) return;
-      const opcode = data[0] & 0x0f;
-      if (opcode === 0x08) {
-        // Close frame
+      try {
+        if (data.length < 2) return;
+        const opcode = data[0] & 0x0f;
+        if (opcode === 0x08) {
+          // Close frame
+          set.delete(conn);
+          socket.destroy();
+        } else if (opcode === 0x09) {
+          // Ping -> send pong
+          const pong = Buffer.alloc(2);
+          pong[0] = 0x8a; // FIN + pong
+          pong[1] = 0;
+          socket.write(pong);
+        }
+      } catch {
+        // Malformed frame — kill the connection
         set.delete(conn);
         socket.destroy();
-      } else if (opcode === 0x09) {
-        // Ping -> send pong
-        const pong = Buffer.alloc(2);
-        pong[0] = 0x8a; // FIN + pong
-        pong[1] = 0;
-        socket.write(pong);
       }
     });
   });
 
-  // Heartbeat to clean dead connections
+  // Heartbeat to clean dead/stale connections (every 30s)
+  const MAX_CONN_AGE_MS = 24 * 60 * 60 * 1000; // 24h max connection lifetime
   const interval = setInterval(() => {
+    const now = Date.now();
     for (const [tenantId, set] of connections) {
       for (const conn of set) {
-        if (conn.socket.destroyed) {
+        if (conn.socket.destroyed || conn.socket.closed) {
           set.delete(conn);
         }
       }

@@ -712,8 +712,13 @@ async function runCycleInner() {
   const db = await getDb();
   if (!db) { logger.warn("Worker: DB unavailable, skipping cycle"); return; }
 
-  await processTrialReminders(db);
-  await processQueuedAutomationJobs(db);
+  // Wrap each sub-task so one failure doesn't kill the entire cycle
+  try { await processTrialReminders(db); } catch (err) {
+    logger.error("Worker: processTrialReminders failed", { error: String(err) });
+  }
+  try { await processQueuedAutomationJobs(db); } catch (err) {
+    logger.error("Worker: processQueuedAutomationJobs failed", { error: String(err) });
+  }
   
   // Process incoming emails from POP3
   try {
@@ -728,10 +733,16 @@ async function runCycleInner() {
   }
 
   // Fetch all enabled automations in ONE query
-  const allAutomations = await db
-    .select()
-    .from(automations)
-    .where(and(eq(automations.enabled, true), isNull(automations.deletedAt)));
+  let allAutomations;
+  try {
+    allAutomations = await db
+      .select()
+      .from(automations)
+      .where(and(eq(automations.enabled, true), isNull(automations.deletedAt)));
+  } catch (err) {
+    logger.error("Worker: Failed to fetch automations", { error: String(err) });
+    return;
+  }
 
   if (allAutomations.length === 0) return;
 

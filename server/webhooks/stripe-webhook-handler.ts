@@ -26,6 +26,14 @@ export interface WebhookEvent {
 const processedEvents = new Map<string, number>();
 const DEDUP_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+// Periodic cleanup every 15 minutes to bound memory usage
+setInterval(() => {
+  const cutoff = Date.now() - DEDUP_TTL_MS;
+  for (const [key, ts] of processedEvents) {
+    if (ts < cutoff) processedEvents.delete(key);
+  }
+}, 15 * 60 * 1000).unref();
+
 function isDuplicateEvent(eventId: string | undefined): boolean {
   if (!eventId) return false;
   const ts = processedEvents.get(eventId);

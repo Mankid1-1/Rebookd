@@ -53,14 +53,17 @@ export function csrfProtection() {
  * Limits signup attempts to 3 per hour per IP.
  */
 const signupAttempts = new Map<string, { count: number; resetAt: number }>();
+const MAX_SIGNUP_ENTRIES = 5_000;
 
-// Cleanup stale entries every 10 minutes
+// Cleanup stale entries every 5 minutes
 setInterval(() => {
   const now = Date.now();
   for (const [ip, entry] of signupAttempts) {
     if (entry.resetAt < now) signupAttempts.delete(ip);
   }
-}, 10 * 60 * 1000);
+  // Hard cap
+  if (signupAttempts.size > MAX_SIGNUP_ENTRIES) signupAttempts.clear();
+}, 5 * 60 * 1000).unref();
 
 export function signupRateLimit() {
   return (req: Request, res: Response, next: NextFunction) => {

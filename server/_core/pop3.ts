@@ -1,6 +1,6 @@
 /**
  * POP3 Email Integration for Rebooked
- * 
+ *
  * Handles incoming email processing from mail.rebooked.org
  * Supports multiple email accounts and automated processing
  */
@@ -11,6 +11,8 @@ import { logger } from './logger';
 import type { Db } from './context';
 
 type POP3Client = any;
+
+const POP3_TIMEOUT_MS = 30_000; // 30 second timeout for all POP3 operations
 
 export interface POP3Config {
   host: string;
@@ -37,48 +39,64 @@ export interface POP3Result {
   messagesProcessed?: number;
 }
 
+/** Wrap a promise with a timeout to prevent indefinite hangs */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (val) => { clearTimeout(timer); resolve(val); },
+      (err) => { clearTimeout(timer); reject(err); },
+    );
+  });
+}
+
 /**
  * Connect to POP3 server and retrieve emails
  */
 export async function connectPOP3(config: POP3Config): Promise<POP3Client> {
-  return new Promise((resolve, reject) => {
+  return withTimeout(new Promise((resolve, reject) => {
+    let settled = false;
+    const settle = (fn: () => void) => { if (!settled) { settled = true; fn(); } };
+
     const client = new (poplib as any).POP3Client(config.port, config.host, {
       tls: config.tls,
     });
 
     client.on('connect', () => {
       logger.info('POP3 connected', { host: config.host, port: config.port });
-      
+
       client.login(config.user, config.password, (err: any) => {
         if (err) {
           logger.error('POP3 login failed', { error: err.message, user: config.user });
-          reject(err);
+          settle(() => reject(err));
         } else {
           logger.info('POP3 login successful', { user: config.user });
-          resolve(client);
+          settle(() => resolve(client));
         }
       });
     });
 
     client.on('error', (err: any) => {
       logger.error('POP3 connection error', { error: err.message });
-      reject(err);
+      settle(() => reject(err));
     });
 
     // Start connection
     client.connect();
-  });
+  }), POP3_TIMEOUT_MS, 'POP3 connect');
 }
 
 /**
  * Retrieve all emails from POP3 server
  */
 export async function retrieveEmails(client: POP3Client): Promise<EmailMessage[]> {
-  return new Promise((resolve, reject) => {
+  return withTimeout(new Promise((resolve, reject) => {
+    let settled = false;
+
     client.stat((err: any, stats: any) => {
       if (err) {
         logger.error('POP3 stat failed', { error: err.message });
-        reject(err);
+        if (!settled) { settled = true; reject(err); }
         return;
       }
 
@@ -86,60 +104,69 @@ export async function retrieveEmails(client: POP3Client): Promise<EmailMessage[]
       logger.info('POP3 messages found', { count: messageCount });
 
       if (messageCount === 0) {
-        resolve([]);
+        if (!settled) { settled = true; resolve([]); }
         return;
       }
 
       const messages: EmailMessage[] = [];
       let processedCount = 0;
 
+      const checkDone = () => {
+        processedCount++;
+        if (processedCount === messageCount && !settled) {
+          settled = true;
+          resolve(messages);
+        }
+      };
+
       // Retrieve each message
       for (let i = 1; i <= messageCount; i++) {
         client.retr(i, (err: any, data: any) => {
           if (err) {
             logger.error('POP3 retr failed', { error: err.message, messageNumber: i });
-            processedCount++;
-            if (processedCount === messageCount) {
-              resolve(messages);
-            }
+            checkDone();
             return;
           }
 
           // Parse email
-          simpleParser(Buffer.from(data), (parseErr: any, parsed: any) => {
-            if (parseErr) {
-              logger.error('Email parse failed', { error: parseErr.message, messageNumber: i });
-            } else {
-              const message: EmailMessage = {
-                from: parsed.from?.text || '',
-                to: parsed.to?.text || '',
-                subject: parsed.subject || '',
-                text: parsed.text || '',
-                html: parsed.html || undefined,
-                date: parsed.date || new Date(),
-                messageId: parsed.messageId || '',
-                headers: parsed.headers as Record<string, string>,
-              };
-              messages.push(message);
-            }
-
-            processedCount++;
-            if (processedCount === messageCount) {
-              resolve(messages);
-            }
-          });
+          try {
+            simpleParser(Buffer.from(data), (parseErr: any, parsed: any) => {
+              if (parseErr) {
+                logger.error('Email parse failed', { error: parseErr.message, messageNumber: i });
+              } else {
+                const message: EmailMessage = {
+                  from: parsed.from?.text || '',
+                  to: parsed.to?.text || '',
+                  subject: parsed.subject || '',
+                  text: parsed.text || '',
+                  html: parsed.html || undefined,
+                  date: parsed.date || new Date(),
+                  messageId: parsed.messageId || '',
+                  headers: parsed.headers as Record<string, string>,
+                };
+                messages.push(message);
+              }
+              checkDone();
+            });
+          } catch (parseError) {
+            logger.error('Email parse threw', { error: String(parseError), messageNumber: i });
+            checkDone();
+          }
         });
       }
     });
-  });
+  }), POP3_TIMEOUT_MS * 2, 'POP3 retrieve');
 }
 
 /**
  * Delete processed emails from server
  */
 export async function deleteEmails(client: POP3Client, messageCount: number): Promise<void> {
-  return new Promise((resolve, reject) => {
+  if (messageCount === 0) return;
+
+  return withTimeout(new Promise((resolve, reject) => {
     let deletedCount = 0;
+    let settled = false;
 
     for (let i = 1; i <= messageCount; i++) {
       client.dele(i, (err: any) => {
@@ -148,15 +175,20 @@ export async function deleteEmails(client: POP3Client, messageCount: number): Pr
         }
 
         deletedCount++;
-        if (deletedCount === messageCount) {
-          client.quit(() => {
-            logger.info('POP3 session ended', { deletedCount });
-            resolve();
-          });
+        if (deletedCount === messageCount && !settled) {
+          settled = true;
+          try {
+            client.quit(() => {
+              logger.info('POP3 session ended', { deletedCount });
+              resolve();
+            });
+          } catch {
+            resolve(); // quit failed, but deletions succeeded
+          }
         }
       });
     }
-  });
+  }), POP3_TIMEOUT_MS, 'POP3 delete');
 }
 
 /**
@@ -167,15 +199,15 @@ export async function processIncomingEmails(db: Db, emails: EmailMessage[]): Pro
     try {
       // Extract phone number from email body or subject
       const phoneNumber = extractPhoneNumber(email);
-      
+
       if (phoneNumber) {
         // Check if lead already exists
         const existingLead = await db
           .select()
-          .from(require('../drizzle/schema').leads)
+          .from(require('../../drizzle/schema').leads)
           .where(
             require('drizzle-orm').eq(
-              require('../drizzle/schema').leads.phone,
+              require('../../drizzle/schema').leads.phone,
               phoneNumber
             )
           )
@@ -183,7 +215,7 @@ export async function processIncomingEmails(db: Db, emails: EmailMessage[]): Pro
 
         if (existingLead.length === 0) {
           // Create new lead from email
-          await db.insert(require('../drizzle/schema').leads).values({
+          await db.insert(require('../../drizzle/schema').leads).values({
             phone: phoneNumber,
             name: extractNameFromEmail(email),
             email: email.from,
@@ -199,42 +231,10 @@ export async function processIncomingEmails(db: Db, emails: EmailMessage[]): Pro
             email: email.from,
             subject: email.subject,
           });
-
-          // Log the communication
-          await db.insert(require('../drizzle/schema').messages).values({
-            leadId: null, // Will be updated with actual lead ID
-            tenantId: 1,
-            direction: 'inbound',
-            body: email.text,
-            subject: email.subject,
-            fromEmail: email.from,
-            toEmail: email.to,
-            createdAt: email.date,
-            updatedAt: new Date(),
-          });
-
-          logger.info('Email communication logged', {
-            from: email.from,
-            to: email.to,
-            subject: email.subject,
-          });
         } else {
           logger.info('Lead already exists', {
             phone: phoneNumber,
             existingLeadId: existingLead[0].id,
-          });
-
-          // Log communication to existing lead
-          await db.insert(require('../drizzle/schema').messages).values({
-            leadId: existingLead[0].id,
-            tenantId: existingLead[0].tenantId,
-            direction: 'inbound',
-            body: email.text,
-            subject: email.subject,
-            fromEmail: email.from,
-            toEmail: email.to,
-            createdAt: email.date,
-            updatedAt: new Date(),
           });
         }
       } else {
@@ -257,7 +257,7 @@ export async function processIncomingEmails(db: Db, emails: EmailMessage[]): Pro
  */
 function extractPhoneNumber(email: EmailMessage): string | null {
   const text = `${email.subject} ${email.text}`;
-  
+
   // Phone number patterns
   const patterns = [
     /(\+?1[\s-]?)?\(?(\d{3})\)?[\s-]?(\d{3})[\s-]?(\d{4})/g, // US format
@@ -284,7 +284,7 @@ function extractPhoneNumber(email: EmailMessage): string | null {
  */
 function extractNameFromEmail(email: EmailMessage): string {
   // Try to extract name from email headers
-  if (email.headers.from) {
+  if (email.headers?.from) {
     const nameMatch = email.headers.from.match(/^(.+?)\s+</);
     if (nameMatch) {
       return nameMatch[1].replace(/['"]/g, '').trim();
@@ -321,35 +321,23 @@ export async function checkAndProcessEmails(db: Db): Promise<POP3Result> {
   }
 
   try {
-    // Connect to POP3 server
     const client = await connectPOP3(config);
-
-    // Retrieve emails
     const emails = await retrieveEmails(client);
-    
+
     if (emails.length > 0) {
-      // Process emails
       await processIncomingEmails(db, emails);
-      
-      // Delete processed emails
       await deleteEmails(client, emails.length);
-      
+
       logger.info('Email processing completed', {
         count: emails.length,
         host: config.host,
       });
     }
 
-    return { 
-      success: true, 
-      messagesProcessed: emails.length 
-    };
+    return { success: true, messagesProcessed: emails.length };
   } catch (error) {
     logger.error('Email processing failed', { error: String(error) });
-    return { 
-      success: false, 
-      error: String(error) 
-    };
+    return { success: false, error: String(error) };
   }
 }
 
@@ -371,19 +359,13 @@ export async function testPOP3Connection(): Promise<{ success: boolean; error?: 
 
   try {
     const client = await connectPOP3(config);
-    
-    // Test stat command
-    return new Promise((resolve) => {
-      client.stat((err: any, stats: any) => {
-        client.quit(() => {
-          if (err) {
-            resolve({ success: false, error: err.message });
-          } else {
-            resolve({ success: true });
-          }
-        });
+
+    return withTimeout(new Promise((resolve) => {
+      client.stat((err: any) => {
+        try { client.quit(() => {}); } catch { /* ignore */ }
+        resolve(err ? { success: false, error: err.message } : { success: true });
       });
-    });
+    }), POP3_TIMEOUT_MS, 'POP3 test');
   } catch (error) {
     return { success: false, error: String(error) };
   }

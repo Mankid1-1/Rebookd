@@ -191,9 +191,8 @@ export const tenantRouter = router({
       return { success: true };
     }),
 
-  // ─── Team Management ───────────────────────────────────────────────
-  team: router({
-    list: tenantProcedure.query(async ({ ctx }) => {
+  // ─── Team Management (flattened – tRPC v11 doesn't resolve nested routers) ───
+  teamList: tenantProcedure.query(async ({ ctx }) => {
       const members = await ctx.db
         .select({
           id: users.id,
@@ -208,9 +207,9 @@ export const tenantRouter = router({
         ...m,
         tenantRole: m.tenantRole ?? "owner",
       }));
-    }),
+  }),
 
-    invite: tenantProcedure
+  teamInvite: tenantProcedure
       .input(z.object({ email: z.string().email() }))
       .mutation(async ({ ctx, input }) => {
         // Only owners can invite
@@ -263,11 +262,11 @@ export const tenantRouter = router({
         });
 
         return { success: true };
-      }),
+  }),
 
-    remove: tenantProcedure
-      .input(z.object({ userId: z.number() }))
-      .mutation(async ({ ctx, input }) => {
+  teamRemove: tenantProcedure
+    .input(z.object({ userId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
         // Only owners can remove
         const caller = await ctx.db.select({ tenantRole: users.tenantRole }).from(users).where(eq(users.id, ctx.user.id)).then((r) => r[0]);
         if (caller && caller.tenantRole === "employee") {
@@ -287,9 +286,9 @@ export const tenantRouter = router({
 
         await ctx.db.update(users).set({ tenantId: null, tenantRole: null }).where(eq(users.id, input.userId));
         return { success: true };
-      }),
+  }),
 
-    pending: tenantProcedure.query(async ({ ctx }) => {
+  teamPending: tenantProcedure.query(async ({ ctx }) => {
       const invitations = await ctx.db
         .select({
           id: tenantInvitations.id,
@@ -301,9 +300,9 @@ export const tenantRouter = router({
         .from(tenantInvitations)
         .where(and(eq(tenantInvitations.tenantId, ctx.tenantId), gte(tenantInvitations.expiresAt, new Date())));
       return invitations;
-    }),
+  }),
 
-    cancelInvite: tenantProcedure
+  teamCancelInvite: tenantProcedure
       .input(z.object({ invitationId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const caller = await ctx.db.select({ tenantRole: users.tenantRole }).from(users).where(eq(users.id, ctx.user.id)).then((r) => r[0]);
@@ -313,9 +312,9 @@ export const tenantRouter = router({
 
         await ctx.db.delete(tenantInvitations).where(and(eq(tenantInvitations.id, input.invitationId), eq(tenantInvitations.tenantId, ctx.tenantId)));
         return { success: true };
-      }),
+  }),
 
-    resendInvite: tenantProcedure
+  teamResendInvite: tenantProcedure
       .input(z.object({ invitationId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const caller = await ctx.db.select({ tenantRole: users.tenantRole }).from(users).where(eq(users.id, ctx.user.id)).then((r) => r[0]);
@@ -345,7 +344,6 @@ export const tenantRouter = router({
         });
 
         return { success: true };
-      }),
   }),
 });
 

@@ -211,9 +211,9 @@ export default function Settings() {
   const [inviteSending, setInviteSending] = useState(false);
 
   // ── Team data from API ──
-  const { data: teamMembers = [], refetch: refetchTeam } = trpc.tenant.team.list.useQuery(undefined, { retry: false });
-  const { data: pendingInvitations = [], refetch: refetchPending } = trpc.tenant.team.pending.useQuery(undefined, { retry: false });
-  const inviteMutation = trpc.tenant.team.invite.useMutation({
+  const { data: teamMembers = [], refetch: refetchTeam } = trpc.tenant.teamList.useQuery(undefined, { retry: false });
+  const { data: pendingInvitations = [], refetch: refetchPending } = trpc.tenant.teamPending.useQuery(undefined, { retry: false });
+  const inviteMutation = trpc.tenant.teamInvite.useMutation({
     onSuccess: () => {
       toast.success(`Invitation sent to ${inviteEmail}`);
       setInviteEmail("");
@@ -222,21 +222,21 @@ export default function Settings() {
     onError: (err) => toast.error(err.message),
     onSettled: () => setInviteSending(false),
   });
-  const removeMutation = trpc.tenant.team.remove.useMutation({
+  const removeMutation = trpc.tenant.teamRemove.useMutation({
     onSuccess: () => {
       toast.success("Team member removed");
       refetchTeam();
     },
     onError: (err) => toast.error(err.message),
   });
-  const cancelInviteMutation = trpc.tenant.team.cancelInvite.useMutation({
+  const cancelInviteMutation = trpc.tenant.teamCancelInvite.useMutation({
     onSuccess: () => {
       toast.success("Invitation cancelled");
       refetchPending();
     },
     onError: (err) => toast.error(err.message),
   });
-  const resendInviteMutation = trpc.tenant.team.resendInvite.useMutation({
+  const resendInviteMutation = trpc.tenant.teamResendInvite.useMutation({
     onSuccess: () => toast.success("Invitation resent"),
     onError: (err) => toast.error(err.message),
   });
