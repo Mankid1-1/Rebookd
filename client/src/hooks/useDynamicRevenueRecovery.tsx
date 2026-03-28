@@ -10,6 +10,18 @@ import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisc
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/hooks/useAuth';
 
+// Re-export for other components
+export { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
+
+// Feature usage tracking utility
+export function trackFeatureUsage(feature: string, action: string, metadata?: any) {
+  // Track feature usage for analytics and progressive disclosure
+  console.log('Feature usage:', { feature, action, metadata });
+  
+  // In a real implementation, this would send to analytics service
+  // Example: trpc.analytics.trackFeatureUsage.mutate({ feature, action, metadata });
+}
+
 // Dynamic leakage detection based on user's historical conversion rates
 export function useDynamicLeakageDetection() {
   const { data: userMetrics } = trpc.analytics.userConversionMetrics.useQuery();

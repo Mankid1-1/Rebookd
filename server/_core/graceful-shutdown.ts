@@ -37,28 +37,19 @@ class GracefulShutdown {
   }
 
   /**
-   * Setup signal handlers for graceful shutdown
+   * Setup signal handlers for graceful shutdown.
+   * Note: Only registers SIGTERM/SIGINT/SIGUSR2 here.
+   * uncaughtException and unhandledRejection are handled by _core/index.ts
+   * to avoid duplicate/competing handlers.
    */
   private setupSignalHandlers() {
     const signals = ['SIGTERM', 'SIGINT', 'SIGUSR2'];
-    
+
     signals.forEach(signal => {
       process.on(signal, () => {
-        console.log(`\n🛑 Received ${signal}, starting graceful shutdown...`);
+        console.log(`\n Received ${signal}, starting graceful shutdown...`);
         this.shutdown(signal);
       });
-    });
-
-    // Handle uncaught exceptions
-    process.on('uncaughtException', (error) => {
-      console.error('💥 Uncaught Exception:', error);
-      this.shutdown('uncaughtException');
-    });
-
-    // Handle unhandled promise rejections
-    process.on('unhandledRejection', (reason, promise) => {
-      console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
-      this.shutdown('unhandledRejection');
     });
   }
 
@@ -128,38 +119,40 @@ class GracefulShutdown {
    * Close database connections
    */
   private async closeDatabaseConnections(): Promise<void> {
-    return new Promise((resolve) => {
-      // This would integrate with your database connection pool
-      console.log('🔄 Database connections closed');
-      resolve();
-    });
+    try {
+      const { getDb } = await import('../db');
+      const db = await getDb();
+      if (db && db.$client) {
+        await db.$client.end();
+        console.log('Database connections closed');
+      }
+    } catch (err) {
+      console.error('Error closing database connections:', err);
+    }
   }
 
   /**
    * Cleanup memory and caches
    */
   private async cleanupMemory(): Promise<void> {
-    return new Promise((resolve) => {
-      // Force garbage collection if available
-      if (global.gc) {
-        global.gc();
-        console.log('🗑️ Forced garbage collection');
-      }
+    // Force garbage collection if available
+    if (global.gc) {
+      global.gc();
+      console.log('Forced garbage collection');
+    }
 
-      // Clear any caches
-      try {
-        const { clearSearchCache } = require('../services/lead-search-optimization.service');
-        if (typeof clearSearchCache === 'function') {
-          clearSearchCache();
-          console.log('🧹 Search cache cleared');
-        }
-      } catch {
-        // Search cache module not available
+    // Clear any caches
+    try {
+      const { clearSearchCache } = require('../services/lead-search-optimization.service');
+      if (typeof clearSearchCache === 'function') {
+        clearSearchCache();
+        console.log('Search cache cleared');
       }
+    } catch {
+      // Service may not exist — that's fine
+    }
 
-      console.log('✅ Memory cleanup completed');
-      resolve();
-    });
+    console.log('Memory cleanup completed');
   }
 
   /**

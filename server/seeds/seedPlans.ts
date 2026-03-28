@@ -16,13 +16,13 @@ async function seed() {
     {
       name: "Flex",
       slug: "flex",
-      priceMonthly: 2900, // Starting at $29/mo (slider-based, $29-$149)
+      priceMonthly: 2900,
       maxAutomations: 3,
       maxMessages: 500,
       maxSeats: 1,
       revenueSharePercent: 20,
       hasPromotion: true,
-      promotionalSlots: 10, // First 10 Flex subscribers are founders with free trial
+      promotionalSlots: 10,
       features: ["Basic automations", "SMS messaging", "Lead management"],
       stripePriceId: flexPriceId,
     },
@@ -35,7 +35,7 @@ async function seed() {
       maxSeats: 10,
       revenueSharePercent: 15,
       hasPromotion: true,
-      promotionalSlots: 20, // First 20 Rebooked subscribers are founders with free trial
+      promotionalSlots: 20,
       features: ["Unlimited automations", "AI rewrite", "Priority support", "Team members", "Advanced analytics"],
       stripePriceId: rebookedPriceId,
     },
@@ -64,7 +64,9 @@ async function seed() {
     }
   }
 
-  console.log("Plans seed complete");
+  console.log("\n✅ V2 Plans seed complete");
+  console.log("   - Early Adopter: FREE (risk-free, first 20 clients) + 15% revenue share");
+  console.log("   - Pro: $199/month + 15% revenue share on recovered revenue");
   process.exit(0);
 }
 

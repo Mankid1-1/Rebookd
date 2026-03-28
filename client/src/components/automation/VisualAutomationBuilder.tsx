@@ -7,6 +7,8 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { useDynamicAutomationNodes } from '@/hooks/useDynamicConfiguration';
 import { useAuth } from '@/hooks/useAuth';
 import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
@@ -101,7 +103,19 @@ export interface Workflow {
   };
 }
 
-export default function VisualAutomationBuilder() {
+export interface VisualAutomationBuilderProps {
+  onSave?: (workflow: Workflow) => void;
+  onExecute?: (workflow: Workflow) => void;
+  readOnly?: boolean;
+  initialWorkflow?: Workflow;
+}
+
+export default function VisualAutomationBuilder({ 
+  onSave, 
+  onExecute, 
+  readOnly = false, 
+  initialWorkflow 
+}: VisualAutomationBuilderProps = {}) {
   const dynamicNodes = useDynamicAutomationNodes();
   const { user } = useAuth();
   

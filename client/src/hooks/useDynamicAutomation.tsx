@@ -428,3 +428,15 @@ export function useDynamicAutomationSuccessPrediction() {
  *   r.type === 'high_priority' && userSkill.level !== 'beginner'
  * );
  */
+
+// Re-export progressive disclosure context for convenience
+export { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
+
+// Feature usage tracking utility
+export function trackFeatureUsage(feature: string, action: string, metadata?: any) {
+  // Track feature usage for analytics and progressive disclosure
+  console.log('Feature usage:', { feature, action, metadata });
+  
+  // In a real implementation, this would send to analytics service
+  // Example: trpc.analytics.trackFeatureUsage.mutate({ feature, action, metadata });
+}

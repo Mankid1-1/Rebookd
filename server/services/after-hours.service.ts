@@ -108,9 +108,11 @@ export async function processAfterHoursLead(
     const responseTime = isAfterHours ? DEFAULT_CONFIG.responseDelay * 60 * 1000 : 0;
 
     if (isAfterHours) {
-      // Schedule immediate response
-      setTimeout(async () => {
-        await sendAfterHoursResponse(db, tenantId, newLead.id, bookingLink, isAfterHours);
+      // Schedule delayed response
+      setTimeout(() => {
+        sendAfterHoursResponse(db, tenantId, newLead.id, bookingLink, isAfterHours).catch((err) => {
+          logger.error('After-hours delayed response failed', { error: (err as Error).message, leadId: newLead.id });
+        });
       }, responseTime);
     } else {
       // Send immediate response

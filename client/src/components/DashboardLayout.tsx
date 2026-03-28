@@ -135,7 +135,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
     return DEFAULT_WIDTH;
   });
-  const { loading, user } = useAuth();
 
   useEffect(() => {
     setItem(SIDEBAR_WIDTH_KEY, sidebarWidth);

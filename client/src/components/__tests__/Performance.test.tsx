@@ -6,6 +6,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import React from 'react';
 import { VisualAutomationBuilder } from '../../automation/VisualAutomationBuilder';
 import { 
   useProgressiveDisclosure, 
@@ -99,6 +100,7 @@ describe('Performance Tests: Visual Automation Builder', () => {
 
   describe('Rendering Performance', () => {
     it('renders initial interface within acceptable time', async () => {
+      const monitor = new PerformanceMonitor();
       const startTime = monitor.startMeasurement('initial-render');
       
       render(
@@ -118,7 +120,7 @@ describe('Performance Tests: Visual Automation Builder', () => {
 
     it('handles large number of nodes efficiently', async () => {
       const user = userEvent.setup();
-      
+      const monitor = new PerformanceMonitor();
       render(
         <VisualAutomationBuilder
           onSave={() => {}}
@@ -582,6 +584,7 @@ describe('Accessibility Performance', () => {
       })),
     });
     
+    const monitor = new PerformanceMonitor();
     render(
       <VisualAutomationBuilder
         onSave={() => {}}
@@ -594,7 +597,7 @@ describe('Accessibility Performance', () => {
     // Test interactions with accessibility features
     for (let i = 0; i < 10; i++) {
       await user.tab();
-      await user.keyboard.press('Enter');
+      await user.keyboard('Enter');
     }
     
     const totalTime = monitor.endMeasurement('accessibility-performance', startTime);

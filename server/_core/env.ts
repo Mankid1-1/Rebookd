@@ -68,3 +68,35 @@ export const ENV: EnvConfig = {
   referralExpiryDays: parseInt(process.env.REFERRAL_EXPIRY_DAYS ?? "90"),
   referralProgramEnabled: process.env.REFERRAL_PROGRAM_ENABLED === "true",
 };
+
+/** Call at startup to log warnings for missing critical env vars. */
+export function validateEnv(): void {
+  const critical: [string, string][] = [
+    ["ENCRYPTION_KEY", ENV.encryptionKey],
+    ["STRIPE_SECRET_KEY", ENV.stripeSecretKey],
+    ["STRIPE_WEBHOOK_SECRET", ENV.stripeWebhookSecret],
+    ["DATABASE_URL", process.env.DATABASE_URL || process.env.RAILWAY_URL || ""],
+  ];
+
+  const warn: [string, string][] = [
+    ["SENTRY_DSN", ENV.sentryDsn],
+    ["TELNYX_API_KEY", ENV.telnyxApiKey],
+    ["JWT_SECRET", process.env.JWT_SECRET || ""],
+  ];
+
+  for (const [name, value] of critical) {
+    if (!value) {
+      console.warn(`[ENV] CRITICAL: ${name} is not set — feature will fail at runtime`);
+    }
+  }
+
+  if (ENV.cookieSecret === "rebooked-salt") {
+    console.warn("[ENV] WARNING: Using default JWT/cookie secret — set JWT_SECRET in production");
+  }
+
+  for (const [name, value] of warn) {
+    if (!value) {
+      console.warn(`[ENV] WARNING: ${name} is not set`);
+    }
+  }
+}

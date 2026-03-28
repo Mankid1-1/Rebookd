@@ -92,7 +92,7 @@ export const createAutomationSchema = z.object({
     type: z.string(),
     config: z.record(z.string(), z.any()),
   })),
-  isActive: z.boolean().default(true),
+  enabled: z.boolean().default(true),
 });
 
 export const updateAutomationSchema = z.object({

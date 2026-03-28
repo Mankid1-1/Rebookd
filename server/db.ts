@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import * as schema from "../drizzle/schema";
+import { logger } from "./_core/logger";
 
 // Fallback to SQLite for development if MySQL is not available
 // @ts-ignore - better-sqlite3 is an optional dev dependency
@@ -39,8 +40,14 @@ export async function getDb() {
         ...(dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1') ? {} : { ssl: { rejectUnauthorized: false } }),
       });
 
-      // The cast is needed because getDb() returns the Db alias (MySql2Database<schema>)
-      // but drizzle() infers a slightly different generic signature.
+      // Prevent unhandled 'error' events from crashing Node
+      _pool.on("error", (err) => {
+        logger.error("MySQL pool error (non-fatal, pool will self-heal)", {
+          error: err.message,
+          code: (err as any).code,
+        });
+      });
+
       _db = drizzle(_pool, { schema, mode: "default" }) as unknown as ReturnType<typeof drizzle<typeof schema>>;
       return _db;
     } catch (error) {
@@ -54,7 +61,6 @@ export async function getDb() {
   }
   console.log('Using SQLite for development');
   const sqlite = new Database('./rebooked-dev.db');
-  // SQLite fallback for dev - cast to MySQL Db type since all callers expect it
   _db = drizzleSqlite(sqlite, { schema }) as unknown as ReturnType<typeof drizzle<typeof schema>>;
   return _db;
 }
@@ -92,9 +98,12 @@ export async function pingDb(): Promise<boolean> {
     const pool = _pool;
     if (!pool) return false;
     const conn = await pool.getConnection();
-    await conn.ping();
-    conn.release();
-    return true;
+    try {
+      await conn.ping();
+      return true;
+    } finally {
+      conn.release();
+    }
   } catch {
     return false;
   }

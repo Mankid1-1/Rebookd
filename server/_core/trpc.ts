@@ -1,5 +1,6 @@
 import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from "@shared/const";
 import { initTRPC, TRPCError } from "@trpc/server";
+import { z } from "zod";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import * as TenantService from "../services/tenant.service";
