@@ -11,30 +11,32 @@ import { LocaleProvider } from "./contexts/LocaleContext";
 import { SkillLevelProvider } from "./contexts/SkillLevelContext";
 import { lazy, Suspense } from "react";
 import { AuthGuard } from "./components/layout/AuthGuard";
+import { GlobalAIChat } from "./components/chat/GlobalAIChat";
 
 // Lazy load heavy components for code splitting
-const Home = lazy(() => import("./pages/Home"));
-const Dashboard = lazy(() => import("./pages/Dashboard"));
-const Leads = lazy(() => import("./pages/Leads"));
-const LeadDetail = lazy(() => import("./pages/LeadDetail"));
-const Automations = lazy(() => import("./pages/Automations"));
-const Templates = lazy(() => import("./pages/Templates"));
-const Analytics = lazy(() => import("./pages/Analytics"));
-const Settings = lazy(() => import("./pages/Settings"));
-const Billing = lazy(() => import("./pages/Billing"));
-const Onboarding = lazy(() => import("./pages/Onboarding"));
-const Inbox = lazy(() => import("./pages/Inbox"));
+const Home = lazy(() => import("@/pages/Home"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Leads = lazy(() => import("@/pages/Leads"));
+const LeadDetail = lazy(() => import("@/pages/LeadDetail"));
+const Automations = lazy(() => import("@/pages/Automations"));
+const Templates = lazy(() => import("@/pages/Templates"));
+const Analytics = lazy(() => import("@/pages/Analytics"));
+const Settings = lazy(() => import("@/pages/Settings"));
+const Billing = lazy(() => import("@/pages/Billing"));
+const Onboarding = lazy(() => import("@/pages/Onboarding"));
+const Inbox = lazy(() => import("@/pages/Inbox"));
 
 // Admin pages - lazy loaded
-const AdminTenants = lazy(() => import("./pages/admin/AdminTenants"));
-const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
-const AdminSystemHealth = lazy(() => import("./pages/admin/AdminSystemHealth"));
-const AdminMessages = lazy(() => import("./pages/admin/AdminMessages"));
+const AdminTenants = lazy(() => import("@/pages/admin/AdminTenants"));
+const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers"));
+const AdminSystemHealth = lazy(() => import("@/pages/admin/AdminSystemHealth"));
+const AdminMessages = lazy(() => import("@/pages/admin/AdminMessages"));
+const AdminDeployments = lazy(() => import("@/pages/admin/AdminDeployments"));
 
 // High-impact feature pages - lazy loaded
 const LeadCapture = lazy(() => import("@/pages/LeadCapture"));
 const BookingConversion = lazy(() => import("@/pages/BookingConversion"));
-const StripeConnect = lazy(() => import("./pages/StripeConnect"));
+const StripeConnect = lazy(() => import("@/pages/StripeConnect"));
 const NoShowRecovery = lazy(() => import("@/pages/NoShowRecovery"));
 const CancellationRecovery = lazy(() => import("@/pages/CancellationRecovery"));
 const RetentionEngine = lazy(() => import("@/pages/RetentionEngine"));
@@ -42,17 +44,20 @@ const SmartScheduling = lazy(() => import("@/pages/SmartScheduling"));
 const PaymentEnforcement = lazy(() => import("@/pages/PaymentEnforcement"));
 const AfterHours = lazy(() => import("@/pages/AfterHours"));
 const AdminAutomation = lazy(() => import("@/pages/AdminAutomation"));
-const Referral = lazy(() => import("./pages/Referral"));
-const CalendarIntegration = lazy(() => import("./pages/CalendarIntegration"));
-const WaitingList = lazy(() => import("./pages/WaitingList"));
-const ReviewManagement = lazy(() => import("./pages/ReviewManagement"));
-const Rescheduling = lazy(() => import("./pages/Rescheduling"));
+const Referral = lazy(() => import("@/pages/Referral"));
+const CalendarIntegration = lazy(() => import("@/pages/CalendarIntegration"));
+const WaitingList = lazy(() => import("@/pages/WaitingList"));
+const ReviewManagement = lazy(() => import("@/pages/ReviewManagement"));
+const Rescheduling = lazy(() => import("@/pages/Rescheduling"));
+const AiTools = lazy(() => import("@/pages/AiTools"));
+const ContactImport = lazy(() => import("@/pages/ContactImport"));
 
 // Legal / Public pages - lazy loaded
-const Privacy = lazy(() => import("./pages/Privacy"));
-const Terms = lazy(() => import("./pages/Terms"));
-const TCPACompliance = lazy(() => import("./pages/TCPACompliance"));
-const Support = lazy(() => import("./pages/Support"));
+const Privacy = lazy(() => import("@/pages/Privacy"));
+const Terms = lazy(() => import("@/pages/Terms"));
+const TCPACompliance = lazy(() => import("@/pages/TCPACompliance"));
+const Support = lazy(() => import("@/pages/Support"));
+const Login = lazy(() => import("@/pages/Login"));
 
 function Router() {
   return (
@@ -66,10 +71,13 @@ function Router() {
       <Route path="/tcpa" component={TCPACompliance} />
       <Route path="/support" component={Support} />
 
+      {/* Auth */}
+      <Route path="/login" component={Login} />
+
       {/* Onboarding */}
       <Route path="/onboarding" component={Onboarding} />
 
-      {/* App - Protected Routes (wrapped in ErrorBoundary per section) */}
+      {/* App - Protected Routes (all wrapped in ErrorBoundary) */}
       <Route path="/dashboard">
         <ErrorBoundary>
           <AuthGuard>
@@ -78,124 +86,184 @@ function Router() {
         </ErrorBoundary>
       </Route>
       <Route path="/leads">
-        <AuthGuard>
-          <Leads />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard>
+            <Leads />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/leads/:id">
-        <AuthGuard>
-          <LeadDetail />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard>
+            <LeadDetail />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/inbox">
-        <AuthGuard>
-          <Inbox />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard>
+            <Inbox />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/automations">
-        <AuthGuard tenantOnly>
-          <Automations />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <Automations />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/templates">
-        <AuthGuard tenantOnly>
-          <Templates />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <Templates />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/analytics">
-        <AuthGuard>
-          <Analytics />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard>
+            <Analytics />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/settings">
-        <AuthGuard>
-          <Settings />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard>
+            <Settings />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/billing">
-        <AuthGuard>
-          <Billing />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard>
+            <Billing />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/stripe-connect">
-        <AuthGuard tenantOnly>
-          <StripeConnect />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <StripeConnect />
+          </AuthGuard>
+        </ErrorBoundary>
+      </Route>
+      <Route path="/ai-tools">
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <AiTools />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
 
       {/* High-Impact Feature Routes - Tenant Only */}
       <Route path="/lead-capture">
-        <AuthGuard tenantOnly>
-          <LeadCapture />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <LeadCapture />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/booking-conversion">
-        <AuthGuard tenantOnly>
-          <BookingConversion />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <BookingConversion />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/no-show-recovery">
-        <AuthGuard tenantOnly>
-          <NoShowRecovery />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <NoShowRecovery />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/cancellation-recovery">
-        <AuthGuard tenantOnly>
-          <CancellationRecovery />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <CancellationRecovery />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/retention-engine">
-        <AuthGuard tenantOnly>
-          <RetentionEngine />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <RetentionEngine />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/smart-scheduling">
-        <AuthGuard tenantOnly>
-          <SmartScheduling />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <SmartScheduling />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/payment-enforcement">
-        <AuthGuard tenantOnly>
-          <PaymentEnforcement />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <PaymentEnforcement />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/after-hours">
-        <AuthGuard tenantOnly>
-          <AfterHours />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <AfterHours />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/admin-automation">
-        <AuthGuard tenantOnly>
-          <AdminAutomation />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <AdminAutomation />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/referral">
-        <AuthGuard tenantOnly>
-          <Referral />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <Referral />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/calendar-integration">
-        <AuthGuard tenantOnly>
-          <CalendarIntegration />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <CalendarIntegration />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/waiting-list">
-        <AuthGuard tenantOnly>
-          <WaitingList />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <WaitingList />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/review-management">
-        <AuthGuard tenantOnly>
-          <ReviewManagement />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <ReviewManagement />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
       <Route path="/rescheduling">
-        <AuthGuard tenantOnly>
-          <Rescheduling />
-        </AuthGuard>
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <Rescheduling />
+          </AuthGuard>
+        </ErrorBoundary>
+      </Route>
+      <Route path="/contact-import">
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <ContactImport />
+          </AuthGuard>
+        </ErrorBoundary>
       </Route>
 
-      {/* Admin - Admin Only Routes (isolated error boundary) */}
+      {/* Admin - Admin Only Routes */}
       <Route path="/admin">
         <ErrorBoundary>
           <AuthGuard adminOnly>
@@ -231,6 +299,13 @@ function Router() {
           </AuthGuard>
         </ErrorBoundary>
       </Route>
+      <Route path="/admin/deployments">
+        <ErrorBoundary>
+          <AuthGuard adminOnly>
+            <AdminDeployments />
+          </AuthGuard>
+        </ErrorBoundary>
+      </Route>
 
       {/* Fallback */}
       <Route path="/404" component={NotFound} />
@@ -257,6 +332,7 @@ function App() {
                 </div>
               }>
                 <Router />
+                <GlobalAIChat />
                 <LocaleOnboardingModal />
                 <CookieConsent />
               </Suspense>

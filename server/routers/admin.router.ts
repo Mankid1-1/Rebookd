@@ -9,7 +9,9 @@ import * as UserService from "../services/user.service";
 import * as SystemService from "../services/system.service";
 import * as AiService from "../services/ai.service";
 import * as AdminAuditService from "../services/admin-audit.service";
+import * as DeploymentService from "../services/deployment.service";
 import { EmailService } from "../services/email.service";
+import { BUILD_VERSION } from "../../shared/version";
 
 function clampAdminPagination(input?: { page?: number; limit?: number }) {
   const page = Math.max(1, input?.page ?? 1);
@@ -179,5 +181,69 @@ export const adminRouter = router({
     return atRiskTenants
       .filter((t) => t.riskScore >= 40)
       .sort((a, b) => b.riskScore - a.riskScore);
+  }),
+
+  // ─── Live Update System: Deployments & System Info ──────────────────
+  deployments: router({
+    list: adminProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(50).optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        await auditAdminRead(ctx, "admin.deployments.list");
+        return DeploymentService.getDeployHistory(ctx.db, input?.limit ?? 20);
+      }),
+
+    latest: adminProcedure.query(async ({ ctx }) => {
+      return DeploymentService.getLatestDeployment(ctx.db);
+    }),
+
+    record: adminProcedure
+      .input(z.object({
+        version: z.string(),
+        gitHash: z.string().optional(),
+        gitBranch: z.string().optional(),
+        status: z.enum(["started", "uploading", "reloading", "verified", "failed", "rolled_back"]),
+        deployedBy: z.string().optional(),
+        durationMs: z.number().optional(),
+        changelog: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await auditAdminRead(ctx, "admin.deployments.record", { version: input.version });
+        return DeploymentService.recordDeployment(ctx.db, input);
+      }),
+  }),
+
+  systemInfo: adminProcedure.query(async ({ ctx }) => {
+    await auditAdminRead(ctx, "admin.systemInfo");
+
+    const memUsage = process.memoryUsage();
+    const [tenantCount] = await ctx.db.select({ c: sql<number>`COUNT(*)` }).from(tenants);
+    const [userCount] = await ctx.db.select({ c: sql<number>`COUNT(*)` }).from(users);
+    const [leadCount] = await ctx.db.select({ c: sql<number>`COUNT(*)` }).from(leads);
+
+    const latestDeploy = await DeploymentService.getLatestDeployment(ctx.db);
+
+    return {
+      version: BUILD_VERSION,
+      uptime: Math.floor(process.uptime()),
+      startedAt: new Date(Date.now() - process.uptime() * 1000).toISOString(),
+      memory: {
+        rss: Math.round(memUsage.rss / 1024 / 1024),
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+        heapPressure: Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100),
+      },
+      counts: {
+        tenants: Number(tenantCount?.c ?? 0),
+        users: Number(userCount?.c ?? 0),
+        leads: Number(leadCount?.c ?? 0),
+      },
+      latestDeploy: latestDeploy ? {
+        version: latestDeploy.version,
+        status: latestDeploy.status,
+        deployedBy: latestDeploy.deployedBy,
+        createdAt: latestDeploy.createdAt,
+        durationMs: latestDeploy.durationMs,
+      } : null,
+    };
   }),
 });

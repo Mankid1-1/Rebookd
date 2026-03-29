@@ -32,6 +32,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
+import { RebookedIcon } from "@/components/RebookedLogo";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
   BarChart3,
@@ -61,6 +62,7 @@ import {
   Link2,
   Wrench,
   Compass,
+  Rocket,
 } from "lucide-react";
 import * as React from "react";
 import { useLocation } from "wouter";
@@ -124,6 +126,7 @@ const TOOLS_GROUP: NavGroup = {
     { icon: ListOrdered, labelKey: "sidebar.waitingList", fallback: "Waiting List", path: "/waiting-list" },
     { icon: Star, labelKey: "sidebar.reviews", fallback: "Reviews", path: "/review-management" },
     { icon: RefreshCw, labelKey: "sidebar.rescheduling", fallback: "Rescheduling", path: "/rescheduling" },
+    { icon: Users, labelKey: "sidebar.contactImport", fallback: "Import Contacts", path: "/contact-import" },
   ],
 };
 
@@ -150,6 +153,7 @@ const ADMIN_NAV: NavItem[] = [
   { icon: Users, labelKey: "sidebar.users", fallback: "Users", path: "/admin/users" },
   { icon: TrendingUp, labelKey: "sidebar.systemHealth", fallback: "System Health", path: "/admin/health" },
   { icon: MessageSquare, labelKey: "sidebar.messages", fallback: "Messages", path: "/admin/messages" },
+  { icon: Rocket, labelKey: "sidebar.deployments", fallback: "Deployments", path: "/admin/deployments" },
 ];
 
 // Admin collapsible: Platform overview
@@ -169,11 +173,16 @@ const ADMIN_PLATFORM_GROUP: NavGroup = {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const { data: tenant } = trpc.tenant.get.useQuery(undefined, { retry: false });
+  const { data: tenant } = trpc.tenant.get.useQuery(undefined, { retry: false, enabled: !!user?.tenantId });
+  const { t: tFunc } = useLocale();
 
   if (loading) return <DashboardLayoutSkeleton />;
 
-  const { t: tFunc } = useLocale();
+  // Redirect to onboarding if user has no tenant
+  if (user && !user.tenantId) {
+    window.location.href = "/onboarding";
+    return <DashboardLayoutSkeleton />;
+  }
 
   if (!user) {
     return (
@@ -340,9 +349,7 @@ function DashboardLayoutContent({
             </button>
             {!isCollapsed && (
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
-                  <Zap className="w-3.5 h-3.5 text-primary-foreground" />
-                </div>
+                <RebookedIcon size={28} />
                 <div className="min-w-0">
                   <p
                     className="font-bold text-sm tracking-tight truncate"
@@ -362,7 +369,7 @@ function DashboardLayoutContent({
         </SidebarHeader>
 
         {/* Navigation */}
-        <SidebarContent className="gap-0 py-3">
+        <SidebarContent className="gap-1 py-3">
           {isAdmin ? (
             <>
               {/* Admin: flat admin nav */}
@@ -375,14 +382,14 @@ function DashboardLayoutContent({
                 {renderFlatItems(ADMIN_NAV)}
               </SidebarGroup>
 
-              <div className="mx-4 my-2 border-t border-sidebar-border/50" />
+              <div className="mx-4 my-2 shrink-0 border-t border-sidebar-border/50" />
 
               {/* Admin: collapsible platform overview */}
               <SidebarGroup>
                 {renderCollapsibleGroup(ADMIN_PLATFORM_GROUP)}
               </SidebarGroup>
 
-              <div className="mx-4 my-2 border-t border-sidebar-border/50" />
+              <div className="mx-4 my-2 shrink-0 border-t border-sidebar-border/50" />
 
               {/* Admin: collapsible account */}
               <SidebarGroup>
@@ -396,7 +403,7 @@ function DashboardLayoutContent({
                 {renderFlatItems(TOP_NAV)}
               </SidebarGroup>
 
-              <div className="mx-4 my-1 border-t border-sidebar-border/50" />
+              <div className="mx-4 my-1 shrink-0 border-t border-sidebar-border/50" />
 
               {/* Services dropdown — Basic sees top 4 only, Intermediate sees top 4, Advanced sees all */}
               {skillLevel !== "basic" && (
@@ -416,7 +423,7 @@ function DashboardLayoutContent({
                 </SidebarGroup>
               )}
 
-              <div className="mx-4 my-1 border-t border-sidebar-border/50" />
+              <div className="mx-4 my-1 shrink-0 border-t border-sidebar-border/50" />
 
               {/* Analytics (flat) — Hidden for basic */}
               {skillLevel !== "basic" && (
@@ -432,7 +439,7 @@ function DashboardLayoutContent({
 
               {/* Discover More — Basic only */}
               {skillLevel === "basic" && (
-                <SidebarGroup className="mt-auto px-2 pb-1">
+                <SidebarGroup className="px-2 pb-1">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
@@ -456,7 +463,7 @@ function DashboardLayoutContent({
         </SidebarContent>
 
         {/* User Footer */}
-        <SidebarFooter className="p-3 border-t border-sidebar-border">
+        <SidebarFooter className="p-3 border-t border-sidebar-border relative shrink-0">
           {!isCollapsed && (
             <div className="mb-2 flex justify-end">
               <LanguageSelector />
@@ -522,9 +529,7 @@ function DashboardLayoutContent({
             <div className="flex items-center gap-3">
               <SidebarTrigger className="h-9 w-9 rounded-lg" />
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
-                  <Zap className="w-3 h-3 text-primary-foreground" />
-                </div>
+                <RebookedIcon size={24} />
                 <span
                   className="font-bold text-sm"
                   style={{ fontFamily: "'Space Grotesk', sans-serif" }}

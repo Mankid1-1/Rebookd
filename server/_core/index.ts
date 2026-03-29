@@ -3,7 +3,6 @@ import express from "express";
 import cors from "cors";
 import { createServer } from "http";
 import net from "net";
-import rateLimit from "express-rate-limit";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerInboundWebhooks } from "./inboundWebhook";
@@ -21,6 +20,7 @@ import { readFileSync } from "fs";
 import { trafficGateMiddleware, setShutdownRef } from "./traffic-gate";
 import { validateEnv } from "./env";
 import { BUILD_VERSION } from "../../shared/version";
+import * as DeploymentService from "../services/deployment.service";
 
 // Graceful shutdown state — shared with traffic gate
 const shutdownState = { value: false };
@@ -155,9 +155,12 @@ async function startServer() {
   setShutdownRef(shutdownState);
   app.use(trafficGateMiddleware);
 
+  const IS_PRODUCTION = process.env.NODE_ENV === "production";
   app.use(
     cors({
-      origin: corsOrigins.length > 0 ? corsOrigins : true,
+      // In production, only allow explicitly configured origins.
+      // Falling back to `true` (reflect all) would neutralise CORS entirely.
+      origin: corsOrigins.length > 0 ? corsOrigins : (IS_PRODUCTION ? false : true),
       credentials: true,
     }),
   );
@@ -203,7 +206,17 @@ async function startServer() {
     });
   });
 
-  app.get("/health/detailed", async (_req, res) => {
+  app.get("/health/detailed", async (req, res) => {
+    // Restrict to internal callers only — this endpoint leaks Stripe connectivity,
+    // memory pressure, and worker state that should not be public.
+    const internalToken = process.env.INTERNAL_HEALTH_TOKEN || process.env.WEBHOOK_SECRET;
+    const providedToken = req.headers["x-internal-token"];
+    const clientIp = req.ip || "";
+    const isLocalhost = clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "::ffff:127.0.0.1";
+    if (!isLocalhost && (!internalToken || providedToken !== internalToken)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
     const checks: Record<string, { status: string; latencyMs?: number; error?: string }> = {};
 
     // DB check with latency
@@ -225,8 +238,7 @@ async function startServer() {
     // Stripe connectivity
     try {
       const stripeStart = Date.now();
-      const { default: Stripe } = await import("stripe");
-      const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY || "", { apiVersion: "2022-11-15" });
+      const { stripe: stripeClient } = await import("./stripe");
       await stripeClient.balance.retrieve();
       checks.stripe = { status: "healthy", latencyMs: Date.now() - stripeStart };
     } catch (err) {
@@ -257,6 +269,94 @@ async function startServer() {
   app.get("/api/version", (_req, res) => {
     res.set("Cache-Control", "no-cache, no-store, must-revalidate");
     res.json({ version: BUILD_VERSION });
+  });
+
+  // ─── System status (admin-only, rich metrics for dashboard widget) ─────
+  app.get("/api/system/status", async (req, res) => {
+    // Only allow from localhost or with internal token
+    const internalToken = process.env.INTERNAL_HEALTH_TOKEN || process.env.WEBHOOK_SECRET;
+    const providedToken = req.headers["x-internal-token"] || req.query.token;
+    const clientIp = req.ip || "";
+    const isLocal = clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "::ffff:127.0.0.1";
+    // Also allow authenticated admin requests (cookie-based auth checked via tRPC)
+    const hasAdminCookie = req.headers.cookie?.includes("rebooked_session");
+    if (!isLocal && !hasAdminCookie && (!internalToken || providedToken !== internalToken)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const memUsage = process.memoryUsage();
+    const cpuUsage = process.cpuUsage();
+    const dbOk = await pingDb();
+
+    // Worker heartbeat
+    let workerStatus = "unknown";
+    let workerLastBeat: string | null = null;
+    try {
+      const heartbeat = JSON.parse(readFileSync(WORKER_HEARTBEAT_FILE, "utf8"));
+      const ts = Date.parse(heartbeat.ts || heartbeat.lastSuccessAt || "");
+      const stale = !Number.isFinite(ts) || Date.now() - ts > WORKER_STALE_MS;
+      workerStatus = stale ? "stale" : (heartbeat.status === "error" ? "error" : "healthy");
+      workerLastBeat = heartbeat.ts || heartbeat.lastSuccessAt || null;
+    } catch { workerStatus = "unreachable"; }
+
+    res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.json({
+      version: BUILD_VERSION,
+      nodeVersion: process.version,
+      platform: process.platform,
+      pid: process.pid,
+      uptime: Math.floor(process.uptime()),
+      startedAt: new Date(Date.now() - process.uptime() * 1000).toISOString(),
+      environment: process.env.NODE_ENV || "unknown",
+      cluster: {
+        isWorker: !!process.env.NODE_APP_INSTANCE,
+        workerId: process.env.NODE_APP_INSTANCE || "0",
+      },
+      memory: {
+        rss: Math.round(memUsage.rss / 1024 / 1024),
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+        external: Math.round(memUsage.external / 1024 / 1024),
+        heapPressure: Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100),
+      },
+      cpu: {
+        user: Math.round(cpuUsage.user / 1000),
+        system: Math.round(cpuUsage.system / 1000),
+      },
+      database: { status: dbOk ? "connected" : "unreachable" },
+      worker: { status: workerStatus, lastHeartbeat: workerLastBeat },
+      ts: new Date().toISOString(),
+    });
+  });
+
+  // ─── Deploy record endpoint (called by deploy script) ──────────────────
+  app.post("/api/system/deploy-record", async (req, res) => {
+    const internalToken = process.env.INTERNAL_HEALTH_TOKEN || process.env.WEBHOOK_SECRET;
+    const providedToken = req.headers["x-internal-token"];
+    const clientIp = req.ip || "";
+    const isLocal = clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "::ffff:127.0.0.1";
+    if (!isLocal && (!internalToken || providedToken !== internalToken)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    try {
+      const db = await getDb();
+      if (!db) { res.status(503).json({ error: "Database unavailable" }); return; }
+      const result = await DeploymentService.recordDeployment(db, {
+        version: req.body.version,
+        gitHash: req.body.gitHash || null,
+        gitBranch: req.body.gitBranch || null,
+        status: req.body.status || "verified",
+        deployedBy: req.body.deployedBy || null,
+        durationMs: req.body.durationMs || null,
+        completedAt: new Date(),
+      });
+      res.json({ ok: true, id: result?.id });
+    } catch (err) {
+      logger.error("Failed to record deployment", { error: String(err) });
+      res.status(500).json({ error: "Failed to record" });
+    }
   });
 
   app.get("/ready", async (_req, res) => {
@@ -291,14 +391,6 @@ async function startServer() {
       contact: "privacy@rebooked.io",
     });
   });
-
-  const apiLimiter = rateLimit({
-    windowMs: 5 * 60 * 1000, 
-    limit: 600, 
-    standardHeaders: 'draft-7',
-    legacyHeaders: false,
-  });
-  app.use("/api/", apiLimiter);
 
   // tRPC API
   app.use(

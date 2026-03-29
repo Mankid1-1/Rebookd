@@ -17,16 +17,16 @@ module.exports = {
     {
       name: "rebooked-app",
       script: "dist/index.js",
-      node_args: "--max-old-space-size=512",
+      node_args: "--max-old-space-size=1536",
       cwd: __dirname,
 
-      // Cluster mode: enables `pm2 reload` for zero-downtime restarts.
-      // 2 instances = one stays live while the other reloads.
-      instances: 2,
-      exec_mode: "cluster",
+      // Fork mode: single instance for stability.
+      // Switch to cluster mode once port-sharing is verified.
+      instances: 1,
+      exec_mode: "fork",
 
       autorestart: true,
-      max_memory_restart: "600M",
+      max_memory_restart: "1800M",
 
       // Graceful shutdown: PM2 sends SIGINT, waits for listen_timeout,
       // then kills after kill_timeout.

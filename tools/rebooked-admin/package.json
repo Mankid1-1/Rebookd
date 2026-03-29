@@ -1,0 +1,25 @@
+{
+  "name": "rebooked-admin-console",
+  "version": "1.0.0",
+  "description": "Standalone Rebooked Admin Console — monitor, deploy, and manage your platform",
+  "type": "module",
+  "main": "admin-console.mjs",
+  "bin": {
+    "rebooked-admin": "./admin-console.mjs"
+  },
+  "scripts": {
+    "start": "node admin-console.mjs",
+    "build:exe": "pkg admin-console.mjs --targets node20-win-x64 --output dist/rebooked-admin.exe --compress GZip"
+  },
+  "pkg": {
+    "assets": ["dashboard.html"],
+    "targets": ["node20-win-x64"],
+    "outputPath": "dist"
+  },
+  "dependencies": {
+    "ssh2": "^1.17.0"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  }
+}

@@ -10,6 +10,8 @@
     "deploy": "./scripts/deploy.sh",
     "deploy:windows": "scripts/deploy.bat",
     "deploy:live": "node scripts/deploy-live.mjs",
+    "admin:console": "node tools/rebooked-admin/admin-console.mjs",
+    "admin:build-exe": "cd tools/rebooked-admin && npm install && npm run build:exe",
     "test": "node scripts/run-all-tests.js",
     "test:quick": "node scripts/run-all-tests.js quick",
     "test:unit": "vitest run",

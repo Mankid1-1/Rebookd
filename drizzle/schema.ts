@@ -56,7 +56,7 @@ export const users = mysqlTable("users", {
   loginMethod: varchar("loginMethod", { length: 64 }),
   passwordHash: varchar("passwordHash", { length: 255 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  accountType: mysqlEnum("accountType", ["business", "referral"]).default("business").notNull(),
+  accountType: mysqlEnum("accountType", ["business", "referral", "both"]).default("business").notNull(),
   tenantId: int("tenantId"),
   tenantRole: mysqlEnum("tenantRole", ["owner", "employee"]),
   skillLevel: mysqlEnum("skillLevel", ["basic", "intermediate", "advanced"]).default("basic"),
@@ -66,8 +66,7 @@ export const users = mysqlTable("users", {
   suspendedReason: text("suspendedReason"),
   deletedAt: timestamp("deletedAt"), // Soft delete
   
-  // Business Association
-  tenantId: int("tenantId"),
+  // Business Association (tenantId already defined above in Authentication section)
   
   // Payment & Billing
   stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
@@ -857,3 +856,175 @@ export const featureConfigs = mysqlTable("feature_configs", {
 });
 
 export type FeatureConfig = typeof featureConfigs.$inferSelect;
+
+// ─── Calendar Integration ──────────────────────────────────────────────────────
+
+export const calendarConnections = mysqlTable("calendar_connections", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  provider: mysqlEnum("provider", ["google", "outlook", "caldav", "calendly", "acuity"]).notNull(),
+  label: varchar("label", { length: 255 }),
+  accessToken: text("accessToken"),  // Encrypted at rest
+  refreshToken: text("refreshToken"), // Encrypted at rest
+  externalCalendarId: varchar("externalCalendarId", { length: 255 }),
+  externalAccountId: varchar("externalAccountId", { length: 255 }),
+  syncEnabled: boolean("syncEnabled").default(true).notNull(),
+  lastSyncAt: timestamp("lastSyncAt"),
+  syncIntervalMinutes: int("syncIntervalMinutes").default(5).notNull(),
+  tokenExpiresAt: timestamp("tokenExpiresAt"),
+  metadata: json("metadata").$type<Record<string, unknown>>(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  tenantIdx: index("cal_conn_tenant_idx").on(t.tenantId),
+  providerIdx: index("cal_conn_provider_idx").on(t.tenantId, t.provider),
+  syncIdx: index("cal_conn_sync_idx").on(t.syncEnabled, t.lastSyncAt),
+}));
+
+export type CalendarConnection = typeof calendarConnections.$inferSelect;
+export type InsertCalendarConnection = typeof calendarConnections.$inferInsert;
+
+export const calendarEvents = mysqlTable("calendar_events", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  calendarConnectionId: int("calendarConnectionId").notNull(),
+  externalEventId: varchar("externalEventId", { length: 255 }).notNull(),
+  title: varchar("title", { length: 500 }),
+  startTime: timestamp("startTime").notNull(),
+  endTime: timestamp("endTime").notNull(),
+  status: mysqlEnum("status", ["confirmed", "cancelled", "tentative"]).default("confirmed").notNull(),
+  attendeeName: varchar("attendeeName", { length: 255 }),
+  attendeeEmail: varchar("attendeeEmail", { length: 320 }),
+  attendeePhone: varchar("attendeePhone", { length: 20 }),
+  leadId: int("leadId"), // Linked lead if matched
+  location: text("location"),
+  metadata: json("metadata").$type<Record<string, unknown>>(),
+  syncedAt: timestamp("syncedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  tenantIdx: index("cal_events_tenant_idx").on(t.tenantId),
+  connectionIdx: index("cal_events_connection_idx").on(t.calendarConnectionId),
+  externalIdx: uniqueIndex("cal_events_external_idx").on(t.calendarConnectionId, t.externalEventId),
+  timeIdx: index("cal_events_time_idx").on(t.tenantId, t.startTime, t.endTime),
+  statusIdx: index("cal_events_status_idx").on(t.tenantId, t.status),
+  leadIdx: index("cal_events_lead_idx").on(t.leadId),
+}));
+
+export type CalendarEvent = typeof calendarEvents.$inferSelect;
+export type InsertCalendarEvent = typeof calendarEvents.$inferInsert;
+
+export const calendarSyncLog = mysqlTable("calendar_sync_log", {
+  id: int("id").autoincrement().primaryKey(),
+  calendarConnectionId: int("calendarConnectionId").notNull(),
+  syncType: mysqlEnum("syncType", ["full", "incremental"]).default("incremental").notNull(),
+  status: mysqlEnum("status", ["running", "success", "failed"]).default("running").notNull(),
+  eventsProcessed: int("eventsProcessed").default(0).notNull(),
+  eventsCreated: int("eventsCreated").default(0).notNull(),
+  eventsUpdated: int("eventsUpdated").default(0).notNull(),
+  eventsCancelled: int("eventsCancelled").default(0).notNull(),
+  errors: json("errors").$type<Array<{ message: string; eventId?: string }>>(),
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+}, (t) => ({
+  connectionIdx: index("cal_sync_log_connection_idx").on(t.calendarConnectionId),
+  startedIdx: index("cal_sync_log_started_idx").on(t.startedAt),
+}));
+
+export type CalendarSyncLog = typeof calendarSyncLog.$inferSelect;
+
+// ─── Contact Import ────────────────────────────────────────────────────────────
+
+export const contactImports = mysqlTable("contact_imports", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  source: mysqlEnum("source", ["vcard", "google_contacts", "csv"]).notNull(),
+  status: mysqlEnum("status", ["pending", "processing", "complete", "failed"]).default("pending").notNull(),
+  fileName: varchar("fileName", { length: 255 }),
+  totalContacts: int("totalContacts").default(0).notNull(),
+  imported: int("imported").default(0).notNull(),
+  skipped: int("skipped").default(0).notNull(),
+  duplicates: int("duplicates").default(0).notNull(),
+  errors: json("errors").$type<Array<{ row: number; message: string }>>(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+}, (t) => ({
+  tenantIdx: index("contact_imports_tenant_idx").on(t.tenantId),
+  statusIdx: index("contact_imports_status_idx").on(t.status),
+}));
+
+export type ContactImport = typeof contactImports.$inferSelect;
+export type InsertContactImport = typeof contactImports.$inferInsert;
+
+// ─── Lead Segments & Automation Overrides ──────────────────────────────────────
+
+export const leadSegments = mysqlTable("lead_segments", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  color: varchar("color", { length: 7 }), // hex color for UI
+  rules: json("rules").$type<{
+    logic: "AND" | "OR";
+    conditions: Array<{
+      field: string;
+      operator: string;
+      value: unknown;
+    }>;
+  }>(),
+  isAutomatic: boolean("isAutomatic").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  tenantIdx: index("lead_segments_tenant_idx").on(t.tenantId),
+  nameIdx: uniqueIndex("lead_segments_name_idx").on(t.tenantId, t.name),
+}));
+
+export type LeadSegment = typeof leadSegments.$inferSelect;
+export type InsertLeadSegment = typeof leadSegments.$inferInsert;
+
+export const leadSegmentMembers = mysqlTable("lead_segment_members", {
+  id: int("id").autoincrement().primaryKey(),
+  segmentId: int("segmentId").notNull(),
+  leadId: int("leadId").notNull(),
+  addedAt: timestamp("addedAt").defaultNow().notNull(),
+}, (t) => ({
+  segmentIdx: index("lead_seg_members_segment_idx").on(t.segmentId),
+  leadIdx: index("lead_seg_members_lead_idx").on(t.leadId),
+  uniqueIdx: uniqueIndex("lead_seg_members_unique_idx").on(t.segmentId, t.leadId),
+}));
+
+export type LeadSegmentMember = typeof leadSegmentMembers.$inferSelect;
+
+export const leadAutomationOverrides = mysqlTable("lead_automation_overrides", {
+  id: int("id").autoincrement().primaryKey(),
+  leadId: int("leadId").notNull(),
+  automationTemplateKey: varchar("automationTemplateKey", { length: 100 }).notNull(),
+  enabled: boolean("enabled").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => ({
+  leadIdx: index("lead_auto_overrides_lead_idx").on(t.leadId),
+  uniqueIdx: uniqueIndex("lead_auto_overrides_unique_idx").on(t.leadId, t.automationTemplateKey),
+}));
+
+// ─── Deployment History (Live Update System) ─────────────────────────────────
+
+export const deployments = mysqlTable("deployments", {
+  id: int("id").autoincrement().primaryKey(),
+  version: varchar("version", { length: 100 }).notNull(),
+  gitHash: varchar("gitHash", { length: 40 }),
+  gitBranch: varchar("gitBranch", { length: 200 }),
+  status: mysqlEnum("status", ["started", "uploading", "reloading", "verified", "failed", "rolled_back"]).default("started").notNull(),
+  deployedBy: varchar("deployedBy", { length: 200 }),
+  durationMs: int("durationMs"),
+  changelog: text("changelog"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+}, (t) => ({
+  versionIdx: index("deployments_version_idx").on(t.version),
+  statusIdx: index("deployments_status_idx").on(t.status),
+  createdIdx: index("deployments_created_idx").on(t.createdAt),
+}));
+
+export type Deployment = typeof deployments.$inferSelect;
+export type InsertDeployment = typeof deployments.$inferInsert;
