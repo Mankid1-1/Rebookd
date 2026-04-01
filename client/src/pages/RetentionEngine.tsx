@@ -9,12 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { 
-  Heart, 
-  Users, 
-  TrendingUp, 
-  Calendar, 
-  Clock, 
+import {
+  Heart,
+  Users,
+  TrendingUp,
+  Calendar,
+  Clock,
   Star,
   Settings,
   Zap,
@@ -22,6 +22,7 @@ import {
   Award,
   Repeat
 } from "lucide-react";
+import { HelpTooltip } from "@/components/ui/HelpTooltip";
 import { toast } from "sonner";
 import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
 import { useAuth } from "@/hooks/useAuth";
@@ -70,8 +71,17 @@ export default function RetentionEngine() {
     loyaltyTiers: dynamicLoyaltyTiers
   });
 
-  const { data: metrics, isLoading } = trpc.analytics.retentionMetrics.useQuery(undefined, { refetchInterval: 30000 });
+  const { data: metrics, isLoading } = trpc.analytics.retentionMetrics.useQuery(undefined, { refetchInterval: 60_000 });
   const { data: settings } = trpc.tenant.settings.useQuery(undefined, { retry: false });
+  const { data: automationsList } = trpc.automations.list.useQuery();
+  // Rebooking targets existing customers (booked leads with previous visits)
+  const { data: bookedLeads } = trpc.leads.list.useQuery({ limit: 1, status: "booked" } as any);
+  // Loyalty targets repeat customers — falls back to booked leads
+  const { data: allLeads } = trpc.leads.list.useQuery({ limit: 5 } as any);
+  const testAutomation = trpc.automations.test.useMutation({
+    onSuccess: () => toast.success("Test SMS sent! Check the lead's phone for the message."),
+    onError: (err) => toast.error(err.message),
+  });
   const updateConfig = trpc.tenant.updateRetentionEngineConfig.useMutation({
     onSuccess: () => toast.success("Retention engine configuration updated"),
     onError: (err) => toast.error(err.message)
@@ -88,11 +98,34 @@ export default function RetentionEngine() {
   };
 
   const handleTestRebooking = () => {
-    toast.success("Test rebooking campaign sent successfully");
+    // Target a booked (existing customer) lead for re-engagement
+    const lead = (bookedLeads as any)?.leads?.[0] ?? (bookedLeads as any)?.[0];
+    if (!lead?.phone) {
+      toast.info("You need at least one booked customer to test rebooking campaigns.");
+      return;
+    }
+    const auto = (automationsList as any[])?.find((a: any) => a.key === 'qualified_followup_1d' || a.key === 'win_back_90d');
+    if (!auto) {
+      toast.info("Enable a retention automation on the Automations page first.");
+      return;
+    }
+    testAutomation.mutate({ automationId: auto.id, testPhone: lead.phone });
   };
 
   const handleTriggerLoyalty = () => {
-    toast.success("Loyalty rewards program activated");
+    // Find a lead with the highest visit count for loyalty (or any booked lead)
+    const leads = ((allLeads as any)?.leads ?? allLeads) as any[];
+    const loyaltyLead = leads?.sort((a: any, b: any) => (b?.visitCount ?? 0) - (a?.visitCount ?? 0))?.[0];
+    if (!loyaltyLead?.phone) {
+      toast.info("You need at least one customer to test loyalty rewards.");
+      return;
+    }
+    const auto = (automationsList as any[])?.find((a: any) => a.key === 'loyalty_milestone' || a.key === 'birthday_promo');
+    if (!auto) {
+      toast.info("Enable the Loyalty Milestone automation on the Automations page first.");
+      return;
+    }
+    testAutomation.mutate({ automationId: auto.id, testPhone: loyaltyLead.phone });
   };
 
   if (isLoading) return <DashboardLayout>Loading...</DashboardLayout>;
@@ -129,11 +162,13 @@ export default function RetentionEngine() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                  <Users className="h-6 w-6 text-blue-600" />
+                <div className="p-2 bg-info/10 rounded-lg mr-3">
+                  <Users className="h-6 w-6 text-info" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total Clients</p>
+                  <HelpTooltip content="Total number of unique clients in your Rebooked account." variant="info">
+                    <p className="text-sm font-medium text-muted-foreground">Total Clients</p>
+                  </HelpTooltip>
                   <p className="text-2xl font-bold">{metrics?.totalClients || 0}</p>
                 </div>
               </div>
@@ -143,11 +178,13 @@ export default function RetentionEngine() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg mr-3">
-                  <Repeat className="h-6 w-6 text-green-600" />
+                <div className="p-2 bg-success/10 rounded-lg mr-3">
+                  <Repeat className="h-6 w-6 text-success" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Rebooked Clients</p>
+                  <HelpTooltip content="Clients who booked again after receiving an automated re-engagement or rebooking SMS." variant="info">
+                    <p className="text-sm font-medium text-muted-foreground">Rebooked Clients</p>
+                  </HelpTooltip>
                   <p className="text-2xl font-bold">{metrics?.rebookedClients || 0}</p>
                 </div>
               </div>
@@ -157,11 +194,13 @@ export default function RetentionEngine() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-100 rounded-lg mr-3">
-                  <TrendingUp className="h-6 w-6 text-purple-600" />
+                <div className="p-2 bg-accent/10 rounded-lg mr-3">
+                  <TrendingUp className="h-6 w-6 text-accent" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Retention Rate</p>
+                  <HelpTooltip content="Percentage of lapsed clients who booked again after receiving a re-engagement SMS." variant="info">
+                    <p className="text-sm font-medium text-muted-foreground">Retention Rate</p>
+                  </HelpTooltip>
                   <p className="text-2xl font-bold">{metrics?.retentionRate || 0}%</p>
                 </div>
               </div>
@@ -171,11 +210,13 @@ export default function RetentionEngine() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-orange-100 rounded-lg mr-3">
-                  <Zap className="h-6 w-6 text-orange-600" />
+                <div className="p-2 bg-warning/10 rounded-lg mr-3">
+                  <Zap className="h-6 w-6 text-warning" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">LTV Expansion</p>
+                  <HelpTooltip content="Average total revenue a client generates over their relationship with your business, boosted by retention campaigns." variant="info">
+                    <p className="text-sm font-medium text-muted-foreground">LTV Expansion</p>
+                  </HelpTooltip>
                   <p className="text-2xl font-bold">${((metrics?.ltvExpansion || 0) / 100).toFixed(0)}</p>
                 </div>
               </div>
@@ -201,7 +242,9 @@ export default function RetentionEngine() {
                 <TabsContent value="rebooking" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="time-based">Time-Based Rebooking</Label>
+                      <HelpTooltip content="Sends rebooking reminders at set intervals after a client's last visit — e.g. 4, 6, or 8 weeks." variant="info">
+                        <Label htmlFor="time-based">Time-Based Rebooking</Label>
+                      </HelpTooltip>
                       <Switch
                         id="time-based"
                         checked={config.timeBasedRebooking}
@@ -230,7 +273,7 @@ export default function RetentionEngine() {
                         ))}
                       </div>
                     </div>
-                    <div className="p-4 bg-blue-50 rounded-lg">
+                    <div className="p-4 bg-info/10 rounded-lg">
                       <h4 className="font-medium mb-2">Rebooking Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• 4, 6, 8 week intervals</li>
@@ -245,7 +288,9 @@ export default function RetentionEngine() {
                 <TabsContent value="loyalty" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="loyalty-program">Loyalty Program</Label>
+                      <HelpTooltip content="Automatically sends reward messages when clients hit visit milestones, encouraging them to keep booking." variant="info">
+                        <Label htmlFor="loyalty-program">Loyalty Program</Label>
+                      </HelpTooltip>
                       <Switch
                         id="loyalty-program"
                         checked={config.loyaltyProgram}
@@ -254,7 +299,7 @@ export default function RetentionEngine() {
                         }
                       />
                     </div>
-                    <div className="p-4 bg-green-50 rounded-lg">
+                    <div className="p-4 bg-success/10 rounded-lg">
                       <h4 className="font-medium mb-2">Loyalty Tiers</h4>
                       <div className="space-y-3">
                         {config.loyaltyTiers.map((tier, index) => (
@@ -263,7 +308,7 @@ export default function RetentionEngine() {
                               <p className="font-medium">{tier.visits} Visits</p>
                               <p className="text-sm text-muted-foreground">{tier.reward}</p>
                             </div>
-                            <Badge className="bg-green-100 text-green-800">Active</Badge>
+                            <Badge className="bg-success/10 text-success">Active</Badge>
                           </div>
                         ))}
                       </div>
@@ -274,7 +319,9 @@ export default function RetentionEngine() {
                 <TabsContent value="reactivation" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="reactivation-campaigns">Reactivation Campaigns</Label>
+                      <HelpTooltip content="Targets clients who haven't booked in 30, 60, or 90 days with personalised win-back SMS messages." variant="info">
+                        <Label htmlFor="reactivation-campaigns">Reactivation Campaigns</Label>
+                      </HelpTooltip>
                       <Switch
                         id="reactivation-campaigns"
                         checked={config.reactivationCampaigns}
@@ -283,7 +330,7 @@ export default function RetentionEngine() {
                         }
                       />
                     </div>
-                    <div className="p-4 bg-purple-50 rounded-lg">
+                    <div className="p-4 bg-accent/10 rounded-lg">
                       <h4 className="font-medium mb-2">Reactivation Windows</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• 30 days inactive</li>
@@ -297,7 +344,7 @@ export default function RetentionEngine() {
                 
                 <TabsContent value="advanced" className="space-y-6 mt-6">
                   <div className="space-y-4">
-                    <div className="p-4 bg-orange-50 rounded-lg">
+                    <div className="p-4 bg-warning/10 rounded-lg">
                       <h4 className="font-medium mb-2">Advanced Options</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Custom rebooking templates</li>
@@ -319,23 +366,23 @@ export default function RetentionEngine() {
             <CardContent>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="text-center p-4 bg-blue-50 rounded-lg">
-                    <Award className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+                  <div className="text-center p-4 bg-info/10 rounded-lg">
+                    <Award className="h-8 w-8 text-info mx-auto mb-2" />
                     <h3 className="font-medium">Bronze Tier</h3>
                     <p className="text-sm text-muted-foreground">3+ Visits</p>
-                    <Badge className="bg-blue-100 text-blue-800">{metrics?.bronzeClients || 0} Clients</Badge>
+                    <Badge className="bg-info/10 text-info">{metrics?.bronzeClients || 0} Clients</Badge>
                   </div>
-                  <div className="text-center p-4 bg-green-50 rounded-lg">
-                    <Award className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                  <div className="text-center p-4 bg-success/10 rounded-lg">
+                    <Award className="h-8 w-8 text-success mx-auto mb-2" />
                     <h3 className="font-medium">Silver Tier</h3>
                     <p className="text-sm text-muted-foreground">5+ Visits</p>
-                    <Badge className="bg-green-100 text-green-800">{metrics?.silverClients || 0} Clients</Badge>
+                    <Badge className="bg-success/10 text-success">{metrics?.silverClients || 0} Clients</Badge>
                   </div>
-                  <div className="text-center p-4 bg-purple-50 rounded-lg">
-                    <Award className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+                  <div className="text-center p-4 bg-accent/10 rounded-lg">
+                    <Award className="h-8 w-8 text-accent mx-auto mb-2" />
                     <h3 className="font-medium">Gold Tier</h3>
                     <p className="text-sm text-muted-foreground">10+ Visits</p>
-                    <Badge className="bg-purple-100 text-purple-800">{metrics?.goldClients || 0} Clients</Badge>
+                    <Badge className="bg-accent/10 text-accent">{metrics?.goldClients || 0} Clients</Badge>
                   </div>
                 </div>
                 <div className="p-4 bg-muted rounded-lg">
@@ -372,16 +419,16 @@ export default function RetentionEngine() {
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <p className="text-2xl font-bold text-blue-600">{metrics?.totalClients || 0}</p>
+                <div className="text-center p-3 bg-info/10 rounded-lg">
+                  <p className="text-2xl font-bold text-info">{metrics?.totalClients || 0}</p>
                   <p className="text-sm text-muted-foreground">Total Clients</p>
                 </div>
-                <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <p className="text-2xl font-bold text-green-600">{metrics?.rebookedClients || 0}</p>
+                <div className="text-center p-3 bg-success/10 rounded-lg">
+                  <p className="text-2xl font-bold text-success">{metrics?.rebookedClients || 0}</p>
                   <p className="text-sm text-muted-foreground">Rebooked</p>
                 </div>
-                <div className="text-center p-3 bg-purple-50 rounded-lg">
-                  <p className="text-2xl font-bold text-purple-600">${((metrics?.ltvExpansion || 0) / 100).toFixed(0)}</p>
+                <div className="text-center p-3 bg-accent/10 rounded-lg">
+                  <p className="text-2xl font-bold text-accent">${((metrics?.ltvExpansion || 0) / 100).toFixed(0)}</p>
                   <p className="text-sm text-muted-foreground">LTV Expansion</p>
                 </div>
               </div>

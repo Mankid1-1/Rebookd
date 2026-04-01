@@ -1,9 +1,6 @@
-// Secure localStorage utilities with encryption
-// This provides encrypted storage for sensitive data to prevent XSS attacks
-
-import CryptoJS from 'crypto-js';
-
-const ENCRYPTION_KEY = import.meta.env.VITE_STORAGE_ENCRYPTION_KEY || 'rebooked-client-storage-key';
+// localStorage utilities for UI/preference state.
+// Note: localStorage is NOT suitable for storing sensitive data (auth tokens,
+// PII, secrets). Auth sessions are managed via httpOnly cookies server-side.
 
 interface StorageItem<T = any> {
   value: T;
@@ -12,59 +9,47 @@ interface StorageItem<T = any> {
 }
 
 /**
- * Encrypts data before storing in localStorage
+ * Stores an item in localStorage with a timestamp.
+ * Use this for non-sensitive UI state (preferences, feature flags, etc.).
  */
 export function setSecureItem<T>(key: string, value: T): void {
   try {
-    const encrypted = CryptoJS.AES.encrypt(JSON.stringify(value), ENCRYPTION_KEY).toString();
     const item: StorageItem<T> = {
-      value: encrypted as any,
+      value,
       timestamp: Date.now(),
-      encrypted: true
+      encrypted: false,
     };
     localStorage.setItem(key, JSON.stringify(item));
   } catch (error) {
-    console.error('Failed to set secure item:', error);
-    // Fallback to unencrypted storage
-    localStorage.setItem(key, JSON.stringify({
-      value,
-      timestamp: Date.now(),
-      encrypted: false
-    }));
+    console.error('Failed to set item:', error);
   }
 }
 
 /**
- * Decrypts data when retrieving from localStorage
+ * Retrieves a timestamped item from localStorage.
  */
 export function getSecureItem<T>(key: string, defaultValue?: T): T | null {
   try {
     const itemStr = localStorage.getItem(key);
-    if (!itemStr) return defaultValue || null;
-    
+    if (!itemStr) return defaultValue ?? null;
+
     const item: StorageItem<T> = JSON.parse(itemStr);
-    
-    if (!item.encrypted) {
-      return item.value;
-    }
-    
-    const decrypted = CryptoJS.AES.decrypt(item.value as string, ENCRYPTION_KEY).toString(CryptoJS.enc.Utf8);
-    return JSON.parse(decrypted);
+    return item.value;
   } catch (error) {
-    console.error('Failed to get secure item:', error);
-    return defaultValue || null;
+    console.error('Failed to get item:', error);
+    return defaultValue ?? null;
   }
 }
 
 /**
- * Removes item from localStorage
+ * Removes item from localStorage.
  */
 export function removeSecureItem(key: string): void {
   localStorage.removeItem(key);
 }
 
 /**
- * Clears all secure storage
+ * Clears all items that were written by setSecureItem.
  */
 export function clearSecureStorage(): void {
   Object.keys(localStorage).forEach(key => {
@@ -72,11 +57,10 @@ export function clearSecureStorage(): void {
     if (itemStr) {
       try {
         const item = JSON.parse(itemStr);
-        if (item.encrypted) {
+        if ('timestamp' in item) {
           localStorage.removeItem(key);
         }
       } catch {
-        // Remove if we can't parse
         localStorage.removeItem(key);
       }
     }
@@ -84,24 +68,22 @@ export function clearSecureStorage(): void {
 }
 
 /**
- * Checks if item exists and is not expired (24 hours)
+ * Checks if item exists and was written within the last 24 hours.
  */
 export function isSecureItemValid(key: string): boolean {
   try {
     const itemStr = localStorage.getItem(key);
     if (!itemStr) return false;
-    
+
     const item: StorageItem = JSON.parse(itemStr);
-    const now = Date.now();
-    const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-    
-    return (now - item.timestamp) < maxAge;
+    const maxAge = 24 * 60 * 60 * 1000;
+    return (Date.now() - item.timestamp) < maxAge;
   } catch {
     return false;
   }
 }
 
-// Non-secure utilities for non-sensitive data
+// Non-timestamped utilities for simple values
 export function setItem<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
@@ -113,11 +95,11 @@ export function setItem<T>(key: string, value: T): void {
 export function getItem<T>(key: string, defaultValue?: T): T | null {
   try {
     const itemStr = localStorage.getItem(key);
-    if (!itemStr) return defaultValue || null;
+    if (!itemStr) return defaultValue ?? null;
     return JSON.parse(itemStr);
   } catch (error) {
     console.error('Failed to get item:', error);
-    return defaultValue || null;
+    return defaultValue ?? null;
   }
 }
 

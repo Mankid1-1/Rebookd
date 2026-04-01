@@ -13,6 +13,10 @@ export default defineConfig({
   out: "./drizzle",
   dialect: "mysql",
   dbCredentials: {
-    url: connectionString.includes("?") ? connectionString : `${connectionString}?ssl={"rejectUnauthorized":false}`,
+    url: connectionString.includes("?") ? connectionString : (
+      connectionString.includes("localhost") || connectionString.includes("127.0.0.1")
+        ? connectionString
+        : `${connectionString}?ssl={"rejectUnauthorized":${process.env.NODE_ENV === "production" ? "true" : "false"}}`
+    ),
   },
 });

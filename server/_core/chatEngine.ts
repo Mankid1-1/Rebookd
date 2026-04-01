@@ -264,3 +264,115 @@ export function getSuggestedQuestions(category?: string, skillLevel?: SkillLevel
 function getTopQuestions(count: number, skillLevel?: SkillLevel): string[] {
   return getSuggestedQuestions(undefined, skillLevel).slice(0, count);
 }
+
+// ─── LLM Context Chat (All-Aware Fallback) ──────────────────────────────────
+
+import type { UserProfile } from "./chatActions";
+
+/**
+ * Build a rich system prompt from live platform data so the LLM
+ * can give specific, data-driven answers.
+ */
+export function buildContextPrompt(profile: UserProfile): string {
+  const activeAutomations = profile.automations.filter((a) => a.enabled);
+  const inactiveAutomations = profile.automations.filter((a) => !a.enabled);
+  const lk = profile.leakageMetrics ?? { unconfirmedAppointments: 0, qualifiedUnbooked: 0, cancellationsUnrecovered: 0, failedDeliveryRecovery: 0 };
+  const ds = profile.deliveryStats ?? { total: 0, delivered: 0, failed: 0, rate: 100 };
+  const avg = profile.avgRevenuePerBooking || 0;
+  const potentialRecovery = (profile.qualifiedLeadCount ?? 0) * avg * ((profile.overallRecoveryRate ?? 0) / 100);
+
+  return `You are RebookedAI — the intelligent, data-driven assistant for "${profile.tenantName}", a ${profile.industry || "service"} business using Rebooked SMS revenue recovery.
+
+REVENUE RECOVERY (REAL DATA):
+- Total recovered: $${(profile.totalRecoveredRevenue ?? 0).toLocaleString()}
+- Last 30 days: $${(profile.recentRecoveredRevenue ?? 0).toLocaleString()}
+- Recovery rate: ${(profile.overallRecoveryRate ?? 0).toFixed(1)}%
+- Avg per booking: $${avg.toLocaleString()}
+- Trend: ${profile.revenueTrend === "up" ? "GROWING" : profile.revenueTrend === "down" ? "DECLINING" : "STABLE"}
+
+LEAD PIPELINE:
+- ${profile.leadCount} total leads (${profile.bookedCount} booked, ${profile.qualifiedLeadCount ?? 0} qualified, ${profile.contactedLeadCount ?? 0} contacted, ${profile.lostLeadCount ?? 0} lost, ${profile.noShowCount} no-shows)
+- Lead trend: ${profile.leadTrend === "up" ? "GROWING" : profile.leadTrend === "down" ? "DECLINING" : "STABLE"}
+
+REVENUE LEAKAGE DETECTED:
+${lk.unconfirmedAppointments > 0 ? `- ${lk.unconfirmedAppointments} unconfirmed appointments in next 48h` : ""}${lk.qualifiedUnbooked > 0 ? `\n- ${lk.qualifiedUnbooked} qualified leads never booked (~$${Math.round(lk.qualifiedUnbooked * avg).toLocaleString()} potential)` : ""}${lk.cancellationsUnrecovered > 0 ? `\n- ${lk.cancellationsUnrecovered} cancellations not recovered` : ""}${lk.failedDeliveryRecovery > 0 ? `\n- ${lk.failedDeliveryRecovery} leads with failed SMS delivery` : ""}${(lk.unconfirmedAppointments + lk.qualifiedUnbooked + lk.cancellationsUnrecovered + lk.failedDeliveryRecovery) === 0 ? "- No leakage detected" : ""}
+
+MESSAGE PERFORMANCE:
+- ${ds.total} messages sent, ${ds.rate.toFixed(0)}% delivery rate${ds.failed > 0 ? `, ${ds.failed} failed` : ""}
+
+AUTOMATIONS:
+- ${activeAutomations.length} active, ${inactiveAutomations.length} inactive of ${profile.automations.length} total
+${inactiveAutomations.length > 0 ? "Inactive: " + inactiveAutomations.slice(0, 5).map((a) => a.name).join(", ") : ""}
+
+PREDICTIONS:
+- Projected pipeline recovery: $${Math.round(potentialRecovery).toLocaleString()}
+- Today's appointments: ${profile.todayAppointments}
+- Calendars connected: ${profile.connectedCalendars}
+
+${profile.recentLeads.length > 0 ? "RECENT LEADS:\n" + profile.recentLeads.map((l) => `- ${l.name} (${l.status})`).join("\n") : ""}
+
+USER: Skill=${profile.skillLevel}, Plan=${profile.planName}, TZ=${profile.timezone || "unset"}
+
+RULES:
+- Reference REAL numbers from data above — never make up stats.
+- Give specific, actionable advice based on the data. If leakage exists, recommend specific automations.
+- If recovery rate is low, suggest specific improvements.
+- Adapt complexity to skill level (${profile.skillLevel}).
+- Use markdown. Keep responses under 250 words.
+- Solo founder voice — warm, direct, data-driven.
+- Tell users they can say "show my revenue", "show leakage", "predict revenue", "how can I improve", "generate a report" for detailed data.`;
+}
+
+/**
+ * Chat with the LLM using full platform context. Used as fallback when
+ * KB confidence is low and no intent was matched.
+ */
+export async function chatWithContext(
+  message: string,
+  profile: UserProfile,
+  history?: ChatMessage[],
+): Promise<ChatResponse> {
+  try {
+    const { invokeLLM } = await import("./llm");
+
+    const systemPrompt = buildContextPrompt(profile);
+    const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
+      { role: "system", content: systemPrompt },
+    ];
+
+    // Include last 10 messages of history for richer context
+    if (history && history.length > 0) {
+      for (const msg of history.slice(-10)) {
+        messages.push({ role: msg.role, content: msg.content });
+      }
+    }
+
+    messages.push({ role: "user", content: message });
+
+    const result = await invokeLLM({
+      messages,
+      maxTokens: 800,
+    });
+
+    const answer = typeof result.choices?.[0]?.message?.content === "string"
+      ? result.choices[0].message.content
+      : "I couldn't generate a response right now. Try asking about your leads, automations, or stats.";
+
+    return {
+      answer,
+      confidence: 0.8,
+      category: "ai_context",
+      suggestions: ["Show my stats", "What should I do?", "Show my leads"],
+      matchedQuestion: message,
+    };
+  } catch (err) {
+    // LLM unavailable — return graceful fallback
+    return {
+      answer: "I'm having trouble connecting to my AI brain right now. In the meantime, try asking me to \"show my stats\" or \"show my leads\" for instant data.",
+      confidence: 0.3,
+      category: "error",
+      suggestions: ["Show my stats", "Show my leads", "What can you do?"],
+      matchedQuestion: message,
+    };
+  }
+}

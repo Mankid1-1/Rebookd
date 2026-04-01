@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rebooked — TikTok Referral Ad</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #111;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    padding: 20px 10px 40px;
+    gap: 24px;
+  }
+
+  h1 {
+    color: #00A896;
+    font-size: 14px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    text-align: center;
+    margin-top: 8px;
+  }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .btn {
+    background: #0D1B2A;
+    color: #00A896;
+    border: 2px solid #00A896;
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+  .btn:hover { background: #00A896; color: #fff; }
+  .btn.active { background: #00A896; color: #fff; }
+
+  /* ── PHONE FRAME ── */
+  .phone-wrap {
+    position: relative;
+    width: 320px;
+    height: 568px;
+  }
+
+  .phone-frame {
+    position: absolute;
+    inset: 0;
+    border-radius: 36px;
+    border: 6px solid #1c2e3e;
+    box-shadow: 0 0 0 2px #0D1B2A, 0 20px 60px rgba(0,0,0,0.7);
+    overflow: hidden;
+    background: #000;
+  }
+
+  /* ── VIDEO CANVAS ── */
+  .video-canvas {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    background: #0D1B2A;
+  }
+
+  /* ── SLIDES ── */
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 20px;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+  }
+  .slide.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Backgrounds */
+  .bg-navy   { background: #0D1B2A; }
+  .bg-teal   { background: #00A896; }
+  .bg-dark   { background: #060e17; }
+  .bg-split  { background: linear-gradient(160deg, #0D1B2A 60%, #00A896 100%); }
+  .bg-gold   { background: linear-gradient(160deg, #0D1B2A 40%, #E8920A22 100%); }
+
+  /* Typography */
+  .eyebrow {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #E8920A;
+    font-weight: 800;
+    margin-bottom: 10px;
+  }
+  .big-text {
+    font-size: 28px;
+    font-weight: 900;
+    color: #fff;
+    text-align: center;
+    line-height: 1.15;
+  }
+  .teal-text { color: #00A896; }
+  .gold-text { color: #E8920A; }
+  .sub-text {
+    font-size: 13px;
+    color: rgba(255,255,255,0.7);
+    text-align: center;
+    margin-top: 10px;
+    line-height: 1.5;
+  }
+  .huge-number {
+    font-size: 58px;
+    font-weight: 900;
+    color: #00A896;
+    line-height: 1;
+    text-align: center;
+  }
+  .huge-label {
+    font-size: 13px;
+    color: rgba(255,255,255,0.6);
+    text-align: center;
+    margin-top: 4px;
+  }
+
+  /* Notification pill */
+  .notif {
+    background: #fff;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    width: 100%;
+    max-width: 260px;
+    animation: slideInTop 0.5s ease forwards;
+  }
+  @keyframes slideInTop {
+    from { transform: translateY(-40px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+  .notif-icon {
+    width: 36px; height: 36px;
+    background: #00A896;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .notif-text { flex: 1; }
+  .notif-title { font-size: 11px; font-weight: 700; color: #0D1B2A; }
+  .notif-body  { font-size: 10px; color: #555; margin-top: 1px; }
+  .notif-time  { font-size: 9px; color: #aaa; }
+
+  /* SMS Bubble */
+  .sms-wrap {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .sms-bubble {
+    background: #E8920A;
+    color: #fff;
+    border-radius: 16px 16px 4px 16px;
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    align-self: flex-end;
+    max-width: 200px;
+    line-height: 1.4;
+    animation: fadeUp 0.5s ease forwards;
+  }
+  .sms-reply {
+    background: #1c3048;
+    color: #fff;
+    border-radius: 16px 16px 16px 4px;
+    padding: 10px 14px;
+    font-size: 12px;
+    align-self: flex-start;
+    max-width: 200px;
+    line-height: 1.4;
+    animation: fadeUp 0.6s ease forwards;
+  }
+  @keyframes fadeUp {
+    from { transform: translateY(16px); opacity: 0; }
+    to   { transform: translateY(0);   opacity: 1; }
+  }
+
+  /* Math equation */
+  .equation {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .eq-line {
+    font-size: 20px;
+    font-weight: 800;
+    color: #fff;
+    text-align: center;
+  }
+  .eq-result {
+    font-size: 36px;
+    font-weight: 900;
+    color: #E8920A;
+    text-align: center;
+    border-top: 2px solid rgba(255,255,255,0.3);
+    padding-top: 8px;
+    width: 100%;
+  }
+
+  /* Referral card */
+  .ref-card {
+    background: linear-gradient(135deg, #0D1B2A, #1c3048);
+    border: 2px solid #00A896;
+    border-radius: 16px;
+    padding: 20px;
+    width: 100%;
+    text-align: center;
+  }
+  .ref-label { font-size: 9px; color: #00A896; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; }
+  .ref-amount { font-size: 32px; font-weight: 900; color: #fff; }
+  .ref-sub { font-size: 11px; color: rgba(255,255,255,0.6); margin-top: 4px; }
+  .ref-link {
+    margin-top: 14px;
+    background: #00A896;
+    color: #fff;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  /* Stack of notifications */
+  .notif-stack { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+  .notif-mini {
+    background: #fff;
+    border-radius: 10px;
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+  }
+  .notif-mini-icon { width: 28px; height: 28px; background: #00A896; border-radius: 6px; display:flex;align-items:center;justify-content:center; font-size:13px; }
+  .notif-mini-txt  { font-size: 11px; font-weight: 700; color: #0D1B2A; }
+  .notif-mini-sub  { font-size: 9px; color: #888; }
+
+  /* CTA slide */
+  .cta-badge {
+    background: #E8920A;
+    color: #fff;
+    border-radius: 20px;
+    padding: 10px 22px;
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    margin-top: 16px;
+    text-align: center;
+  }
+
+  /* Progress bar */
+  .progress-bar {
+    position: absolute;
+    bottom: 0; left: 0;
+    height: 3px;
+    background: #E8920A;
+    transition: width 0.1s linear;
+    z-index: 20;
+  }
+
+  /* Slide counter */
+  .slide-dots {
+    position: absolute;
+    top: 10px; right: 12px;
+    display: flex; gap: 4px;
+    z-index: 20;
+  }
+  .dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.3);
+    transition: background 0.3s;
+  }
+  .dot.active { background: #E8920A; }
+
+  /* TikTok UI chrome */
+  .tiktok-chrome {
+    position: absolute;
+    right: 10px; bottom: 80px;
+    display: flex; flex-direction: column; align-items: center; gap: 18px;
+    z-index: 15;
+  }
+  .tc-icon { font-size: 22px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
+  .tc-label { font-size: 8px; color: rgba(255,255,255,0.8); text-align: center; font-weight: 600; }
+
+  .tiktok-bottom {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.85));
+    padding: 30px 12px 14px;
+    z-index: 14;
+  }
+  .tiktok-user { font-size: 11px; font-weight: 800; color: #fff; margin-bottom: 3px; }
+  .tiktok-caption { font-size: 10px; color: rgba(255,255,255,0.85); line-height: 1.4; }
+  .tiktok-music { font-size: 9px; color: rgba(255,255,255,0.6); margin-top: 5px; }
+  .tiktok-hashtags { font-size: 10px; color: #00A896; font-weight: 700; margin-top: 3px; }
+
+  /* Animated logo */
+  .logo-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .logo-mark {
+    width: 56px; height: 56px;
+    background: #00A896;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+    box-shadow: 0 0 30px #00A89680;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 20px #00A89660; }
+    50%      { box-shadow: 0 0 40px #00A896aa; }
+  }
+  .logo-name { font-size: 22px; font-weight: 900; color: #fff; letter-spacing: -0.5px; }
+  .logo-tag  { font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 2px; text-align: center; }
+
+  /* Timer & playback */
+  .playback-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .play-btn {
+    width: 48px; height: 48px;
+    background: #00A896;
+    border-radius: 50%;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.1s;
+  }
+  .play-btn:hover { transform: scale(1.05); }
+  .timer-txt { color: #aaa; font-size: 12px; font-family: monospace; }
+
+  .select-label {
+    color: #aaa;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>Rebooked · TikTok Referral Ad</h1>
+
+<!-- Concept selector -->
+<div>
+  <div class="select-label" style="margin-bottom:8px">Select Concept</div>
+  <div class="controls">
+    <button class="btn active" onclick="selectConcept(1, this)">Concept 1 — The Math (15s)</button>
+    <button class="btn"        onclick="selectConcept(2, this)">Concept 2 — Text Your Friend (20s)</button>
+    <button class="btn"        onclick="selectConcept(3, this)">Concept 3 — Storytime (30s)</button>
+  </div>
+</div>
+
+<!-- Phone -->
+<div class="phone-wrap">
+  <div class="phone-frame">
+    <div class="video-canvas" id="canvas">
+
+      <!-- ════ CONCEPT 1 SLIDES ════ -->
+
+      <div class="slide bg-dark active" data-concept="1" id="c1s0">
+        <div class="logo-wrap">
+          <div class="logo-mark">📅</div>
+          <div class="logo-name">Rebooked</div>
+          <div class="logo-tag">SMS Revenue Recovery</div>
+        </div>
+      </div>
+
+      <div class="slide bg-navy" data-concept="1" id="c1s1">
+        <div style="margin-bottom:20px">
+          <div class="notif">
+            <div class="notif-icon">💸</div>
+            <div class="notif-text">
+              <div class="notif-title">Rebooked Referral</div>
+              <div class="notif-body">+$50 earned this month</div>
+            </div>
+            <div class="notif-time">now</div>
+          </div>
+        </div>
+        <div class="big-text">I got paid <span class="gold-text">$50</span><br>today.</div>
+        <div class="sub-text">Wait — let me explain. 👀</div>
+      </div>
+
+      <div class="slide bg-split" data-concept="1" id="c1s2">
+        <div class="eyebrow">one referral</div>
+        <div class="big-text">I referred ONE friend<br>to <span class="teal-text">Rebooked.</span></div>
+        <div class="sub-text">I literally just sent a link. 📲</div>
+      </div>
+
+      <div class="slide bg-navy" data-concept="1" id="c1s3">
+        <div class="eyebrow">the math</div>
+        <div class="equation">
+          <div class="eq-line">$50 / month</div>
+          <div class="eq-line">×</div>
+          <div class="eq-line">6 months</div>
+          <div class="eq-result">= $300 💰</div>
+        </div>
+        <div class="sub-text">Per referral. That's it.</div>
+      </div>
+
+      <div class="slide bg-dark" data-concept="1" id="c1s4">
+        <div class="eyebrow">text a friend</div>
+        <div class="sms-wrap">
+          <div style="font-size:10px;color:#888;margin-bottom:4px">💬 Sarah ✂️</div>
+          <div class="sms-bubble">Hey — you own a salon right? You'd love this 👇</div>
+          <div class="sms-reply">OMG what is it?? 😍</div>
+          <div class="sms-bubble">It's called Rebooked — sends SMS to missed calls automatically. Free trial too.</div>
+        </div>
+      </div>
+
+      <div class="slide bg-gold" data-concept="1" id="c1s5">
+        <div class="notif-stack">
+          <div class="notif-mini">
+            <div class="notif-mini-icon">💸</div>
+            <div><div class="notif-mini-txt">+$50 earned</div><div class="notif-mini-sub">Referral: Sarah's Salon</div></div>
+          </div>
+          <div class="notif-mini">
+            <div class="notif-mini-icon">💸</div>
+            <div><div class="notif-mini-txt">+$50 earned</div><div class="notif-mini-sub">Referral: City Clinic</div></div>
+          </div>
+          <div class="notif-mini">
+            <div class="notif-mini-icon">💸</div>
+            <div><div class="notif-mini-txt">+$50 earned</div><div class="notif-mini-sub">Referral: Glow Studio</div></div>
+          </div>
+        </div>
+        <div style="margin-top:16px">
+          <div class="cta-badge">↑ Link in bio. Free to join. 🔗</div>
+        </div>
+      </div>
+
+      <!-- ════ CONCEPT 2 SLIDES ════ -->
+
+      <div class="slide bg-dark" data-concept="2" id="c2s0" style="display:none">
+        <div class="logo-wrap">
+          <div class="logo-mark">📅</div>
+          <div class="logo-name">Rebooked</div>
+          <div class="logo-tag">SMS Revenue Recovery</div>
+        </div>
+      </div>
+
+      <div class="slide bg-navy" data-concept="2" id="c2s1" style="display:none">
+        <div class="eyebrow">do this right now</div>
+        <div class="big-text">Do you know a<br><span class="teal-text">salon owner?</span></div>
+        <div class="sub-text">Or a clinic? A consultant? Anyone with appointments?</div>
+      </div>
+
+      <div class="slide bg-split" data-concept="2" id="c2s2" style="display:none">
+        <div class="eyebrow">meet rebooked</div>
+        <div class="big-text">Missed calls<br>→ <span class="gold-text">Booked clients.</span></div>
+        <div class="sub-text">Automatic SMS recovery. No manual follow-up needed.</div>
+      </div>
+
+      <div class="slide bg-navy" data-concept="2" id="c2s3" style="display:none">
+        <div class="eyebrow">risk free</div>
+        <div class="big-text"><span class="teal-text">35-day</span><br>ROI guarantee.</div>
+        <div class="sub-text">Free if they don't make back more than they pay. Zero risk.</div>
+      </div>
+
+      <div class="slide bg-dark" data-concept="2" id="c2s4" style="display:none">
+        <div class="eyebrow">here's the kicker</div>
+        <div class="ref-card">
+          <div class="ref-label">Your referral reward</div>
+          <div class="ref-amount">$50 / month</div>
+          <div class="ref-sub">for 6 months = <strong style="color:#E8920A">$300 per referral</strong></div>
+          <div class="ref-link">Share your link → get paid 💰</div>
+        </div>
+      </div>
+
+      <div class="slide bg-dark" data-concept="2" id="c2s5" style="display:none">
+        <div class="eyebrow">do the math</div>
+        <div class="equation">
+          <div class="eq-line">3 friends referred</div>
+          <div class="eq-line">×</div>
+          <div class="eq-line">$300 each</div>
+          <div class="eq-result">= $900 🎉</div>
+        </div>
+      </div>
+
+      <div class="slide bg-gold" data-concept="2" id="c2s6" style="display:none">
+        <div class="eyebrow">your move</div>
+        <div class="big-text">Link in bio.<br><span class="teal-text">Grab yours.</span></div>
+        <div class="sub-text">Takes 2 minutes. Earns for 6 months.</div>
+        <div class="cta-badge">→ rebooked.org 🔗</div>
+      </div>
+
+      <!-- ════ CONCEPT 3 SLIDES ════ -->
+
+      <div class="slide bg-dark" data-concept="3" id="c3s0" style="display:none">
+        <div class="logo-wrap">
+          <div class="logo-mark">📅</div>
+          <div class="logo-name">Rebooked</div>
+          <div class="logo-tag">SMS Revenue Recovery</div>
+        </div>
+      </div>
+
+      <div class="slide bg-navy" data-concept="3" id="c3s1" style="display:none">
+        <div class="big-text" style="font-size:22px">What I made from<br>referrals this month.</div>
+        <div class="sub-text" style="margin-top:16px;font-style:italic">Storytime. 👇</div>
+      </div>
+
+      <div class="slide bg-split" data-concept="3" id="c3s2" style="display:none">
+        <div class="eyebrow">the tool</div>
+        <div class="big-text" style="font-size:22px">I use <span class="teal-text">Rebooked</span><br>for my business.</div>
+        <div class="sub-text">It auto-texts missed calls and no-shows. Recovers revenue I'd have lost.</div>
+      </div>
+
+      <div class="slide bg-dark" data-concept="3" id="c3s3" style="display:none">
+        <div class="eyebrow">what I did</div>
+        <div class="sms-wrap">
+          <div style="font-size:10px;color:#888;margin-bottom:6px">💬 Facebook Group — Salon Owners UK</div>
+          <div class="sms-bubble" style="border-radius:14px;align-self:center;text-align:center;max-width:240px">
+            "Anyone using an SMS tool for no-shows? I use Rebooked — sharing my link if anyone wants to try it free for 35 days 👇"
+          </div>
+          <div style="font-size:10px;color:#00A896;text-align:center;margin-top:8px">❤️ 47 reactions · 23 comments</div>
+        </div>
+      </div>
+
+      <div class="slide bg-navy" data-concept="3" id="c3s4" style="display:none">
+        <div class="eyebrow">what happened</div>
+        <div class="equation">
+          <div class="eq-line">3 sign-ups in a week</div>
+          <div class="eq-line">× $50/month × 6 months</div>
+          <div class="eq-result">= $900 💸</div>
+        </div>
+        <div class="sub-text">From one Facebook comment.</div>
+      </div>
+
+      <div class="slide bg-split" data-concept="3" id="c3s5" style="display:none">
+        <div class="eyebrow">why it works</div>
+        <div class="big-text" style="font-size:22px"><span class="gold-text">35-day</span> ROI guarantee.</div>
+        <div class="sub-text">They only pay if it makes them money. So there's nothing to lose for them — and you still get paid.</div>
+      </div>
+
+      <div class="slide bg-dark" data-concept="3" id="c3s6" style="display:none">
+        <div class="eyebrow">your referral income</div>
+        <div class="notif-stack">
+          <div class="notif-mini">
+            <div class="notif-mini-icon">💸</div>
+            <div><div class="notif-mini-txt">Month 1: +$150</div><div class="notif-mini-sub">3 active referrals</div></div>
+          </div>
+          <div class="notif-mini">
+            <div class="notif-mini-icon">💸</div>
+            <div><div class="notif-mini-txt">Month 2: +$150</div><div class="notif-mini-sub">Keeps going...</div></div>
+          </div>
+          <div class="notif-mini">
+            <div class="notif-mini-icon">💰</div>
+            <div><div class="notif-mini-txt">Month 6: $900 total</div><div class="notif-mini-sub">From ONE post.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="slide bg-gold" data-concept="3" id="c3s7" style="display:none">
+        <div class="eyebrow">your turn</div>
+        <div class="big-text">Link in bio.<br><span class="teal-text">Seriously.</span></div>
+        <div class="sub-text">Takes 2 minutes to set up. Pays for 6 months.</div>
+        <div class="cta-badge">→ rebooked.org 🔗</div>
+      </div>
+
+      <!-- TikTok UI chrome (always visible) -->
+      <div class="tiktok-chrome" id="tikChrome">
+        <div style="text-align:center">
+          <div class="tc-icon">❤️</div>
+          <div class="tc-label">24.1K</div>
+        </div>
+        <div style="text-align:center">
+          <div class="tc-icon">💬</div>
+          <div class="tc-label">843</div>
+        </div>
+        <div style="text-align:center">
+          <div class="tc-icon">↗️</div>
+          <div class="tc-label">Share</div>
+        </div>
+        <div style="text-align:center">
+          <div class="tc-icon">🎵</div>
+          <div class="tc-label">Sound</div>
+        </div>
+      </div>
+
+      <div class="tiktok-bottom" id="tikBottom">
+        <div class="tiktok-user">@rebooked.app</div>
+        <div class="tiktok-caption">This is how I earn $50/month just for sharing a link 👇</div>
+        <div class="tiktok-hashtags">#rebooked #passiveincome #sidehustle #salonowner</div>
+        <div class="tiktok-music">🎵 Trending audio</div>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="progress-bar" id="progressBar" style="width:0%"></div>
+
+      <!-- Slide dots -->
+      <div class="slide-dots" id="slideDots"></div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Playback controls -->
+<div class="playback-row">
+  <button class="play-btn" id="playBtn" onclick="togglePlay()">▶</button>
+  <span class="timer-txt" id="timerTxt">0.0s / 15s</span>
+  <button class="btn" onclick="prevSlide()">◀ Prev</button>
+  <button class="btn" onclick="nextSlide()">Next ▶</button>
+</div>
+
+<script>
+// ── State ──
+const concepts = {
+  1: { slides: ['c1s0','c1s1','c1s2','c1s3','c1s4','c1s5'], duration: 15, label: '#rebooked #passiveincome #sidehustle #salonowner' },
+  2: { slides: ['c2s0','c2s1','c2s2','c2s3','c2s4','c2s5','c2s6'], duration: 20, label: '#rebooked #salonowner #referralprogram #smallbusiness' },
+  3: { slides: ['c3s0','c3s1','c3s2','c3s3','c3s4','c3s5','c3s6','c3s7'], duration: 30, label: '#rebooked #passiveincome #salonmarketing #referral' },
+};
+
+let currentConcept = 1;
+let currentSlide = 0;
+let isPlaying = false;
+let elapsed = 0;
+let rafId = null;
+let lastTs = null;
+
+function selectConcept(num, btn) {
+  document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentConcept = num;
+  currentSlide = 0;
+  elapsed = 0;
+  isPlaying = false;
+  lastTs = null;
+  document.getElementById('playBtn').textContent = '▶';
+  // Show/hide slides
+  document.querySelectorAll('.slide').forEach(s => {
+    s.style.display = '';
+    s.classList.remove('active');
+  });
+  // Hide other concepts
+  document.querySelectorAll('.slide').forEach(s => {
+    if (s.dataset.concept != num) s.style.display = 'none';
+  });
+  renderDots();
+  showSlide(0);
+  updateProgress();
+  updateTimer();
+}
+
+function renderDots() {
+  const dotsEl = document.getElementById('slideDots');
+  const c = concepts[currentConcept];
+  dotsEl.innerHTML = c.slides.map((_, i) =>
+    `<div class="dot ${i===0?'active':''}" id="dot${i}"></div>`
+  ).join('');
+}
+
+function showSlide(idx) {
+  const c = concepts[currentConcept];
+  c.slides.forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('active', i === idx);
+    const dot = document.getElementById('dot' + i);
+    if (dot) dot.classList.toggle('active', i === idx);
+  });
+  // Update hashtags
+  document.querySelector('.tiktok-hashtags').textContent = c.label;
+}
+
+function updateProgress() {
+  const c = concepts[currentConcept];
+  const pct = Math.min((elapsed / c.duration) * 100, 100);
+  document.getElementById('progressBar').style.width = pct + '%';
+}
+
+function updateTimer() {
+  const c = concepts[currentConcept];
+  document.getElementById('timerTxt').textContent =
+    elapsed.toFixed(1) + 's / ' + c.duration + 's';
+  // Slide index from time
+  const slideIdx = Math.min(
+    Math.floor((elapsed / c.duration) * c.slides.length),
+    c.slides.length - 1
+  );
+  if (slideIdx !== currentSlide) {
+    currentSlide = slideIdx;
+    showSlide(currentSlide);
+  }
+}
+
+function tick(ts) {
+  if (!lastTs) lastTs = ts;
+  const delta = (ts - lastTs) / 1000;
+  lastTs = ts;
+  const c = concepts[currentConcept];
+  elapsed = Math.min(elapsed + delta, c.duration);
+  updateProgress();
+  updateTimer();
+  if (elapsed >= c.duration) {
+    isPlaying = false;
+    document.getElementById('playBtn').textContent = '▶';
+    elapsed = 0;
+    currentSlide = 0;
+    showSlide(0);
+    updateProgress();
+    updateTimer();
+    return;
+  }
+  if (isPlaying) rafId = requestAnimationFrame(tick);
+}
+
+function togglePlay() {
+  isPlaying = !isPlaying;
+  document.getElementById('playBtn').textContent = isPlaying ? '⏸' : '▶';
+  if (isPlaying) {
+    lastTs = null;
+    rafId = requestAnimationFrame(tick);
+  } else {
+    cancelAnimationFrame(rafId);
+  }
+}
+
+function nextSlide() {
+  const c = concepts[currentConcept];
+  if (currentSlide < c.slides.length - 1) {
+    currentSlide++;
+    elapsed = (currentSlide / c.slides.length) * c.duration;
+    showSlide(currentSlide);
+    updateProgress();
+    updateTimer();
+  }
+}
+
+function prevSlide() {
+  if (currentSlide > 0) {
+    currentSlide--;
+    elapsed = (currentSlide / concepts[currentConcept].slides.length) * concepts[currentConcept].duration;
+    showSlide(currentSlide);
+    updateProgress();
+    updateTimer();
+  }
+}
+
+// Init
+selectConcept(1, document.querySelector('.btn.active'));
+</script>
+</body>
+</html>

@@ -8,6 +8,7 @@ import type { Db } from "../_core/context";
 import * as TenantService from "../services/tenant.service";
 import * as BillingService from "../services/billing.service";
 import * as AdminAuditService from "../services/admin-audit.service";
+import * as StripeCheckoutService from "../services/stripe-checkout.service";
 
 async function auditAdminRead(
   ctx: { db: Db; user: { id: number; email?: string | null }; req: { path?: string } },
@@ -27,19 +28,22 @@ async function auditAdminRead(
 
 export const billingRouter = router({
   createCheckoutSession: tenantProcedure
-    .input(z.object({ priceId: z.string() }))
+    .input(z.object({
+      priceId: z.string().optional(),
+      planType: z.enum(['growth', 'flex']).default('growth'),
+      flexSliderValue: z.number().optional(),
+      referralCode: z.string().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", { apiVersion: "2022-11-15" });
-      const session = await stripe.checkout.sessions.create({
-        mode: "subscription",
-        payment_method_types: ["card"],
-        line_items: [{ price: input.priceId, quantity: 1 }],
-        success_url: `${process.env.APP_URL || "http://localhost:3000"}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.APP_URL || "http://localhost:3000"}/billing/cancel`,
-        metadata: { tenantId: String(ctx.tenantId) },
-        customer_email: ctx.user.email ?? undefined,
+      const checkoutUrl = await StripeCheckoutService.createCheckoutSession({
+        customerEmail: ctx.user.email ?? '',
+        userId: ctx.user.id.toString(),
+        tenantId: String(ctx.tenantId),
+        planType: input.planType,
+        flexSliderValue: input.flexSliderValue,
+        referralCode: input.referralCode,
       });
-      return { url: session.url, id: session.id };
+      return { url: checkoutUrl, id: null };
     }),
 
   changePlan: tenantProcedure
@@ -65,7 +69,8 @@ export const billingRouter = router({
   createCustomerPortal: tenantProcedure
     .input(z.object({ returnUrl: z.string().url().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", { apiVersion: "2022-11-15" });
+      // Use centralized Stripe singleton from _core/stripe.ts
+      const { stripe } = await import("../_core/stripe");
       const rows = await ctx.db.select().from(subscriptions).where(eq(subscriptions.tenantId, ctx.tenantId)).limit(1);
       const subRow = rows[0];
       let customerId: string | undefined;

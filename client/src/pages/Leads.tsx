@@ -10,20 +10,24 @@ import { QuickActions, getLeadsQuickActions } from "@/components/ui/QuickActions
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { HelpTooltip } from "@/components/ui/HelpTooltip";
+import { HelpTooltip, HelpIcon } from "@/components/ui/HelpTooltip";
 import { OnboardingTour, useOnboardingTour } from "@/components/ui/OnboardingTour";
-import { 
-  Users, 
-  TrendingUp, 
-  Phone, 
-  MessageSquare, 
+import {
+  Users,
+  TrendingUp,
+  Phone,
+  MessageSquare,
   Search,
   Filter,
   Download,
   Zap,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Calendar,
+  Link2,
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { toast } from "sonner";
 
 export default function Leads() {
   const { t } = useLocale();
@@ -59,33 +63,56 @@ export default function Leads() {
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / 20);
 
+  const { data: calendarConnections } = trpc.calendar.listConnections.useQuery(undefined, { retry: false });
+  const connectedCalendars = calendarConnections?.length ?? 0;
+  const lastSyncAt = calendarConnections?.reduce((latest: Date | null, c: any) => {
+    const t = c.lastSyncAt ? new Date(c.lastSyncAt) : null;
+    return t && (!latest || t > latest) ? t : latest;
+  }, null as Date | null);
+
   const handleQuickAction = (action: string) => {
     switch (action) {
       case "add-lead":
-        // Open add lead dialog
         (document.querySelector('[data-testid="add-lead-button"]') as HTMLElement)?.click();
         break;
       case "send-message":
-        // Navigate to compose message
         window.location.href = "/inbox";
         break;
       case "make-call":
-        // Open phone dialer or show call interface
-        console.log("Make call action");
+        toast.info("Select a lead from the table below to call them");
         break;
       case "schedule-appointment":
-        // Open appointment scheduler
-        console.log("Schedule appointment action");
+        window.location.href = "/calendar-integration";
         break;
       case "import-leads":
-        // Open import dialog
-        console.log("Import leads action");
+        window.location.href = "/contact-import";
         break;
       case "search-leads":
-        // Focus search input
         (document.querySelector('[data-testid="search-input"]') as HTMLElement)?.focus();
         break;
     }
+  };
+
+  const handleExport = () => {
+    if (leads.length === 0) {
+      toast.info("No leads to export");
+      return;
+    }
+    const header = "Name,Phone,Email,Status,Source,Created At";
+    const rows = leads.map((l: any) =>
+      [l.name || "", l.phone || "", l.email || "", l.status || "", l.source || "", l.createdAt ? new Date(l.createdAt).toISOString() : ""]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",")
+    );
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `rebooked-leads-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${leads.length} leads`);
   };
 
   const quickActions = getLeadsQuickActions(handleQuickAction);
@@ -106,12 +133,14 @@ export default function Leads() {
               <h1 className="text-2xl font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                 {t('sidebar.leads')}
               </h1>
-              <HelpTooltip 
-                content="Manage all your potential customers and track their journey through your sales pipeline"
+              <HelpIcon
+                content={{
+                  basic: "Your contacts — everyone who has called, texted, or been added to your list",
+                  intermediate: "Manage leads through their lifecycle: new, contacted, qualified, booked, or lost",
+                  advanced: "Leads table with tenant isolation. Status transitions trigger automation_jobs. Full-text search via LIKE queries",
+                }}
                 variant="info"
-              >
-                <span />
-              </HelpTooltip>
+              />
             </div>
             <p className="text-muted-foreground text-sm">
               {total.toLocaleString()} lead{total !== 1 ? "s" : ""}
@@ -120,11 +149,25 @@ export default function Leads() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              {t('common.export')}
-            </Button>
-            <AddLeadDialog />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="sm" onClick={handleExport}>
+                    <Download className="h-4 w-4 mr-2" />
+                    {t('common.export')}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent><p>Export all leads to CSV</p></TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <span className="flex items-center gap-1">
+              <AddLeadDialog />
+              <HelpIcon content={{
+                basic: "Add a new contact manually — just enter their phone number",
+                intermediate: "Create a lead manually. The Welcome automation will trigger if enabled",
+                advanced: "Inserts into leads table, fires eventBus lead.created which triggers matching automation rules",
+              }} variant="help" />
+            </span>
           </div>
         </div>
 
@@ -134,11 +177,18 @@ export default function Leads() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total Leads</p>
+                  <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                    Total Leads
+                    <HelpIcon content={{
+                      basic: "Everyone in your contact list",
+                      intermediate: "All contacts in your pipeline, regardless of status",
+                      advanced: "Count of all lead rows for this tenant, unfiltered by status enum",
+                    }} variant="info" />
+                  </p>
                   <p className="text-2xl font-bold">{total.toLocaleString()}</p>
                 </div>
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  <Users className="h-4 w-4 text-blue-600" />
+                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                  <Users className="h-4 w-4 text-primary" />
                 </div>
               </div>
             </CardContent>
@@ -148,11 +198,18 @@ export default function Leads() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">New Today</p>
+                  <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                    New Today
+                    <HelpIcon content={{
+                      basic: "People added to your list today",
+                      intermediate: "Leads added or imported in the last 24 hours",
+                      advanced: "Count of leads with status='new' from dashboard statusBreakdown aggregation",
+                    }} variant="info" />
+                  </p>
                   <p className="text-2xl font-bold">{statusCounts.new || 0}</p>
                 </div>
-                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                  <TrendingUp className="h-4 w-4 text-green-600" />
+                <div className="w-8 h-8 bg-success/10 rounded-full flex items-center justify-center">
+                  <TrendingUp className="h-4 w-4 text-success" />
                 </div>
               </div>
             </CardContent>
@@ -162,11 +219,18 @@ export default function Leads() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Qualified</p>
+                  <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                    Qualified
+                    <HelpIcon content={{
+                      basic: "People who are interested and ready to book",
+                      intermediate: "Leads who have been engaged and are ready to book — warm prospects",
+                      advanced: "Leads with status='qualified'. Transition from 'contacted' is manual or automation-driven",
+                    }} variant="info" />
+                  </p>
                   <p className="text-2xl font-bold">{statusCounts.qualified || 0}</p>
                 </div>
-                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                  <Zap className="h-4 w-4 text-purple-600" />
+                <div className="w-8 h-8 bg-accent/10 rounded-full flex items-center justify-center">
+                  <Zap className="h-4 w-4 text-accent-foreground" />
                 </div>
               </div>
             </CardContent>
@@ -176,16 +240,61 @@ export default function Leads() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Booked</p>
+                  <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                    Booked
+                    <HelpIcon content={{
+                      basic: "People who have an appointment scheduled",
+                      intermediate: "Leads who have successfully converted to a booked appointment",
+                      advanced: "Leads with status='booked'. This status change is counted toward recovered revenue and ROI calculations",
+                    }} variant="info" />
+                  </p>
                   <p className="text-2xl font-bold">{statusCounts.booked || 0}</p>
                 </div>
-                <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                  <MessageSquare className="h-4 w-4 text-orange-600" />
+                <div className="w-8 h-8 bg-warning/10 rounded-full flex items-center justify-center">
+                  <MessageSquare className="h-4 w-4 text-warning" />
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
+
+        {/* Calendar Sync Status */}
+        <Card className="border-border">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center">
+                  <Calendar className="w-4 h-4 text-success" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-1">
+                    {connectedCalendars > 0
+                      ? `${connectedCalendars} calendar${connectedCalendars > 1 ? "s" : ""} connected`
+                      : "No calendars connected"}
+                    <HelpIcon content={{
+                      basic: "Connect your calendar so new bookings show up here automatically",
+                      intermediate: "When your booking software is connected, new appointment contacts are automatically imported as leads",
+                      advanced: "Calendar sync polls via calendar-sync.service on a cron interval. New contacts are upserted into leads table with source='calendar'",
+                    }} variant="info" />
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {lastSyncAt
+                      ? `Last synced ${new Date(lastSyncAt).toLocaleString()}`
+                      : "Connect your booking software to auto-import contacts"}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => (window.location.href = "/calendar-integration")}
+              >
+                <Link2 className="h-4 w-4 mr-2" />
+                {connectedCalendars > 0 ? "Manage" : "Connect Calendar"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Quick Actions */}
         <Card>
@@ -212,9 +321,16 @@ export default function Leads() {
                     placeholder="Search leads by name, phone, or email..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border rounded-md bg-background"
+                    className="w-full pl-10 pr-10 py-2 border rounded-md bg-background"
                     data-testid="search-input"
                   />
+                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <HelpIcon content={{
+                      basic: "Type a name or phone number to find someone",
+                      intermediate: "Search by name, phone, email, or status. Filters combine with AND logic",
+                      advanced: "Client-side filtering with server pagination. Search debounced at 300ms",
+                    }} variant="help" />
+                  </span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -244,6 +360,14 @@ export default function Leads() {
         </Card>
 
         {/* Leads Table */}
+        <div className="flex items-center gap-2 mb-[-0.75rem]">
+          <span className="text-sm font-medium text-muted-foreground">Lead Status</span>
+          <HelpIcon content={{
+            basic: "This shows where each person is in your booking process",
+            intermediate: "Lead lifecycle: New \u2192 Contacted \u2192 Qualified \u2192 Booked. Status changes can trigger automations",
+            advanced: "Status enum in leads table. Transitions logged in lead_status_history. Each change evaluated against automation conditions",
+          }} variant="info" />
+        </div>
         <LeadsTable
           leads={leads}
           isLoading={isLoading}

@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "vite-dev",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--host"],
+      "port": 5173
+    },
+    {
+      "name": "prospector",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["../../../Desktop/Outreach/app.mjs"],
+      "port": 3847
+    }
+  ]
+}

@@ -5,6 +5,7 @@
  */
 
 import React, { useState } from 'react';
+import { safeStripeRedirect } from '@/utils/safeRedirect';
 import { useStripeConnect } from './StripeConnectProvider';
 
 interface ConnectOnboardingProps {
@@ -61,7 +62,7 @@ const ConnectOnboarding: React.FC<ConnectOnboardingProps> = ({ onComplete }) => 
       
       // Set account ID and redirect to Stripe
       setAccountId(newAccountId);
-      window.location.href = linkData.result.url;
+      safeStripeRedirect(linkData.result.url);
       
     } catch (error: any) {
       setError(error.message);
@@ -87,7 +88,7 @@ const ConnectOnboarding: React.FC<ConnectOnboardingProps> = ({ onComplete }) => 
       }
 
       const data = await response.json();
-      window.location.href = data.result.url;
+      safeStripeRedirect(data.result.url);
     } catch (error: any) {
       setError(error.message);
     } finally {
@@ -100,23 +101,23 @@ const ConnectOnboarding: React.FC<ConnectOnboardingProps> = ({ onComplete }) => 
       <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
         <h2 className="text-2xl font-bold mb-6 text-center">Complete Your Stripe Setup</h2>
         
-        <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+        <div className="mb-6 p-4 bg-info/5 rounded-lg">
           <h3 className="font-semibold mb-2">Account Created Successfully!</h3>
-          <p className="text-gray-600">
+          <p className="text-muted-foreground">
             Your Stripe Connect account has been created. Click below to complete the onboarding process with Stripe.
           </p>
         </div>
 
         {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-600">{error}</p>
+          <div className="mb-4 p-4 bg-destructive/5 border border-destructive/20 rounded-lg">
+            <p className="text-destructive">{error}</p>
           </div>
         )}
 
         <button
           onClick={handleContinueOnboarding}
           disabled={isLoading}
-          className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-primary text-primary-foreground py-3 px-4 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? 'Loading...' : 'Continue to Stripe Onboarding'}
         </button>
@@ -128,19 +129,19 @@ const ConnectOnboarding: React.FC<ConnectOnboardingProps> = ({ onComplete }) => 
     <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
       <h2 className="text-2xl font-bold mb-6 text-center">Create Your Stripe Connect Account</h2>
       
-      <p className="mb-6 text-gray-600 text-center">
+      <p className="mb-6 text-muted-foreground text-center">
         Connect your Stripe account to start accepting payments through Rebooked.
       </p>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-600">{error}</p>
+        <div className="mb-4 p-4 bg-destructive/5 border border-destructive/20 rounded-lg">
+          <p className="text-destructive">{error}</p>
         </div>
       )}
 
       <form onSubmit={handleCreateAccount} className="space-y-4">
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="email" className="block text-sm font-medium text-muted-foreground mb-2">
             Email Address
           </label>
           <input
@@ -148,14 +149,14 @@ const ConnectOnboarding: React.FC<ConnectOnboardingProps> = ({ onComplete }) => 
             id="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
             placeholder="your@email.com"
             required
           />
         </div>
 
         <div>
-          <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="displayName" className="block text-sm font-medium text-muted-foreground mb-2">
             Business Name
           </label>
           <input
@@ -163,7 +164,7 @@ const ConnectOnboarding: React.FC<ConnectOnboardingProps> = ({ onComplete }) => 
             id="displayName"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
             placeholder="Your Business Name"
             required
           />
@@ -172,7 +173,7 @@ const ConnectOnboarding: React.FC<ConnectOnboardingProps> = ({ onComplete }) => 
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-primary text-primary-foreground py-3 px-4 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? 'Creating Account...' : 'Create Stripe Connect Account'}
         </button>
@@ -180,7 +181,7 @@ const ConnectOnboarding: React.FC<ConnectOnboardingProps> = ({ onComplete }) => 
 
       <div className="mt-6 p-4 bg-muted/30 rounded-lg">
         <h3 className="font-semibold mb-2">What happens next?</h3>
-        <ul className="text-sm text-gray-600 space-y-1">
+        <ul className="text-sm text-muted-foreground space-y-1">
           <li>• We'll create your Stripe Connect account</li>
           <li>• You'll be redirected to Stripe to complete onboarding</li>
           <li>• Once complete, you can start accepting payments</li>

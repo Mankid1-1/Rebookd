@@ -17,16 +17,16 @@ module.exports = {
     {
       name: "rebooked-app",
       script: "dist/index.js",
-      node_args: "--max-old-space-size=512",
+      node_args: "--max-old-space-size=768",
       cwd: __dirname,
 
-      // Cluster mode: enables `pm2 reload` for zero-downtime restarts.
-      // 2 instances = one stays live while the other reloads.
-      instances: 2,
-      exec_mode: "cluster",
+      // Fork mode: single instance for stability.
+      // Switch to cluster mode once port-sharing is verified.
+      instances: 1,
+      exec_mode: "fork",
 
       autorestart: true,
-      max_memory_restart: "600M",
+      max_memory_restart: "900M",
 
       // Graceful shutdown: PM2 sends SIGINT, waits for listen_timeout,
       // then kills after kill_timeout.
@@ -46,18 +46,46 @@ module.exports = {
     {
       name: "rebooked-worker",
       script: "dist/worker.js",
+      node_args: "--max-old-space-size=256",
       cwd: __dirname,
       instances: 1,
       exec_mode: "fork",
       autorestart: true,
-      max_memory_restart: "400M",
+      max_memory_restart: "350M",
       // Worker uses SIGUSR2 for graceful reload
       kill_timeout: 10000,
       error_file: "./logs/pm2-worker-error.log",
       out_file: "./logs/pm2-worker-out.log",
       merge_logs: true,
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
-      env: { NODE_ENV: "production" },
+      env: {
+        NODE_ENV: "production",
+        REFERRAL_AUTO_PAYOUT_ENABLED: "true",
+      },
+    },
+    {
+      name: "rebooked-sentinel",
+      script: "dist/sentinel.js",
+      node_args: "--max-old-space-size=200",
+      cwd: __dirname,
+      instances: 1,
+      exec_mode: "fork",
+      autorestart: true,
+      max_memory_restart: "250M",
+      kill_timeout: 10000,
+      restart_delay: 5000,       // 5s between restarts (repairs are expensive)
+      max_restarts: 10,          // Don't restart-loop endlessly
+      min_uptime: 30000,         // Must stay up 30s to count as "started"
+      error_file: "./logs/pm2-sentinel-error.log",
+      out_file: "./logs/pm2-sentinel-out.log",
+      merge_logs: true,
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+      env: {
+        NODE_ENV: "production",
+        SENTINEL_HEARTBEAT_FILE: "/tmp/sentinel-heartbeat.json",
+        // Passed through to autopilot-repair.sh for Claude CLI
+        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || "",
+      },
     },
   ],
 };

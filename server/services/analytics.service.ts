@@ -1,5 +1,5 @@
 import { eq, and, sql, desc, isNotNull, gt, lt, isNull, gte, lte } from "drizzle-orm";
-import { leads, messages, automations } from "../../drizzle/schema";
+import { leads, messages, automations, recoveryEvents } from "../../drizzle/schema";
 
 import type { Db } from "../_core/context";
 import { withQueryTimeout } from "./query.service";
@@ -41,8 +41,8 @@ export async function getRevenueRecoveryMetrics(db: Db, tenantId: number) {
     // Booked leads (converted revenue)
     db.select({ count: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tenantId), eq(leads.status, "booked"))),
     
-    // Average revenue per booking (using a reasonable default)
-    db.select({ avgRevenue: sql<number>`COALESCE(AVG(CASE WHEN ${leads.status} = 'booked' THEN 250 ELSE 0 END), 250)` }).from(leads).where(eq(leads.tenantId, tenantId)),
+    // Real revenue from recovery events (not estimated)
+    db.select({ avgRevenue: sql<number>`COALESCE(SUM(${recoveryEvents.realizedRevenue}), 0)` }).from(recoveryEvents).where(eq(recoveryEvents.tenantId, tenantId)),
     
     // Recent bookings (last 30 days)
     db.select({ count: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tenantId), eq(leads.status, "booked"), gte(leads.createdAt, thirtyDaysAgo))),
@@ -62,19 +62,44 @@ export async function getRevenueRecoveryMetrics(db: Db, tenantId: number) {
 
   const totalLeadsCount = Number(totalLeads[0]?.count ?? 0);
   const bookedLeadsCount = Number(bookedLeads[0]?.count ?? 0);
-  const avgRevenueAmount = Number(avgRevenuePerBooking[0]?.avgRevenue ?? 250);
+  const totalRealRevenue = Number(avgRevenuePerBooking[0]?.avgRevenue ?? 0); // This is now SUM(realizedRevenue), not an average
   const recentBookingsCount = Number(recentBookings[0]?.count ?? 0);
   const recoveredLeadsCount = Number(recoveredLeads[0]?.count ?? 0);
   const lostLeadsCount = Number(lostLeads[0]?.count ?? 0);
   const qualifiedLeadsCount = Number(qualifiedLeads[0]?.count ?? 0);
   const contactedLeadsCount = Number(contactedLeads[0]?.count ?? 0);
 
-  // Calculate revenue metrics
-  const totalRecoveredRevenue = bookedLeadsCount * avgRevenueAmount;
-  const recentRecoveredRevenue = recentBookingsCount * avgRevenueAmount;
-  const potentialRevenue = qualifiedLeadsCount * avgRevenueAmount;
-  const lostRevenue = lostLeadsCount * avgRevenueAmount;
-  const pipelineRevenue = contactedLeadsCount * avgRevenueAmount * 0.3; // 30% conversion estimate
+  // Revenue from real recovery event data — no hardcoded multipliers
+  const totalRecoveredRevenue = totalRealRevenue;
+  const recentRecoveredRevenue = totalRealRevenue;
+
+  // Potential revenue: recovery events in active outreach (sent/responded)
+  // Lost revenue: recovery events that failed or expired
+  // Pipeline revenue: converted but not yet realized
+  let potentialRevenue = 0;
+  let lostRevenue = 0;
+  let pipelineRevenue = 0;
+  try {
+    const [potentialRow, lostRow, pipelineRow] = await Promise.all([
+      db.select({ total: sql<number>`COALESCE(SUM(${recoveryEvents.estimatedRevenue}), 0)` })
+        .from(recoveryEvents)
+        .where(and(eq(recoveryEvents.tenantId, tenantId),
+          sql`${recoveryEvents.status} IN ('sent', 'responded')`)),
+      db.select({ total: sql<number>`COALESCE(SUM(${recoveryEvents.estimatedRevenue}), 0)` })
+        .from(recoveryEvents)
+        .where(and(eq(recoveryEvents.tenantId, tenantId),
+          sql`${recoveryEvents.status} IN ('failed', 'expired')`)),
+      db.select({ total: sql<number>`COALESCE(SUM(${recoveryEvents.estimatedRevenue}), 0)` })
+        .from(recoveryEvents)
+        .where(and(eq(recoveryEvents.tenantId, tenantId),
+          eq(recoveryEvents.status, 'converted'))),
+    ]);
+    potentialRevenue = Number(potentialRow[0]?.total ?? 0);
+    lostRevenue = Number(lostRow[0]?.total ?? 0);
+    pipelineRevenue = Number(pipelineRow[0]?.total ?? 0);
+  } catch {
+    // recovery_events table may not have data yet — fall back to 0
+  }
 
   // Calculate recovery rates
   const overallRecoveryRate = totalLeadsCount > 0 ? (bookedLeadsCount / totalLeadsCount) * 100 : 0;
@@ -88,7 +113,7 @@ export async function getRevenueRecoveryMetrics(db: Db, tenantId: number) {
     pipelineRevenue,
     overallRecoveryRate,
     recentRecoveryRate,
-    avgRevenuePerBooking: avgRevenueAmount,
+    avgRevenuePerBooking: bookedLeadsCount > 0 ? Math.round(totalRealRevenue / bookedLeadsCount) : 0,
     totalLeadsCount,
     bookedLeadsCount,
     qualifiedLeadsCount,
@@ -102,12 +127,12 @@ export async function getRevenueRecoveryMetrics(db: Db, tenantId: number) {
 export async function getRevenueTrends(db: Db, tenantId: number, days = 90) {
   const boundedDays = Math.min(Math.max(days, 1), 365);
   const since = new Date(Date.now() - boundedDays * 24 * 60 * 60 * 1000);
-  
+
+  // Fetch lead trends
   const revenueData = await withQueryTimeout("analytics.revenueTrends", db
     .select({
       date: sql<string>`DATE(${leads.createdAt})`,
       bookings: sql<number>`SUM(CASE WHEN ${leads.status} = 'booked' THEN 1 ELSE 0 END)`,
-      revenue: sql<number>`SUM(CASE WHEN ${leads.status} = 'booked' THEN 250 ELSE 0 END)`,
       totalLeads: sql<number>`COUNT(*)`,
     })
     .from(leads)
@@ -115,10 +140,30 @@ export async function getRevenueTrends(db: Db, tenantId: number, days = 90) {
     .groupBy(sql`DATE(${leads.createdAt})`)
     .orderBy(sql`DATE(${leads.createdAt})`));
 
+  // Fetch real daily revenue from recovery_events (realized revenue per day)
+  let revenueMap = new Map<string, number>();
+  try {
+    const revenueByDay = await withQueryTimeout("analytics.revenueByDay", db
+      .select({
+        date: sql<string>`DATE(${recoveryEvents.realizedAt})`,
+        revenue: sql<number>`SUM(${recoveryEvents.realizedRevenue})`,
+      })
+      .from(recoveryEvents)
+      .where(and(
+        eq(recoveryEvents.tenantId, tenantId),
+        gte(recoveryEvents.realizedAt, since),
+        sql`${recoveryEvents.status} IN ('realized', 'manual_realized')`
+      ))
+      .groupBy(sql`DATE(${recoveryEvents.realizedAt})`));
+    revenueMap = new Map(revenueByDay.map((r: any) => [r.date, Number(r.revenue)]));
+  } catch {
+    // recovery_events may not have data yet — revenue stays at 0
+  }
+
   return revenueData.map((row: any) => ({
     date: row.date,
     bookings: Number(row.bookings),
-    revenue: Number(row.revenue),
+    revenue: revenueMap.get(row.date) ?? 0,
     totalLeads: Number(row.totalLeads),
     recoveryRate: Number(row.totalLeads) > 0 ? (Number(row.bookings) / Number(row.totalLeads)) * 100 : 0
   }));

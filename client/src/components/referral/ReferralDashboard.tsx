@@ -216,7 +216,7 @@ export function ReferralDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -226,8 +226,8 @@ export function ReferralDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Referral Program</h1>
-          <p className="text-gray-600">Earn $50 for every company that subscribes for 6+ months</p>
+          <h1 className="text-3xl font-bold text-foreground">Referral Program</h1>
+          <p className="text-muted-foreground">Earn $50 for every company that subscribes for 6+ months</p>
         </div>
         <Button onClick={generateReferralCode} className="flex items-center gap-2">
           <Gift className="w-4 h-4" />
@@ -355,7 +355,7 @@ export function ReferralDashboard() {
             <CardContent>
               <div className="space-y-4">
                 {referrals.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">
+                  <p className="text-center text-muted-foreground py-8">
                     No referrals yet. Start sharing your referral link!
                   </p>
                 ) : (
@@ -364,21 +364,21 @@ export function ReferralDashboard() {
                       <div className="flex items-center gap-4">
                         <div>
                           <p className="font-medium">Referral Code: {referral.referralCode}</p>
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-muted-foreground">
                             Created: {new Date(referral.createdAt).toLocaleDateString()}
                           </p>
                           {referral.completedAt && (
-                            <p className="text-sm text-green-600">
+                            <p className="text-sm text-success">
                               Completed: {new Date(referral.completedAt).toLocaleDateString()}
                             </p>
                           )}
                           {referral.payoutScheduledAt && !referral.payoutProcessedAt && (
-                            <p className="text-sm text-blue-600">
+                            <p className="text-sm text-info">
                               💰 Payout in {referral.daysUntilPayout || 'calculating...'} days
                             </p>
                           )}
                           {referral.payoutProcessedAt && (
-                            <p className="text-sm text-green-600">
+                            <p className="text-sm text-success">
                               ✅ Paid: {new Date(referral.payoutProcessedAt).toLocaleDateString()}
                             </p>
                           )}
@@ -426,7 +426,7 @@ export function ReferralDashboard() {
             <CardContent>
               <div className="space-y-4">
                 {payouts.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">
+                  <p className="text-center text-muted-foreground py-8">
                     No payouts yet. Complete referrals to start earning!
                   </p>
                 ) : (
@@ -434,11 +434,11 @@ export function ReferralDashboard() {
                     <div key={payout.id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div>
                         <p className="font-medium">${payout.amount} via {payout.method}</p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-muted-foreground">
                           Requested: {new Date(payout.createdAt).toLocaleDateString()}
                         </p>
                         {payout.processedAt && (
-                          <p className="text-sm text-green-600">
+                          <p className="text-sm text-success">
                             Processed: {new Date(payout.processedAt).toLocaleDateString()}
                           </p>
                         )}
@@ -469,23 +469,23 @@ export function ReferralDashboard() {
                   <div key={entry.userId} className="flex items-center justify-between p-4 border rounded-lg">
                     <div className="flex items-center gap-4">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
-                        index === 0 ? 'bg-yellow-100 text-yellow-800' :
-                        index === 1 ? 'bg-gray-100 text-gray-800' :
-                        index === 2 ? 'bg-orange-100 text-orange-800' :
-                        'bg-gray-50 text-gray-600'
+                        index === 0 ? 'bg-warning/10 text-warning' :
+                        index === 1 ? 'bg-muted text-muted-foreground' :
+                        index === 2 ? 'bg-warning/10 text-warning' :
+                        'bg-muted/50 text-muted-foreground'
                       }`}>
                         {entry.rank}
                       </div>
                       <div>
                         <p className="font-medium">User #{entry.userId}</p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-muted-foreground">
                           {entry.totalReferrals} referrals
                         </p>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="font-medium">${entry.totalEarned}</p>
-                      <p className="text-sm text-gray-500">earned</p>
+                      <p className="text-sm text-muted-foreground">earned</p>
                     </div>
                   </div>
                 ))}

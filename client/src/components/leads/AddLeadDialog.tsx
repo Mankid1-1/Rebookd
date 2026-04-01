@@ -28,6 +28,7 @@ const getDynamicSourceOptions = (userSkill?: any, businessType?: string) => {
     { value: "phone", label: "Phone Call", description: "Lead called in directly" },
     { value: "email", label: "Email", description: "Lead sent email inquiry" },
     { value: "referral", label: "Referral", description: "Referred by existing customer" },
+    { value: "contact_sync", label: "Mobile Contact Sync", description: "Imported from phone contacts" },
     { value: "other", label: "Other", description: "Different source" }
   ];
 
@@ -36,6 +37,7 @@ const getDynamicSourceOptions = (userSkill?: any, businessType?: string) => {
     { value: "social", label: "Social Media", description: "From social media platform" },
     { value: "event", label: "Event", description: "Met at trade show or event" },
     { value: "cold", label: "Cold Outreach", description: "Proactive outreach" },
+    { value: "contact_import", label: "Contact Import", description: "Bulk imported from CSV or contact list" },
     { value: "partner", label: "Partner", description: "From business partner" }
   );
 
@@ -127,11 +129,14 @@ export function AddLeadDialog() {
           {/* Phone Number - Required */}
           <PhoneInput
             label="Phone Number *"
-            placeholder="(555) 123-4567"
-            helpText="We'll send a welcome SMS to this number"
+            placeholder="Phone number"
+            helpText="Select your country code and enter the number"
             error={errors.phone?.message}
             success={touchedFields.phone && !errors.phone?.message && form.watch("phone") ? "Valid phone number" : undefined}
-            {...form.register("phone")}
+            name="phone"
+            onChange={(e) => {
+              form.setValue("phone", e.target.value, { shouldValidate: true, shouldTouch: true });
+            }}
           />
 
           {/* Name */}
@@ -208,14 +213,14 @@ export function AddLeadDialog() {
           </div>
 
           {/* What Happens Next */}
-          <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+          <div className="bg-info/5 p-4 rounded-lg border border-info/20">
             <div className="flex items-start gap-3">
-              <Lightbulb className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+              <Lightbulb className="h-5 w-5 text-info mt-0.5" />
               <div className="space-y-2">
-                <h4 className="font-medium text-blue-900 dark:text-blue-100">
+                <h4 className="font-medium text-foreground">
                   What happens next?
                 </h4>
-                <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                <ul className="text-sm text-muted-foreground space-y-1">
                   <li>• Welcome SMS will be sent automatically</li>
                   <li>• Lead will appear in your dashboard</li>
                   <li>• You can track all communications</li>

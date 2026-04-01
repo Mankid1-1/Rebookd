@@ -34,15 +34,15 @@ describe("StatusBadge", () => {
   it("applies correct color classes for each status", () => {
     const { rerender } = render(<StatusBadge status="new" />);
     const badge = screen.getByText("New");
-    expect(badge).toHaveClass("bg-blue-100", "text-blue-800");
+    expect(badge).toHaveClass("bg-info/15", "text-info");
 
     rerender(<StatusBadge status="booked" />);
     const bookedBadge = screen.getByText("Booked");
-    expect(bookedBadge).toHaveClass("bg-green-100", "text-green-800");
+    expect(bookedBadge).toHaveClass("bg-success/15", "text-success");
 
     rerender(<StatusBadge status="lost" />);
     const lostBadge = screen.getByText("Lost");
-    expect(lostBadge).toHaveClass("bg-red-100", "text-red-800");
+    expect(lostBadge).toHaveClass("bg-destructive/15", "text-destructive");
   });
 
   it("renders with tooltip when showTooltip is true", () => {
@@ -79,7 +79,7 @@ describe("StatusBadge", () => {
     
     const badge = screen.getByText("Unknown");
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass("bg-gray-100", "text-gray-800");
+    expect(badge).toHaveClass("bg-muted", "text-muted-foreground");
   });
 
   it("renders with icon when provided", () => {
@@ -97,7 +97,7 @@ describe("CommunicationBadge", () => {
     
     const badge = screen.getByText("SMS");
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass("bg-blue-100", "text-blue-800");
+    expect(badge).toHaveClass("bg-info/15", "text-info");
   });
 
   it("renders Email communication badge", () => {
@@ -105,7 +105,7 @@ describe("CommunicationBadge", () => {
     
     const badge = screen.getByText("Email");
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass("bg-purple-100", "text-purple-800");
+    expect(badge).toHaveClass("bg-accent", "text-accent-foreground");
   });
 
   it("renders Call communication badge", () => {
@@ -113,7 +113,7 @@ describe("CommunicationBadge", () => {
     
     const badge = screen.getByText("Call");
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass("bg-green-100", "text-green-800");
+    expect(badge).toHaveClass("bg-success/15", "text-success");
   });
 
   it("renders with count", () => {
@@ -135,7 +135,7 @@ describe("CommunicationBadge", () => {
     
     const badge = screen.getByText("Unknown");
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass("bg-gray-100", "text-gray-800");
+    expect(badge).toHaveClass("bg-muted", "text-muted-foreground");
   });
 
   it("renders with tooltip", () => {
@@ -152,7 +152,7 @@ describe("ActivityBadge", () => {
     
     const badge = screen.getByText("Active");
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass("bg-green-100", "text-green-800");
+    expect(badge).toHaveClass("bg-success/15", "text-success");
   });
 
   it("renders inactive status", () => {
@@ -160,7 +160,7 @@ describe("ActivityBadge", () => {
     
     const badge = screen.getByText("Inactive");
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass("bg-gray-100", "text-gray-800");
+    expect(badge).toHaveClass("bg-muted", "text-muted-foreground");
   });
 
   it("renders pending status", () => {
@@ -168,7 +168,7 @@ describe("ActivityBadge", () => {
     
     const badge = screen.getByText("Pending");
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass("bg-yellow-100", "text-yellow-800");
+    expect(badge).toHaveClass("bg-warning/15", "text-warning");
   });
 
   it("renders with last activity time", () => {
@@ -198,7 +198,7 @@ describe("ActivityBadge", () => {
     
     const badge = screen.getByText("Unknown");
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass("bg-gray-100", "text-gray-800");
+    expect(badge).toHaveClass("bg-muted", "text-muted-foreground");
   });
 
   it("renders with different sizes", () => {

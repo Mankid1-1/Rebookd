@@ -1,0 +1,29 @@
+{
+  "name": "rebooked-admin-console",
+  "version": "2.0.0",
+  "description": "Standalone Rebooked Admin Console — auto-connects to your deployment, monitors health, manages PM2, and triggers zero-downtime deploys",
+  "type": "module",
+  "main": "admin-console.mjs",
+  "bin": {
+    "rebooked-admin": "./admin-console.mjs"
+  },
+  "scripts": {
+    "start": "node admin-console.mjs",
+    "build:exe": "node build-exe.mjs"
+  },
+  "pkg": {
+    "assets": [
+      "dashboard.html"
+    ],
+    "targets": [
+      "node20-win-x64"
+    ],
+    "outputPath": "dist"
+  },
+  "dependencies": {
+    "ssh2": "^1.17.0"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.14.1"
+  }
+}

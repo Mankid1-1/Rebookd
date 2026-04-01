@@ -5,6 +5,9 @@ import { TRPCError } from "@trpc/server";
 import type { Db } from "../_core/context";
 import { normalizePhoneNumber } from "../_core/phone";
 
+// During soft launch, all features/automations are unlocked for every tenant
+const SOFT_LAUNCH_ACTIVE = process.env.SOFT_LAUNCH_ACTIVE !== "false";
+
 export async function getTenantId(db: Db, userId: number) {
   const user = await getUserById(db, userId);
   if (user?.tenantId) return user.tenantId;
@@ -28,7 +31,7 @@ export async function getAllTenants(db: Db, page = 1, limit = 50) {
 
 export async function updateTenant(db: Db, id: number, data: Partial<{ name: string; timezone: string; industry: string; settings: Record<string, any> }>) {
   const { settings: newSettings, ...rest } = data;
-  const updateData: Record<string, any> = { ...rest, updatedAt: new Date() };
+  const updateData: Record<string, any> = { ...rest };
   if (newSettings) {
     const existing = await db.select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, id)).limit(1);
     updateData.settings = { ...(existing[0]?.settings ?? {}), ...newSettings };
@@ -69,6 +72,7 @@ export function isSubscriptionEntitled(
 }
 
 export async function tenantHasAutomationAccess(db: Db, tenantId: number) {
+  if (SOFT_LAUNCH_ACTIVE) return true;
   const subscription = await getSubscriptionByTenantId(db, tenantId);
   return isSubscriptionEntitled(subscription);
 }
@@ -95,6 +99,18 @@ export async function getPlanForTenant(db: Db, tenantId: number) {
 }
 
 export async function getTenantPlanLimits(db: Db, tenantId: number) {
+  // Soft launch: all features unlocked, unlimited automations/messages/seats
+  if (SOFT_LAUNCH_ACTIVE) {
+    const plan = await getPlanForTenant(db, tenantId);
+    return {
+      maxAutomations: 9999,
+      maxMessages: 999999,
+      maxSeats: 100,
+      planSlug: plan?.slug ?? "soft-launch",
+      planName: plan?.name ?? "Soft Launch",
+      hasAiRewrite: true,
+    };
+  }
   const plan = await getPlanForTenant(db, tenantId);
   if (!plan) return { maxAutomations: 0, maxMessages: 0, maxSeats: 1, planSlug: "free", planName: "No Plan", hasAiRewrite: false };
   const isFullPlan = plan.slug === "rebooked" || plan.maxAutomations >= 9999;
@@ -145,6 +161,6 @@ export async function getSettings(db: Db, tenantId: number): Promise<Record<stri
 export async function updateFeatureConfig(db: Db, tenantId: number, key: string, config: Record<string, any>) {
   const current = await getSettings(db, tenantId);
   const merged = { ...current, [key]: config };
-  await db.update(tenants).set({ settings: merged, updatedAt: new Date() }).where(eq(tenants.id, tenantId));
+  await db.update(tenants).set({ settings: merged }).where(eq(tenants.id, tenantId));
   return merged;
 }

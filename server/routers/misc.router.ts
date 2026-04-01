@@ -7,7 +7,10 @@
  */
 
 import { z } from "zod";
+import { sql, eq, and, count, isNull } from "drizzle-orm";
 import { protectedProcedure, tenantProcedure, publicProcedure, router } from "../_core/trpc";
+import { tenants, subscriptions, recoveryEvents, featureConfigs, calendarConnections } from "../../drizzle/schema";
+import { ENV } from "../_core/env";
 
 // ─── locations ───────────────────────────────────────────────────────────────
 export const locationsRouter = router({
@@ -76,7 +79,48 @@ export const userRouter = router({
 
 // ─── integrations ────────────────────────────────────────────────────────────
 export const integrationsRouter = router({
-  list: tenantProcedure.query(async () => []),
+  list: tenantProcedure.query(async ({ ctx }) => {
+    // Return connected integration status based on env vars and DB state
+    const integrations: Array<{ id: string; name: string; status: "connected" | "not_configured" | "error"; type: string }> = [];
+
+    // SMS providers
+    if (ENV.phoneserviceUrl && ENV.phoneserviceApiKey) {
+      integrations.push({ id: "phoneservice", name: "Phone Service (Android Gateway)", status: "connected", type: "sms" });
+    }
+    if (ENV.telnyxApiKey) {
+      integrations.push({ id: "telnyx", name: "Telnyx SMS", status: "connected", type: "sms" });
+    } else if (ENV.twilioAccountSid) {
+      integrations.push({ id: "twilio", name: "Twilio SMS", status: "connected", type: "sms" });
+    }
+    if (!ENV.phoneserviceUrl && !ENV.telnyxApiKey && !ENV.twilioAccountSid) {
+      integrations.push({ id: "sms", name: "SMS Provider", status: "not_configured", type: "sms" });
+    }
+
+    // Stripe
+    if (ENV.stripeSecretKey) {
+      integrations.push({ id: "stripe", name: "Stripe Payments", status: "connected", type: "payments" });
+    } else {
+      integrations.push({ id: "stripe", name: "Stripe Payments", status: "not_configured", type: "payments" });
+    }
+
+    // Calendar connections for this tenant
+    try {
+      const calConns = await ctx.db
+        .select({ provider: calendarConnections.provider, syncEnabled: calendarConnections.syncEnabled })
+        .from(calendarConnections)
+        .where(eq(calendarConnections.tenantId, ctx.tenantId));
+      for (const conn of calConns) {
+        integrations.push({
+          id: `calendar_${conn.provider}`,
+          name: `${conn.provider.charAt(0).toUpperCase() + conn.provider.slice(1)} Calendar`,
+          status: conn.syncEnabled ? "connected" : "error",
+          type: "calendar",
+        });
+      }
+    } catch { /* non-critical */ }
+
+    return integrations;
+  }),
 });
 
 // ─── featureFlags ─────────────────────────────────────────────────────────────
@@ -85,16 +129,34 @@ export const integrationsRouter = router({
 // need to be a router with a default procedure. We expose it as a top-level query
 // via a wrapper router that the index wires up as `featureFlags`.
 export const featureFlagsRouter = router({
-  // The frontend calls `trpc.featureFlags.useQuery()` which is malformed —
-  // it's missing the procedure name. We can't fix this via routing alone.
-  // Add a stub procedure named "get" and a workaround noted below.
-  // The actual call pattern is caught at the index level.
-  get: publicProcedure.query(async () => ({
-    enableAdvancedReporting: false,
-    enableMultiLocation: false,
-    enableAiRewrite: true,
-    enablePersonalization: false,
-  })),
+  get: tenantProcedure.query(async ({ ctx }) => {
+    // Load feature flags from DB for this tenant, with sensible defaults
+    const defaults: Record<string, boolean> = {
+      enableAdvancedReporting: false,
+      enableMultiLocation: false,
+      enableAiRewrite: true,
+      enablePersonalization: false,
+      enableCalendarSync: true,
+      enableReferralProgram: true,
+      enableReviewRequests: true,
+      enableWaitingList: true,
+    };
+
+    try {
+      const configs = await ctx.db
+        .select({ feature: featureConfigs.feature, enabled: featureConfigs.enabled })
+        .from(featureConfigs)
+        .where(eq(featureConfigs.tenantId, ctx.tenantId));
+
+      for (const cfg of configs) {
+        if (cfg.feature in defaults) {
+          defaults[cfg.feature] = cfg.enabled;
+        }
+      }
+    } catch { /* return defaults on error */ }
+
+    return defaults;
+  }),
 });
 
 // ─── personalization ─────────────────────────────────────────────────────────
@@ -151,5 +213,70 @@ export const schedulingRouter = router({
       suggestions: [],
       message: "Smart scheduling optimization is not yet available.",
     })),
+});
+
+// ─── misc (bug reports) ─────────────────────────────────────────────────────
+export const miscRouter = router({
+  reportBug: protectedProcedure
+    .input(z.object({
+      description: z.string().min(5).max(2000),
+      category: z.string(),
+      page: z.string(),
+      theme: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { createSystemError } = await import("../services/system.service");
+
+      // Create a high-priority system error that sentinel will pick up
+      await createSystemError(ctx.db, {
+        type: "client",
+        message: `[USER_BUG_REPORT] ${input.category}: ${input.description.slice(0, 200)}`,
+        detail: JSON.stringify({
+          fullDescription: input.description,
+          category: input.category,
+          page: input.page,
+          theme: input.theme,
+          reportedBy: ctx.user?.email || ctx.user?.name || "unknown",
+          userId: ctx.user?.id,
+          tenantId: ctx.tenantId ?? null,
+          timestamp: new Date().toISOString(),
+          userAgent: "user-reported",
+        }),
+        severity: input.category === "bug" ? "high" : "medium",
+        tenantId: ctx.tenantId ?? undefined,
+        errorCategory: input.category === "visual" ? "rendering" : input.category === "performance" ? "performance" : "runtime",
+      });
+
+      return { success: true };
+    }),
+});
+
+// ─── platformStats ──────────────────────────────────────────────────────────
+export const platformStatsRouter = router({
+  live: publicProcedure.query(async ({ ctx }) => {
+    const [tenantCount] = await ctx.db.select({ value: count() }).from(tenants);
+    const [recoveryAgg] = await ctx.db
+      .select({
+        totalRecovered: count(),
+        revenueCents: sql<number>`COALESCE(SUM(${recoveryEvents.realizedRevenue}), 0)`,
+      })
+      .from(recoveryEvents);
+    const [founderCount] = await ctx.db
+      .select({ value: count() })
+      .from(subscriptions)
+      .where(eq(subscriptions.guaranteeCohort, "risk_free_20"));
+    const [flexCount] = await ctx.db
+      .select({ value: count() })
+      .from(subscriptions)
+      .where(eq(subscriptions.guaranteeCohort, "flex_10"));
+
+    return {
+      totalClients: tenantCount?.value ?? 0,
+      appointmentsRecovered: recoveryAgg?.totalRecovered ?? 0,
+      revenueRecoveredCents: recoveryAgg?.revenueCents ?? 0,
+      founderSlotsUsed: founderCount?.value ?? 0,
+      flexSlotsUsed: flexCount?.value ?? 0,
+    };
+  }),
 });
 

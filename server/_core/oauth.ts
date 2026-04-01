@@ -2,7 +2,9 @@ import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import bcrypt from "bcryptjs";
 import type { Express, Request, Response } from "express";
 import { createHash, randomBytes } from "crypto";
+import { eq } from "drizzle-orm";
 import { getDb } from "../db";
+import { users as usersTable } from "../../drizzle/schema";
 import * as AuthService from "../services/auth.service";
 import * as UserService from "../services/user.service";
 import { getSessionCookieOptions } from "./cookies";
@@ -20,11 +22,14 @@ async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12);
 }
 
-async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+async function verifyPassword(password: string, storedHash: string): Promise<{ valid: boolean; needsRehash: boolean }> {
   if (storedHash.startsWith("$2")) {
-    return bcrypt.compare(password, storedHash);
+    const valid = await bcrypt.compare(password, storedHash);
+    return { valid, needsRehash: false };
   }
-  return storedHash === legacyHashPassword(password);
+  // Legacy SHA-256 hash — verify but flag for rehash
+  const valid = storedHash === legacyHashPassword(password);
+  return { valid, needsRehash: valid };
 }
 
 function generateOpenId(): string {
@@ -130,9 +135,21 @@ export function registerOAuthRoutes(app: Express) {
         res.status(401).json({ error: "Invalid email or password" });
         return;
       }
-      if (!user.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
+      if (!user.passwordHash) {
         res.status(401).json({ error: "Invalid email or password" });
         return;
+      }
+      const { valid, needsRehash } = await verifyPassword(password, user.passwordHash);
+      if (!valid) {
+        const { recordFailedAuth } = await import("./security");
+        recordFailedAuth(req.ip || "unknown");
+        res.status(401).json({ error: "Invalid email or password" });
+        return;
+      }
+      // Transparently upgrade legacy SHA-256 hashes to bcrypt
+      if (needsRehash) {
+        const newHash = await hashPassword(password);
+        await UserService.setUserPasswordHash(database, user.id, newHash);
       }
       if (!user.emailVerifiedAt) {
         const token = await AuthService.createEmailVerificationToken(database, user.id, user.email || email);
@@ -141,12 +158,15 @@ export function registerOAuthRoutes(app: Express) {
         return;
       }
 
+      const { clearFailedAuth } = await import("./security");
+      clearFailedAuth(req.ip || "unknown");
+      const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days (not 1 year)
       const sessionToken = await sdk.createSessionToken(user.openId, {
         name: user.name || email,
-        expiresInMs: ONE_YEAR_MS,
+        expiresInMs: SESSION_MAX_AGE_MS,
       });
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: SESSION_MAX_AGE_MS });
       await UserService.updateLastSignedIn(database, user.id);
       res.json({ ok: true, accountType: user.role === 'admin' ? 'admin' : ((user as any).accountType || 'business') });
     } catch (error) {
@@ -189,8 +209,16 @@ export function registerOAuthRoutes(app: Express) {
         return;
       }
       const normalizedEmail = email.toLowerCase().trim();
+      const requestedType = accountType === 'referral' ? 'referral' : 'business';
       const existing = await UserService.getUserByEmail(database, normalizedEmail);
       if (existing?.emailVerifiedAt) {
+        // If user already has one account type and is requesting the other, upgrade to "both"
+        const currentType = existing.accountType;
+        if (currentType !== 'both' && currentType !== requestedType) {
+          await database.update(usersTable).set({ accountType: 'both' }).where(eq(usersTable.id, existing.id));
+          res.json({ ok: true, upgraded: true, message: "Your account now has both business and referral capabilities." });
+          return;
+        }
         res.status(409).json({ error: "An account with this email already exists" });
         return;
       }
@@ -319,6 +347,7 @@ function loginPageHtml(state: { mode: string; token: string; status: string; typ
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sign In - Rebooked</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -643,7 +672,10 @@ function loginPageHtml(state: { mode: string; token: string; status: string; typ
 </head>
 <body>
   <div class="brand">
-    <a href="/" style="text-decoration:none;color:inherit"><h1>Rebooked</h1></a>
+    <a href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:10px;justify-content:center">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" width="40" height="40"><rect x="8" y="16" width="48" height="40" rx="8" ry="8" stroke="#00A896" stroke-width="4" fill="none"/><line x1="22" y1="8" x2="22" y2="22" stroke="#00A896" stroke-width="4" stroke-linecap="round"/><line x1="42" y1="8" x2="42" y2="22" stroke="#00A896" stroke-width="4" stroke-linecap="round"/><path d="M40 34 C40 28, 28 28, 28 34 C28 40, 40 40, 40 34" stroke="#00A896" stroke-width="3.5" stroke-linecap="round" fill="none"/><path d="M36 28 L40 34 L34 34" stroke="#00A896" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="50" cy="50" r="4" fill="#E8920A"/></svg>
+      <h1>Rebooked</h1>
+    </a>
     <p>Revenue recovery for appointment-based businesses</p>
     <a href="/" style="font-size:13px;color:#94a3b8;text-decoration:none;display:inline-flex;align-items:center;gap:4px;margin-top:6px">&larr; Back to Home</a>
   </div>
@@ -903,7 +935,7 @@ function loginPageHtml(state: { mode: string; token: string; status: string; typ
         // Check for stored redirect path from AuthGuard
         const savedPath = sessionStorage.getItem('redirectPath');
         sessionStorage.removeItem('redirectPath');
-        const defaultPath = data.accountType === 'admin' ? '/admin/tenants' : data.accountType === 'referral' ? '/referral' : '/dashboard';
+        const defaultPath = data.accountType === 'admin' ? '/admin/tenants' : (data.accountType === 'referral' ? '/referral' : '/dashboard');
         window.location.href = savedPath && savedPath !== '/login' ? savedPath : defaultPath;
       } catch (error) {
         showError(error.message || String(error));
@@ -923,13 +955,17 @@ function loginPageHtml(state: { mode: string; token: string; status: string; typ
       if (password.length < 8) { showError('Password must be at least 8 characters long.'); return; }
       setLoading('signup-btn', true);
       try {
-        await postJson('/api/auth/signup', {
+        const result = await postJson('/api/auth/signup', {
           name, email, password,
           website: document.getElementById('signup-website').value,
           captchaToken: turnstileToken(),
           accountType,
         });
-        showSuccess('Account created! Check your email for a verification link, then sign in.');
+        if (result.upgraded) {
+          showSuccess(result.message || 'Your account now has both business and referral capabilities. Sign in to continue.');
+        } else {
+          showSuccess('Account created! Check your email for a verification link, then sign in.');
+        }
         switchTab('signin');
         document.getElementById('signin-email').value = email;
       } catch (error) {

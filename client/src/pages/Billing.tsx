@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import { HelpTooltip, HelpIcon } from "@/components/ui/HelpTooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,32 +69,32 @@ const FONT_HEADING: React.CSSProperties = {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function usageMeterColor(percent: number) {
-  if (percent >= 80) return "text-red-400";
-  if (percent >= 50) return "text-yellow-400";
-  return "text-green-400";
+  if (percent >= 80) return "text-destructive";
+  if (percent >= 50) return "text-warning";
+  return "text-success";
 }
 
 function progressBarClass(percent: number) {
-  if (percent >= 80) return "[&>div]:bg-red-500";
-  if (percent >= 50) return "[&>div]:bg-yellow-500";
-  return "[&>div]:bg-green-500";
+  if (percent >= 80) return "[&>div]:bg-destructive";
+  if (percent >= 50) return "[&>div]:bg-warning";
+  return "[&>div]:bg-success";
 }
 
 function statusBadgeVariant(status: string) {
   switch (status) {
     case "paid":
     case "active":
-      return "bg-green-500/15 text-green-400 border-green-500/30";
+      return "bg-success/15 text-success border-success/30";
     case "open":
     case "pending":
     case "trialing":
-      return "bg-yellow-500/15 text-yellow-400 border-yellow-500/30";
+      return "bg-warning/15 text-warning border-warning/30";
     case "failed":
     case "uncollectible":
     case "past_due":
-      return "bg-red-500/15 text-red-400 border-red-500/30";
+      return "bg-destructive/15 text-destructive border-destructive/30";
     case "canceled":
-      return "bg-gray-500/15 text-gray-400 border-gray-500/30";
+      return "bg-muted/15 text-muted-foreground border-muted-foreground/30";
     default:
       return "bg-muted text-muted-foreground border-border";
   }
@@ -168,14 +169,17 @@ export default function Billing() {
   const automationsRun = usage?.automationsRun ?? 0;
   const aiRewrites = (usage as any)?.aiRewrites ?? 0;
 
-  // Revenue calculations — only show costs when there's an active paid subscription
-  const revenueRecovered = (usage as any)?.revenueRecovered ?? 0;
-  const revenueSharePercent = currentPlan?.revenueSharePercent ?? DEFAULT_REVENUE_SHARE_PERCENT;
-  const revenueShareOwed =
-    Math.round(revenueRecovered * (revenueSharePercent / 100) * 100) / 100;
-  const monthlyFee = (hasSub && currentPlan) ? currentPlan.priceMonthly / 100 : 0;
-  const totalCost = monthlyFee + revenueShareOwed;
-  const netSavings = revenueRecovered - totalCost;
+  // Revenue calculations — sourced from server-side billing.revenueShare procedure
+  const { data: revenueShareData } = (trpc.billing as any).revenueShare.useQuery(undefined, {
+    retry: false,
+    staleTime: 60_000,
+  }) as { data: { recoveredRevenue: number; revenueSharePercent: number; revenueShareOwed: number; monthlyFee: number; totalCost: number; netSavings: number; billingType: string } | undefined };
+  const revenueRecovered = revenueShareData?.recoveredRevenue ?? 0;
+  const revenueSharePercent = revenueShareData?.revenueSharePercent ?? currentPlan?.revenueSharePercent ?? DEFAULT_REVENUE_SHARE_PERCENT;
+  const revenueShareOwed = revenueShareData?.revenueShareOwed ?? 0;
+  const monthlyFee = revenueShareData?.monthlyFee ?? ((hasSub && currentPlan) ? currentPlan.priceMonthly / 100 : 0);
+  const totalCost = revenueShareData?.totalCost ?? (monthlyFee + revenueShareOwed);
+  const netSavings = revenueShareData?.netSavings ?? (revenueRecovered - totalCost);
   const roiPercent =
     totalCost > 0 ? Math.round((netSavings / totalCost) * 100) : 0;
 
@@ -303,9 +307,12 @@ export default function Billing() {
               ──────────────────────────────────────────────────────────── */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold" style={FONT_HEADING}>
-                {t('billing.title')}
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold" style={FONT_HEADING}>
+                  {t('billing.title')}
+                </h1>
+                <HelpIcon content={{ basic: "Your plan, payments, and usage information", intermediate: "Subscription management, usage tracking, and payment history via Stripe", advanced: "Stripe subscription + usage-based billing. Revenue share computed from recovery_events and billed via Stripe metered billing" }} />
+              </div>
               <p className="text-muted-foreground text-sm mt-1">
                 {t('billing.subtitle')}
               </p>
@@ -325,17 +332,17 @@ export default function Billing() {
             <div
               className={`rounded-xl p-5 flex items-start gap-4 ${
                 trialDays <= 3
-                  ? "bg-red-500/10 border border-red-500/30"
-                  : "bg-yellow-500/10 border border-yellow-500/30"
+                  ? "bg-destructive/10 border border-destructive/30"
+                  : "bg-warning/10 border border-warning/30"
               }`}
             >
               <Clock
-                className={`w-6 h-6 shrink-0 mt-0.5 ${trialDays <= 3 ? "text-red-400" : "text-yellow-400"}`}
+                className={`w-6 h-6 shrink-0 mt-0.5 ${trialDays <= 3 ? "text-destructive" : "text-warning"}`}
               />
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-1">
                   <span
-                    className={`text-2xl font-bold ${trialDays <= 3 ? "text-red-400" : "text-yellow-400"}`}
+                    className={`text-2xl font-bold ${trialDays <= 3 ? "text-destructive" : "text-warning"}`}
                   >
                     {trialDays === 0
                       ? `${Math.max(0, Math.ceil(trialMs / (1000 * 60 * 60)))}h`
@@ -362,10 +369,10 @@ export default function Billing() {
           )}
 
           {subStatus === "active" && (
-            <div className="rounded-xl p-4 flex items-center gap-3 bg-green-500/10 border border-green-500/30">
-              <CheckCircle className="w-5 h-5 text-green-400 shrink-0" />
+            <div className="rounded-xl p-4 flex items-center gap-3 bg-success/10 border border-success/30">
+              <CheckCircle className="w-5 h-5 text-success shrink-0" />
               <div>
-                <p className="text-sm font-medium text-green-400">
+                <p className="text-sm font-medium text-success">
                   All systems running
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -376,10 +383,10 @@ export default function Billing() {
           )}
 
           {subStatus === "past_due" && (
-            <div className="rounded-xl p-5 flex items-start gap-4 bg-red-500/15 border border-red-500/40">
-              <AlertTriangle className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
+            <div className="rounded-xl p-5 flex items-start gap-4 bg-destructive/15 border border-destructive/40">
+              <AlertTriangle className="w-6 h-6 text-destructive shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm font-semibold text-red-400">
+                <p className="text-sm font-semibold text-destructive">
                   Payment past due
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
@@ -425,6 +432,7 @@ export default function Billing() {
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <CreditCard className="w-4 h-4 text-primary" />
                 Current Plan
+                <HelpIcon content={{ basic: "Your current plan — $199/month with a 35-day money-back guarantee", intermediate: "$199/month base + 15% revenue share on recovered appointments. ROI guarantee: free if no positive return in 35 days", advanced: "Stripe subscription with price_id lookup. Revenue share calculated from sum of realized_revenue * 0.15, invoiced monthly" }} />
               </CardTitle>
             </CardHeader>
             <CardContent className="p-5">
@@ -440,7 +448,7 @@ export default function Billing() {
                       </Badge>
                     )}
                     {isEarlyAdopter && (
-                      <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30">
+                      <Badge className="bg-warning/15 text-warning border-warning/30">
                         <Award className="w-3 h-3 mr-1" />
                         Early Adopter
                       </Badge>
@@ -537,11 +545,12 @@ export default function Billing() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                 {/* Recovered Revenue */}
                 <div className="rounded-lg border border-border p-4 space-y-1">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium flex items-center gap-1">
                     Revenue Recovered
+                    <HelpTooltip content="Total revenue from bookings attributed to Rebooked SMS outreach" variant="info"><span /></HelpTooltip>
                   </p>
                   <p
-                    className="text-2xl font-bold text-green-400"
+                    className="text-2xl font-bold text-success"
                     style={FONT_HEADING}
                   >
                     ${fmtUSD(revenueRecovered)}
@@ -553,8 +562,9 @@ export default function Billing() {
 
                 {/* Revenue Share (15%) */}
                 <div className="rounded-lg border border-border p-4 space-y-1">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium flex items-center gap-1">
                     {revenueSharePercent}% Revenue Share
+                    <HelpTooltip content="Rebooked charges 15% of the revenue recovered through the platform. This is only billed when you recover revenue." variant="info"><span /></HelpTooltip>
                   </p>
                   <p className="text-2xl font-bold" style={FONT_HEADING}>
                     ${fmtUSD(revenueShareOwed)}
@@ -565,12 +575,12 @@ export default function Billing() {
                 </div>
 
                 {/* Net Savings */}
-                <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-4 space-y-1">
+                <div className="rounded-lg border border-success/20 bg-success/5 p-4 space-y-1">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                     Your Net Savings
                   </p>
                   <p
-                    className={`text-2xl font-bold ${netSavings >= 0 ? "text-green-400" : "text-red-400"}`}
+                    className={`text-2xl font-bold ${netSavings >= 0 ? "text-success" : "text-destructive"}`}
                     style={FONT_HEADING}
                   >
                     {netSavings >= 0 ? "+" : ""}${fmtUSD(netSavings)}
@@ -585,7 +595,7 @@ export default function Billing() {
               {revenueRecovered > 0 && (
                 <div className="mt-5 rounded-lg bg-muted/30 border border-border p-4">
                   <div className="flex items-center gap-2 text-sm mb-3">
-                    <ArrowUpRight className="w-4 h-4 text-green-400" />
+                    <ArrowUpRight className="w-4 h-4 text-success" />
                     <span className="font-medium">
                       You keep {100 - revenueSharePercent}% of recovered
                       revenue
@@ -593,7 +603,7 @@ export default function Billing() {
                   </div>
                   <div className="flex h-3 w-full rounded-full overflow-hidden">
                     <div
-                      className="bg-green-500 transition-all"
+                      className="bg-success transition-all"
                       style={{
                         width: `${100 - revenueSharePercent}%`,
                       }}
@@ -651,13 +661,13 @@ export default function Billing() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span>Revenue recovered</span>
-                      <span className="font-medium text-green-400">
+                      <span className="font-medium text-success">
                         +${fmtUSD(revenueRecovered)}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span>Total Rebooked cost</span>
-                      <span className="font-medium text-red-400">
+                      <span className="font-medium text-destructive">
                         -${totalCost.toFixed(2)}
                       </span>
                     </div>
@@ -666,7 +676,7 @@ export default function Billing() {
                       <span>Net profit</span>
                       <span
                         className={
-                          netSavings >= 0 ? "text-green-400" : "text-red-400"
+                          netSavings >= 0 ? "text-success" : "text-destructive"
                         }
                       >
                         {netSavings >= 0 ? "+" : ""}${fmtUSD(netSavings)}
@@ -691,6 +701,7 @@ export default function Billing() {
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <Zap className="w-4 h-4 text-primary" />
                 Usage Metrics
+                <HelpIcon content={{ basic: "How many messages and automations you've used this month", intermediate: "Monthly usage: SMS messages sent, active automations, leads managed, and recovered revenue", advanced: "Usage counters from messages (count), automations (enabled count), leads (total count). Metered billing reported to Stripe usage records" }} />
               </CardTitle>
             </CardHeader>
             <CardContent className="p-5">
@@ -701,6 +712,7 @@ export default function Billing() {
                     <div className="flex items-center gap-2 text-sm font-medium">
                       <MessageSquare className="w-4 h-4 text-muted-foreground" />
                       Messages Sent
+                      <HelpTooltip content="SMS messages consumed this billing period. Resets monthly." variant="info"><span /></HelpTooltip>
                     </div>
                     <span
                       className={`text-xs font-semibold ${usageMeterColor(smsPercent)}`}
@@ -716,7 +728,7 @@ export default function Billing() {
                     {smsUsed.toLocaleString()} / {smsLimit.toLocaleString()}{" "}
                     sent this period
                     {smsPercent >= 80 && (
-                      <span className="text-red-400 font-medium ml-1">
+                      <span className="text-destructive font-medium ml-1">
                         - Approaching limit
                       </span>
                     )}
@@ -772,7 +784,7 @@ export default function Billing() {
                     Revenue Recovered
                   </div>
                   <p
-                    className="text-2xl font-bold text-green-400"
+                    className="text-2xl font-bold text-success"
                     style={FONT_HEADING}
                   >
                     ${fmtUSD(revenueRecovered)}
@@ -787,6 +799,7 @@ export default function Billing() {
                   <div className="flex items-center gap-2 text-sm font-medium mb-2">
                     <PieChart className="w-4 h-4 text-muted-foreground" />
                     Revenue Share Owed
+                    <HelpTooltip content="Rebooked charges 15% of the revenue recovered through the platform. This is only billed when you recover revenue." variant="info"><span /></HelpTooltip>
                   </div>
                   <p className="text-2xl font-bold" style={FONT_HEADING}>
                     ${fmtUSD(revenueShareOwed)}
@@ -807,6 +820,7 @@ export default function Billing() {
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-primary" />
                 Billing History
+                <HelpIcon content={{ basic: "Your past payments and invoices", intermediate: "Stripe-powered invoice history with downloadable receipts", advanced: "Fetched from Stripe API via billing.invoices procedure. Includes subscription charges and revenue share line items" }} />
               </CardTitle>
             </CardHeader>
             <CardContent className="p-5">
@@ -822,7 +836,12 @@ export default function Billing() {
                         <TableHead>Invoice</TableHead>
                         <TableHead>Date</TableHead>
                         <TableHead className="text-right">Amount</TableHead>
-                        <TableHead>Status</TableHead>
+                        <TableHead>
+                          <span className="flex items-center gap-1">
+                            Status
+                            <HelpTooltip content="Paid = processed, Open = due, Void = cancelled" variant="info"><span /></HelpTooltip>
+                          </span>
+                        </TableHead>
                         <TableHead className="text-right">
                           Running Total
                         </TableHead>
@@ -1007,12 +1026,12 @@ export default function Billing() {
               6. Early Adopter Badge
               ──────────────────────────────────────────────────────────── */}
           {earlyAdopterPlan && (
-            <Card className="border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-green-500/5">
-              <CardHeader className="pb-3 border-b border-amber-500/20">
+            <Card className="border-warning/30 bg-gradient-to-br from-warning/5 to-success/5">
+              <CardHeader className="pb-3 border-b border-warning/20">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Award className="w-4 h-4 text-amber-400" />
+                  <Award className="w-4 h-4 text-warning" />
                   Early Adopter Program
-                  <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 ml-2">
+                  <Badge className="bg-warning/15 text-warning border-warning/30 ml-2">
                     Limited
                   </Badge>
                 </CardTitle>
@@ -1022,32 +1041,32 @@ export default function Billing() {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <span
-                        className="text-2xl font-bold text-amber-400"
+                        className="text-2xl font-bold text-warning"
                         style={FONT_HEADING}
                       >
                         {earlyAdopterPlan.promotionalSlots}
                       </span>
                       <span className="text-sm text-muted-foreground">
-                        of 20 slots remaining
+                        of {earlyAdopterPlan.earlyAdopterSlots ?? 20} slots remaining
                       </span>
                     </div>
                     <Progress
                       value={
-                        ((20 - earlyAdopterPlan.promotionalSlots) / 20) * 100
+                        (((earlyAdopterPlan.earlyAdopterSlots ?? 20) - earlyAdopterPlan.promotionalSlots) / (earlyAdopterPlan.earlyAdopterSlots ?? 20)) * 100
                       }
-                      className="h-2 mb-3 [&>div]:bg-amber-500"
+                      className="h-2 mb-3 [&>div]:bg-warning"
                     />
                     <p className="text-sm text-muted-foreground">
-                      The first 20 clients are protected by our ROI guarantee.{" "}
-                      <span className="text-amber-400 font-medium">
+                      The first {earlyAdopterPlan.earlyAdopterSlots ?? 20} clients are protected by my ROI guarantee.{" "}
+                      <span className="text-warning font-medium">
                         If Rebooked doesn't generate positive ROI, you don't
                         pay.
                       </span>
                     </p>
                     {isEarlyAdopter && (
-                      <div className="mt-3 rounded-lg bg-green-500/10 border border-green-500/20 p-3 flex items-center gap-2">
-                        <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
-                        <p className="text-sm text-green-400 font-medium">
+                      <div className="mt-3 rounded-lg bg-success/10 border border-success/20 p-3 flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-success shrink-0" />
+                        <p className="text-sm text-success font-medium">
                           You are an Early Adopter. Your ROI guarantee is
                           active.
                         </p>
@@ -1071,11 +1090,12 @@ export default function Billing() {
           {/* ────────────────────────────────────────────────────────────────
               7. ROI Guarantee Section
               ──────────────────────────────────────────────────────────── */}
-          <Card className="border-green-500/30 bg-green-500/5">
-            <CardHeader className="pb-3 border-b border-green-500/20">
+          <Card className="border-success/30 bg-success/5">
+            <CardHeader className="pb-3 border-b border-success/20">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Shield className="w-4 h-4 text-green-400" />
+                <Shield className="w-4 h-4 text-success" />
                 ROI Guarantee
+                <HelpIcon content={{ basic: "If Rebooked doesn't make you money within 35 days, it's free!", intermediate: "ROI guarantee: positive return within 35 days or your subscription is fully refunded. Tracked automatically", advanced: "Guarantee cohort tracked in subscriptions.guarantee_cohort. ROI computed as recovered_revenue - subscription_cost over guarantee_period_days" }} />
               </CardTitle>
             </CardHeader>
             <CardContent className="p-5">
@@ -1089,9 +1109,9 @@ export default function Billing() {
                     pay.
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    We stand behind our platform. If your total Rebooked cost
-                    (subscription + revenue share) exceeds the revenue we
-                    recover for you in any billing period, we'll credit you the
+                    I stand behind Rebooked. If your total cost
+                    (subscription + revenue share) exceeds the revenue Rebooked
+                    recovers for you in any billing period, I'll credit you the
                     difference. Early Adopter clients get it completely free
                     during negative-ROI months.
                   </p>
@@ -1103,7 +1123,7 @@ export default function Billing() {
                     </p>
                     <div className="text-center">
                       <p
-                        className={`text-3xl font-bold ${netSavings >= 0 ? "text-green-400" : "text-red-400"}`}
+                        className={`text-3xl font-bold ${netSavings >= 0 ? "text-success" : "text-destructive"}`}
                         style={FONT_HEADING}
                       >
                         {netSavings >= 0 ? "+" : ""}${fmtUSD(netSavings)}
@@ -1116,7 +1136,7 @@ export default function Billing() {
                     <div className="space-y-1.5 text-xs">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Recovered</span>
-                        <span className="text-green-400 font-medium">
+                        <span className="text-success font-medium">
                           +${fmtUSD(revenueRecovered)}
                         </span>
                       </div>
@@ -1124,21 +1144,21 @@ export default function Billing() {
                         <span className="text-muted-foreground">
                           Rebooked cost
                         </span>
-                        <span className="text-red-400 font-medium">
+                        <span className="text-destructive font-medium">
                           -${fmtUSD(totalCost)}
                         </span>
                       </div>
                     </div>
                     {netSavings >= 0 ? (
-                      <div className="rounded bg-green-500/10 border border-green-500/20 p-2 text-center">
-                        <p className="text-xs text-green-400 font-medium">
+                      <div className="rounded bg-success/10 border border-success/20 p-2 text-center">
+                        <p className="text-xs text-success font-medium">
                           <CheckCircle className="w-3 h-3 inline mr-1" />
                           ROI positive - {roiPercent}% return
                         </p>
                       </div>
                     ) : (
-                      <div className="rounded bg-amber-500/10 border border-amber-500/20 p-2 text-center">
-                        <p className="text-xs text-amber-400 font-medium">
+                      <div className="rounded bg-warning/10 border border-warning/20 p-2 text-center">
+                        <p className="text-xs text-warning font-medium">
                           <AlertTriangle className="w-3 h-3 inline mr-1" />
                           ROI guarantee may apply
                         </p>
@@ -1168,12 +1188,19 @@ export default function Billing() {
                     open={pauseDialogOpen}
                     onOpenChange={setPauseDialogOpen}
                   >
-                    <AlertDialogTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <Pause className="w-4 h-4 mr-1.5" />
-                        Pause subscription
-                      </Button>
-                    </AlertDialogTrigger>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <Pause className="w-4 h-4 mr-1.5" />
+                            Pause subscription
+                          </Button>
+                        </AlertDialogTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Temporarily suspends billing and automations. Can be resumed at any time.</p>
+                      </TooltipContent>
+                    </Tooltip>
                     <AlertDialogContent>
                       <AlertDialogHeader>
                         <AlertDialogTitle>
@@ -1200,16 +1227,23 @@ export default function Billing() {
                     open={cancelDialogOpen}
                     onOpenChange={setCancelDialogOpen}
                   >
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                      >
-                        <XCircle className="w-4 h-4 mr-1.5" />
-                        Cancel subscription
-                      </Button>
-                    </AlertDialogTrigger>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive/80 hover:bg-destructive/10"
+                          >
+                            <XCircle className="w-4 h-4 mr-1.5" />
+                            Cancel subscription
+                          </Button>
+                        </AlertDialogTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Cancels at end of current billing period. You'll keep access until then.</p>
+                      </TooltipContent>
+                    </Tooltip>
                     <AlertDialogContent>
                       <AlertDialogHeader>
                         <AlertDialogTitle>
@@ -1222,24 +1256,24 @@ export default function Billing() {
                           </span>
                           <span className="block text-sm space-y-1">
                             <span className="flex items-center gap-2">
-                              <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                              <XCircle className="w-3.5 h-3.5 text-destructive shrink-0" />
                               Automated SMS re-engagement
                             </span>
                             <span className="flex items-center gap-2">
-                              <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                              <XCircle className="w-3.5 h-3.5 text-destructive shrink-0" />
                               AI-powered message rewrites
                             </span>
                             <span className="flex items-center gap-2">
-                              <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                              <XCircle className="w-3.5 h-3.5 text-destructive shrink-0" />
                               Revenue recovery automations
                             </span>
                             <span className="flex items-center gap-2">
-                              <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                              <XCircle className="w-3.5 h-3.5 text-destructive shrink-0" />
                               No-show and cancellation recovery
                             </span>
                           </span>
                           {revenueRecovered > 0 && (
-                            <span className="block text-sm font-medium text-amber-400">
+                            <span className="block text-sm font-medium text-warning">
                               You've recovered ${fmtUSD(revenueRecovered)} this
                               period. Canceling means leaving that revenue on
                               the table.
@@ -1251,7 +1285,7 @@ export default function Billing() {
                         <AlertDialogCancel>Keep subscription</AlertDialogCancel>
                         <AlertDialogAction
                           onClick={handleCancel}
-                          className="bg-red-600 hover:bg-red-700 text-white"
+                          className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
                         >
                           Cancel subscription
                         </AlertDialogAction>
@@ -1356,7 +1390,7 @@ export default function Billing() {
                                 <TableCell className="text-right text-muted-foreground">
                                   ${fmtUSD(share)}
                                 </TableCell>
-                                <TableCell className="text-right text-green-400 font-medium">
+                                <TableCell className="text-right text-success font-medium">
                                   ${fmtUSD(kept)}
                                 </TableCell>
                               </TableRow>
@@ -1382,7 +1416,7 @@ export default function Billing() {
                       </span>
                       <span className="text-muted-foreground">
                         You keep:{" "}
-                        <span className="font-medium text-green-400">
+                        <span className="font-medium text-success">
                           $
                           {fmtUSD(
                             revenueRecovered *

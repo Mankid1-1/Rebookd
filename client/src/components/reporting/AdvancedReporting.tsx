@@ -4,6 +4,8 @@
  */
 
 import { useState, useEffect } from "react";
+import { useLocale } from "@/contexts/LocaleContext";
+import { useChartColors } from "@/hooks/useChartColors";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -83,52 +85,48 @@ const getDynamicReportTypes = (userRole?: string, userSkill?: any) => {
 };
 
 // Dynamic metrics based on user business type and preferences
-const getDynamicMetrics = (businessType?: string, userPreferences?: any) => {
+// Colors are resolved at call time via the chartColors parameter
+const getDynamicMetrics = (businessType?: string, userPreferences?: any, chartColors?: Record<string, any>) => {
+  const c = chartColors || {} as Record<string, any>;
   const baseMetrics = [
-    { id: 'leads', name: 'Lead Generation', icon: Users, color: '#3b82f6', darkColor: '#60a5fa' },
-    { id: 'revenue', name: 'Revenue', icon: DollarSign, color: '#22c55e', darkColor: '#34d399' },
-    { id: 'conversions', name: 'Conversions', icon: Target, color: '#8b5cf6', darkColor: '#a78bfa' },
+    { id: 'leads', name: 'Lead Generation', icon: Users, color: c.chart1 },
+    { id: 'revenue', name: 'Revenue', icon: DollarSign, color: c.chart2 },
+    { id: 'conversions', name: 'Conversions', icon: Target, color: c.chart3 },
   ];
 
   // Add advanced metrics for intermediate+ users
   if (userPreferences?.skillLevel !== 'beginner') {
     baseMetrics.push(
-      { id: 'messages', name: 'Messages', icon: MessageSquare, color: '#f59e0b', darkColor: '#fbbf24' },
-      { id: 'responseTime', name: 'Response Time', icon: Clock, color: '#ef4444', darkColor: '#f87171' }
+      { id: 'messages', name: 'Messages', icon: MessageSquare, color: c.chart4 },
+      { id: 'responseTime', name: 'Response Time', icon: Clock, color: c.chart5 }
     );
   }
 
   // Add expert metrics for advanced users
   if (userPreferences?.skillLevel === 'expert' || userPreferences?.skillLevel === 'advanced') {
     baseMetrics.push(
-      { id: 'satisfaction', name: 'Customer Satisfaction', icon: TrendingUp, color: '#10b981', darkColor: '#34d399' },
-      { id: 'costPerAcquisition', name: 'Cost per Acquisition', icon: BarChart3, color: '#f97316', darkColor: '#fb923c' }
+      { id: 'satisfaction', name: 'Customer Satisfaction', icon: TrendingUp, color: c.success },
+      { id: 'costPerAcquisition', name: 'Cost per Acquisition', icon: BarChart3, color: c.chart4 }
     );
   }
 
   // Business-specific metrics
   if (businessType?.includes('medical') || businessType?.includes('clinic')) {
     baseMetrics.push(
-      { id: 'appointments', name: 'Appointments', icon: CalendarIcon, color: '#06b6d4', darkColor: '#22d3ee' },
-      { id: 'noShows', name: 'No-Shows', icon: AlertCircle, color: '#dc2626', darkColor: '#ef4444' }
+      { id: 'appointments', name: 'Appointments', icon: CalendarIcon, color: c.info },
+      { id: 'noShows', name: 'No-Shows', icon: AlertCircle, color: c.danger }
     );
   } else if (businessType?.includes('salon') || businessType?.includes('spa')) {
     baseMetrics.push(
-      { id: 'services', name: 'Services', icon: Sparkles, color: '#ec4899', darkColor: '#f472b6' },
-      { id: 'retention', name: 'Customer Retention', icon: Users, color: '#8b5cf6', darkColor: '#a78bfa' }
+      { id: 'services', name: 'Services', icon: Sparkles, color: c.chart3 },
+      { id: 'retention', name: 'Customer Retention', icon: Users, color: c.chart3 }
     );
   }
 
   return baseMetrics;
 };
 
-// Dynamic chart colors based on theme
-const getDynamicChartColors = () => {
-  const isDarkMode = document.documentElement.classList.has('dark');
-  return isDarkMode 
-    ? ['#60a5fa', '#eab308', '#34d399', '#f87171', '#a78bfa', '#9ca3af']
-    : ['#3b82f6', '#eab308', '#22c55e', '#ef4444', '#a855f7', '#6b7280'];
-};
+// Chart colors are now derived from CSS custom properties via useChartColors().
 
 interface AdvancedReportingProps {
   locationId?: string;
@@ -144,14 +142,8 @@ const REPORT_TYPES = [
   { id: 'customer', name: 'Customer Report', description: 'Customer satisfaction and behavior' },
 ];
 
-const METRICS = [
-  { id: 'leads', name: 'Lead Generation', icon: Users, color: '#3b82f6' },
-  { id: 'revenue', name: 'Revenue', icon: DollarSign, color: '#22c55e' },
-  { id: 'conversions', name: 'Conversions', icon: Target, color: '#8b5cf6' },
-  { id: 'messages', name: 'Messages', icon: MessageSquare, color: '#f59e0b' },
-  { id: 'response', name: 'Response Time', icon: Clock, color: '#ef4444' },
-  { id: 'satisfaction', name: 'Satisfaction', icon: CheckCircle, color: '#10b981' },
-];
+// METRICS is built inside the component to use theme-aware colors.
+// See the component body for the actual definition.
 
 export function AdvancedReporting({ 
   locationId, 
@@ -159,7 +151,18 @@ export function AdvancedReporting({
   autoRefresh = false 
 }: AdvancedReportingProps) {
   const { user } = useAuth();
+  const cc = useChartColors();
   const { context } = useProgressiveDisclosureContext();
+
+  // Theme-aware METRICS array
+  const METRICS = [
+    { id: 'leads', name: 'Lead Generation', icon: Users, color: cc.chart1 },
+    { id: 'revenue', name: 'Revenue', icon: DollarSign, color: cc.chart2 },
+    { id: 'conversions', name: 'Conversions', icon: Target, color: cc.chart3 },
+    { id: 'messages', name: 'Messages', icon: MessageSquare, color: cc.chart4 },
+    { id: 'response', name: 'Response Time', icon: Clock, color: cc.chart5 },
+    { id: 'satisfaction', name: 'Satisfaction', icon: CheckCircle, color: cc.success },
+  ];
   const [selectedReport, setSelectedReport] = useState('executive');
   const [selectedMetrics, setSelectedMetrics] = useState(['leads', 'revenue', 'conversions']);
   const [reportData, setReportData] = useState<ReportData | null>(null);
@@ -174,8 +177,8 @@ export function AdvancedReporting({
 
   // Dynamic configurations based on user
   const reportTypes = getDynamicReportTypes(user?.role, context.userSkill);
-  const metrics = getDynamicMetrics(tenant?.industry, userPreferences);
-  const chartColors = getDynamicChartColors();
+  const metrics = getDynamicMetrics(tenant?.industry, userPreferences, cc);
+  const chartColors = [cc.chart1, cc.chart4, cc.chart2, cc.chart5, cc.chart3, cc.muted];
 
   // Real report generation - no simulation!
   const generateReport = trpc.reports.generate.useMutation();
@@ -245,12 +248,7 @@ export function AdvancedReporting({
     });
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
-  };
+  const { formatCurrency } = useLocale();
 
   const getMetricIcon = (metricId: string) => {
     const metric = METRICS.find(m => m.id === metricId);
@@ -259,10 +257,10 @@ export function AdvancedReporting({
 
   const getMetricColor = (metricId: string) => {
     const metric = METRICS.find(m => m.id === metricId);
-    return metric ? metric.color : '#6b7280';
+    return metric ? metric.color : cc.muted;
   };
 
-  const COLORS = ['#3b82f6', '#eab308', '#22c55e', '#ef4444', '#a855f7', '#6b7280'];
+  const COLORS = chartColors;
 
   const calculateTrend = (current: number, previous: number) => {
     if (previous === 0) return { value: 0, direction: 'up' as const };
@@ -434,7 +432,7 @@ export function AdvancedReporting({
                         labelLine={false}
                         label={({ name, percentage }) => `${name} ${percentage}%`}
                         outerRadius={80}
-                        fill="#8884d8"
+                        fill={cc.chart1}
                         dataKey="count"
                       >
                         {reportData.breakdown.byStatus.map((entry, index) => (
@@ -464,7 +462,7 @@ export function AdvancedReporting({
                       <Tooltip 
                         formatter={(value) => [formatCurrency(value as number), 'Revenue']}
                       />
-                      <Bar dataKey="revenue" fill="#22c55e" />
+                      <Bar dataKey="revenue" fill={cc.chart2} />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -490,8 +488,8 @@ export function AdvancedReporting({
                         labelFormatter={(value) => format(new Date(value as string), 'MMM dd, yyyy')}
                       />
                       <Legend />
-                      <Line type="monotone" dataKey="leads" stroke="#3b82f6" strokeWidth={2} />
-                      <Line type="monotone" dataKey="conversions" stroke="#22c55e" strokeWidth={2} />
+                      <Line type="monotone" dataKey="leads" stroke={cc.chart1} strokeWidth={2} />
+                      <Line type="monotone" dataKey="conversions" stroke={cc.chart2} strokeWidth={2} />
                     </LineChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -512,7 +510,7 @@ export function AdvancedReporting({
                         labelFormatter={(value) => format(new Date(value as string), 'MMM dd, yyyy')}
                         formatter={(value) => [formatCurrency(value as number), 'Revenue']}
                       />
-                      <Area type="monotone" dataKey="revenue" stroke="#22c55e" fill="#22c55e" fillOpacity={0.3} />
+                      <Area type="monotone" dataKey="revenue" stroke={cc.chart2} fill={cc.chart2} fillOpacity={0.3} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -532,8 +530,8 @@ export function AdvancedReporting({
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="leads" fill="#3b82f6" />
-                    <Bar dataKey="conversions" fill="#22c55e" />
+                    <Bar dataKey="leads" fill={cc.chart1} />
+                    <Bar dataKey="conversions" fill={cc.chart2} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -556,20 +554,20 @@ export function AdvancedReporting({
                     <div key={staff.staff} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex-1">
                         <h4 className="font-medium">{staff.staff}</h4>
-                        <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
+                        <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                           <span>{staff.leads} leads</span>
                           <span>{formatCurrency(staff.revenue)} revenue</span>
                           <div className="flex items-center gap-1">
-                            <Star className="h-3 w-3 text-yellow-500" />
+                            <Star className="h-3 w-3 text-warning" />
                             <span>{staff.rating}</span>
                           </div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-lg font-bold text-green-600">
+                        <div className="text-lg font-bold text-success">
                           {formatCurrency(staff.revenue)}
                         </div>
-                        <div className="text-sm text-gray-500">
+                        <div className="text-sm text-muted-foreground">
                           {staff.leads} leads
                         </div>
                       </div>
@@ -600,7 +598,7 @@ export function AdvancedReporting({
                     <PolarGrid />
                     <PolarAngleAxis dataKey="metric" />
                     <PolarRadiusAxis angle={90} domain={[0, 100]} />
-                    <Radar name="Performance" dataKey="value" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} />
+                    <Radar name="Performance" dataKey="value" stroke={cc.chart1} fill={cc.chart1} fillOpacity={0.6} />
                   </RadarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -648,12 +646,12 @@ export function AdvancedReporting({
                 </div>
 
                 {/* Report Info */}
-                <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="bg-info/5 p-4 rounded-lg">
                   <div className="flex items-start gap-2">
-                    <Info className="h-4 w-4 text-blue-500 mt-0.5" />
+                    <Info className="h-4 w-4 text-info mt-0.5" />
                     <div>
                       <h4 className="font-medium text-sm mb-1">Report Information</h4>
-                      <div className="text-xs text-blue-800 space-y-1">
+                      <div className="text-xs text-muted-foreground space-y-1">
                         <p>Generated: {format(new Date(), 'MMM dd, yyyy at h:mm a')}</p>
                         <p>Period: {dateFilter}</p>
                         <p>Type: {REPORT_TYPES.find(r => r.id === selectedReport)?.name}</p>

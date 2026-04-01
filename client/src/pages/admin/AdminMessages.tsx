@@ -35,8 +35,8 @@ export default function AdminMessages() {
     <DashboardLayout>
       <div className="p-6 space-y-5 max-w-7xl mx-auto">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center">
-            <Shield className="w-4 h-4 text-yellow-400" />
+          <div className="w-8 h-8 rounded-lg bg-warning/10 flex items-center justify-center">
+            <Shield className="w-4 h-4 text-warning" />
           </div>
           <div>
             <h1 className="text-2xl font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Message Logs</h1>
@@ -106,7 +106,7 @@ export default function AdminMessages() {
                             <Badge variant="outline" className="text-xs capitalize">{log.tone}</Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline" className={`text-xs ${log.success ? "text-green-400 border-green-500/30" : "text-red-400 border-red-500/30"}`}>
+                            <Badge variant="outline" className={`text-xs ${log.success ? "text-success border-success/30" : "text-destructive border-destructive/30"}`}>
                               {log.success ? "Success" : "Failed"}
                             </Badge>
                           </TableCell>

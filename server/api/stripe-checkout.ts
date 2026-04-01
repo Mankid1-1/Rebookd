@@ -4,8 +4,11 @@
  */
 
 import { z } from 'zod';
+import { eq } from 'drizzle-orm';
+import { TRPCError } from '@trpc/server';
 import { publicProcedure, protectedProcedure } from '../_core/trpc';
 import * as StripeCheckoutService from '../services/stripe-checkout.service';
+import { subscriptions } from '../../drizzle/schema';
 
 // Validation schemas
 const createCheckoutSessionSchema = z.object({
@@ -13,30 +16,6 @@ const createCheckoutSessionSchema = z.object({
   referralCode: z.string().optional(),
 });
 
-const reportUsageSchema = z.object({
-  customerId: z.string(),
-  recoveredAmount: z.number().min(0),
-});
-
-const createPortalSessionSchema = z.object({
-  customerId: z.string(),
-});
-
-const cancelSubscriptionSchema = z.object({
-  subscriptionId: z.string(),
-});
-
-const resumeSubscriptionSchema = z.object({
-  subscriptionId: z.string(),
-});
-
-const getSubscriptionDetailsSchema = z.object({
-  subscriptionId: z.string(),
-});
-
-const getCurrentUsageSchema = z.object({
-  customerId: z.string(),
-});
 
 export const stripeCheckoutRouter = {
   // Create Stripe Checkout Session
@@ -70,82 +49,68 @@ export const stripeCheckoutRouter = {
       };
     }),
 
-  // Report revenue recovery usage
+  // Report revenue recovery usage — uses caller's own subscription, ignores client-supplied customerId
   reportUsage: protectedProcedure
-    .input(reportUsageSchema)
-    .mutation(async ({ input }) => {
-      await StripeCheckoutService.reportRevenueUsage(
-        input.customerId,
-        input.recoveredAmount
-      );
-      
+    .input(z.object({ recoveredAmount: z.number().min(0) }))
+    .mutation(async ({ input, ctx }) => {
+      // Resolve customerId from the caller's own subscription row — never trust client-supplied IDs
+      const [sub] = await ctx.db.select().from(subscriptions).where(eq(subscriptions.tenantId, ctx.user.tenantId ?? 0)).limit(1);
+      if (!sub?.stripeCustomerId) throw new TRPCError({ code: 'NOT_FOUND', message: 'No active subscription found' });
+      await StripeCheckoutService.reportRevenueUsage(sub.stripeCustomerId, input.recoveredAmount);
       return {
         success: true,
         message: `Reported $${input.recoveredAmount} revenue recovery`,
       };
     }),
 
-  // Get current usage for billing period
+  // Get current usage for billing period — resolves customerId server-side
   getCurrentUsage: protectedProcedure
-    .input(getCurrentUsageSchema)
-    .query(async ({ input }) => {
-      const usage = await StripeCheckoutService.getCurrentUsage(input.customerId);
-      
+    .query(async ({ ctx }) => {
+      const [sub] = await ctx.db.select().from(subscriptions).where(eq(subscriptions.tenantId, ctx.user.tenantId ?? 0)).limit(1);
+      if (!sub?.stripeCustomerId) return { success: true, usage: 0, estimatedCharge: 0, message: 'No active subscription' };
+      const usage = await StripeCheckoutService.getCurrentUsage(sub.stripeCustomerId);
       return {
         success: true,
         usage,
-        estimatedCharge: usage * 0.15, // 15% of recovered revenue
+        // Note: actual rate is 15% for Growth plan, 20% for Flex plan — resolved server-side via billing.service
+        estimatedCharge: usage * 0.15,
         message: `Current usage: $${usage} recovered revenue`,
       };
     }),
 
-  // Create customer portal session
+  // Create customer portal session — resolves customerId server-side, never from client
   createPortalSession: protectedProcedure
-    .input(createPortalSessionSchema)
-    .mutation(async ({ input }) => {
-      const portalUrl = await StripeCheckoutService.createCustomerPortalSession(input.customerId);
-      
-      return {
-        success: true,
-        portalUrl,
-        message: "Customer portal session created",
-      };
+    .mutation(async ({ ctx }) => {
+      const [sub] = await ctx.db.select().from(subscriptions).where(eq(subscriptions.tenantId, ctx.user.tenantId ?? 0)).limit(1);
+      if (!sub?.stripeCustomerId) throw new TRPCError({ code: 'NOT_FOUND', message: 'No active subscription found' });
+      const portalUrl = await StripeCheckoutService.createCustomerPortalSession(sub.stripeCustomerId);
+      return { success: true, portalUrl, message: "Customer portal session created" };
     }),
 
-  // Cancel subscription
+  // Cancel subscription — verifies ownership against caller's tenant before cancelling
   cancelSubscription: protectedProcedure
-    .input(cancelSubscriptionSchema)
-    .mutation(async ({ input }) => {
-      await StripeCheckoutService.cancelSubscription(input.subscriptionId);
-      
-      return {
-        success: true,
-        message: "Subscription will be cancelled at period end",
-      };
+    .mutation(async ({ ctx }) => {
+      const [sub] = await ctx.db.select().from(subscriptions).where(eq(subscriptions.tenantId, ctx.user.tenantId ?? 0)).limit(1);
+      if (!sub?.stripeId) throw new TRPCError({ code: 'NOT_FOUND', message: 'No active subscription found' });
+      await StripeCheckoutService.cancelSubscription(sub.stripeId);
+      return { success: true, message: "Subscription will be cancelled at period end" };
     }),
 
-  // Resume cancelled subscription
+  // Resume cancelled subscription — verifies ownership against caller's tenant
   resumeSubscription: protectedProcedure
-    .input(resumeSubscriptionSchema)
-    .mutation(async ({ input }) => {
-      await StripeCheckoutService.resumeSubscription(input.subscriptionId);
-      
-      return {
-        success: true,
-        message: "Subscription resumed successfully",
-      };
+    .mutation(async ({ ctx }) => {
+      const [sub] = await ctx.db.select().from(subscriptions).where(eq(subscriptions.tenantId, ctx.user.tenantId ?? 0)).limit(1);
+      if (!sub?.stripeId) throw new TRPCError({ code: 'NOT_FOUND', message: 'No subscription found' });
+      await StripeCheckoutService.resumeSubscription(sub.stripeId);
+      return { success: true, message: "Subscription resumed successfully" };
     }),
 
-  // Get subscription details
+  // Get subscription details — only returns the caller's own subscription
   getSubscriptionDetails: protectedProcedure
-    .input(getSubscriptionDetailsSchema)
-    .query(async ({ input }) => {
-      const subscription = await StripeCheckoutService.getSubscriptionDetails(input.subscriptionId);
-      
-      return {
-        success: true,
-        subscription,
-        message: "Subscription details retrieved",
-      };
+    .query(async ({ ctx }) => {
+      const [sub] = await ctx.db.select().from(subscriptions).where(eq(subscriptions.tenantId, ctx.user.tenantId ?? 0)).limit(1);
+      if (!sub?.stripeId) throw new TRPCError({ code: 'NOT_FOUND', message: 'No subscription found' });
+      const subscription = await StripeCheckoutService.getSubscriptionDetails(sub.stripeId);
+      return { success: true, subscription, message: "Subscription details retrieved" };
     }),
 };

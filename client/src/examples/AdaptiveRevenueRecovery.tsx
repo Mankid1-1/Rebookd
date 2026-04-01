@@ -106,7 +106,7 @@ export function AdaptiveRevenueRecovery() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">
+              <div className="text-2xl font-bold text-success">
                 {userMetrics?.overallConversionRate ? 
                   `${(userMetrics.overallConversionRate * 100).toFixed(1)}%` : 'N/A'
                 }
@@ -114,7 +114,7 @@ export function AdaptiveRevenueRecovery() {
               <div className="text-sm text-muted-foreground">Conversion Rate</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">
+              <div className="text-2xl font-bold text-info">
                 {automationPerformance?.successRate ? 
                   `${(automationPerformance.successRate * 100).toFixed(1)}%` : 'N/A'
                 }
@@ -122,7 +122,7 @@ export function AdaptiveRevenueRecovery() {
               <div className="text-sm text-muted-foreground">Automation Success</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">
+              <div className="text-2xl font-bold text-accent-foreground">
                 {recoveryHistory?.overallRecoveryRate ? 
                   `${(recoveryHistory.overallRecoveryRate * 100).toFixed(1)}%` : 'N/A'
                 }

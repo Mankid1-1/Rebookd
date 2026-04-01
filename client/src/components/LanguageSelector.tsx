@@ -46,7 +46,7 @@ export function LanguageSelector() {
       </button>
 
       {open && (
-        <div className="absolute bottom-full mb-2 right-0 w-64 bg-card border border-border rounded-xl shadow-xl shadow-black/20 overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+        <div className="absolute bottom-full mb-2 right-0 w-64 bg-card border border-border rounded-xl shadow-xl shadow-black/20 overflow-hidden z-[60] animate-in fade-in slide-in-from-bottom-2 duration-200">
           <div className="p-3 border-b border-border">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Language</p>
             <div className="grid grid-cols-2 gap-1 max-h-40 overflow-y-auto">

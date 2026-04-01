@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { HelpTooltip, HelpIcon } from "@/components/ui/HelpTooltip";
 import {
   Users,
   Clock,
@@ -36,7 +37,7 @@ export default function WaitingList() {
   });
 
   const { data: metrics, isLoading } = trpc.analytics.waitingListMetrics.useQuery(undefined, {
-    refetchInterval: 30000,
+    refetchInterval: 60_000,
   });
   const { data: settings } = trpc.tenant.settings.useQuery(undefined, { retry: false });
   const updateConfig = trpc.tenant.updateWaitingListConfig.useMutation({
@@ -62,7 +63,10 @@ export default function WaitingList() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold">Waiting List</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold">Waiting List</h1>
+              <HelpIcon content={{ basic: "When someone cancels, people on this list get notified automatically", intermediate: "Waiting list management — automatically text waitlisted clients when slots open from cancellations", advanced: "Cancellation flurry automation: monitors calendar for cancellations, then sends batch SMS to waiting_list entries ordered by priority and created_at" }} />
+            </div>
             <p className="text-muted-foreground mt-2">
               Manage your waiting lists and cancellation flurry notifications to fill last-minute openings
             </p>
@@ -80,8 +84,8 @@ export default function WaitingList() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                  <Users className="h-6 w-6 text-blue-600" />
+                <div className="p-2 bg-primary/10 rounded-lg mr-3">
+                  <Users className="h-6 w-6 text-primary" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Active Waitlist Size</p>
@@ -94,11 +98,11 @@ export default function WaitingList() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg mr-3">
-                  <CheckCircle className="h-6 w-6 text-green-600" />
+                <div className="p-2 bg-success/10 rounded-lg mr-3">
+                  <CheckCircle className="h-6 w-6 text-success" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Filled from Waitlist</p>
+                  <p className="text-sm font-medium text-muted-foreground"><HelpTooltip content="Number of appointment slots filled by clients pulled from your waiting list" variant="info">Filled from Waitlist</HelpTooltip></p>
                   <p className="text-2xl font-bold">{metrics?.filledFromWaitlist || 0}</p>
                 </div>
               </div>
@@ -108,11 +112,11 @@ export default function WaitingList() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-100 rounded-lg mr-3">
-                  <Zap className="h-6 w-6 text-purple-600" />
+                <div className="p-2 bg-accent/10 rounded-lg mr-3">
+                  <Zap className="h-6 w-6 text-accent" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Cancellation Flurries Sent</p>
+                  <p className="text-sm font-medium text-muted-foreground"><HelpTooltip content="Times Rebooked sent a mass SMS to multiple waitlisted clients when a slot opened up" variant="info">Cancellation Flurries Sent</HelpTooltip></p>
                   <p className="text-2xl font-bold">{metrics?.cancellationFlurriesSent || 0}</p>
                 </div>
               </div>
@@ -122,11 +126,11 @@ export default function WaitingList() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-orange-100 rounded-lg mr-3">
-                  <Target className="h-6 w-6 text-orange-600" />
+                <div className="p-2 bg-warning/10 rounded-lg mr-3">
+                  <Target className="h-6 w-6 text-warning" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Fill Rate</p>
+                  <p className="text-sm font-medium text-muted-foreground"><HelpTooltip content="Percentage of opened slots that were successfully filled from your waiting list" variant="info">Fill Rate</HelpTooltip></p>
                   <p className="text-2xl font-bold">{metrics?.fillRate || 0}%</p>
                 </div>
               </div>
@@ -150,6 +154,7 @@ export default function WaitingList() {
                   <CardTitle className="flex items-center gap-2">
                     <Users className="h-5 w-5" />
                     Active Waiting List Summary
+                    <HelpIcon content={{ basic: "People waiting for an appointment opening", intermediate: "Prioritized queue — highest priority contacts are notified first when spots open", advanced: "Entries in waiting_list table ordered by priority DESC, created_at ASC. Auto-expires after configurable hours" }} />
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -183,7 +188,7 @@ export default function WaitingList() {
                       </Badge>
                     </div>
                   </div>
-                  <div className="p-4 bg-blue-50 rounded-lg">
+                  <div className="p-4 bg-primary/5 rounded-lg">
                     <h4 className="font-medium mb-2 flex items-center gap-2">
                       <ListOrdered className="h-4 w-4" />
                       How It Works
@@ -216,22 +221,22 @@ export default function WaitingList() {
                           <div
                             className={`p-1.5 rounded-full ${
                               activity.action === "filled"
-                                ? "bg-green-100"
+                                ? "bg-success/10"
                                 : activity.action === "added"
-                                  ? "bg-blue-100"
+                                  ? "bg-primary/10"
                                   : activity.action === "expired"
-                                    ? "bg-orange-100"
-                                    : "bg-gray-100"
+                                    ? "bg-warning/10"
+                                    : "bg-muted"
                             }`}
                           >
                             {activity.action === "filled" ? (
-                              <CheckCircle className="h-4 w-4 text-green-600" />
+                              <CheckCircle className="h-4 w-4 text-success" />
                             ) : activity.action === "added" ? (
-                              <Users className="h-4 w-4 text-blue-600" />
+                              <Users className="h-4 w-4 text-primary" />
                             ) : activity.action === "expired" ? (
-                              <AlertTriangle className="h-4 w-4 text-orange-600" />
+                              <AlertTriangle className="h-4 w-4 text-warning" />
                             ) : (
-                              <RefreshCw className="h-4 w-4 text-gray-600" />
+                              <RefreshCw className="h-4 w-4 text-muted-foreground" />
                             )}
                           </div>
                           <div>
@@ -281,7 +286,7 @@ export default function WaitingList() {
                 <CardContent className="space-y-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="flurry-enabled">Enable Cancellation Flurry</Label>
+                      <Label htmlFor="flurry-enabled"><HelpTooltip content="When enabled, Rebooked automatically texts multiple waitlisted clients the moment a cancellation comes in, racing to fill the slot" variant="info">Enable Cancellation Flurry</HelpTooltip></Label>
                       <p className="text-xs text-muted-foreground mt-1">
                         Automatically notify waitlisted clients when a slot opens up
                       </p>
@@ -297,7 +302,7 @@ export default function WaitingList() {
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="auto-notify">Auto-Notify on Cancellation</Label>
+                      <Label htmlFor="auto-notify"><HelpTooltip content="Sends an immediate notification to the top waitlisted client when a slot opens up" variant="info">Auto-Notify on Cancellation</HelpTooltip></Label>
                       <p className="text-xs text-muted-foreground mt-1">
                         Send SMS immediately when a cancellation is detected
                       </p>
@@ -312,7 +317,7 @@ export default function WaitingList() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Message Limit per Cancellation</Label>
+                    <Label><HelpTooltip content="Maximum number of clients to contact per cancellation. Prevents overwhelming clients with messages." variant="info">Message Limit per Cancellation</HelpTooltip></Label>
                     <p className="text-xs text-muted-foreground">
                       Maximum number of clients to notify per cancellation event
                     </p>
@@ -332,7 +337,7 @@ export default function WaitingList() {
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="priority-history">Priority by Booking History</Label>
+                      <Label htmlFor="priority-history"><HelpTooltip content="Clients with more past bookings move higher in the waitlist queue — rewards loyalty" variant="info">Priority by Booking History</HelpTooltip></Label>
                       <p className="text-xs text-muted-foreground mt-1">
                         Prioritize loyal clients with more past bookings
                       </p>
@@ -366,16 +371,16 @@ export default function WaitingList() {
                       <Badge variant="secondary">{metrics?.filledViaFlurry || 0}</Badge>
                     </div>
                     <div className="flex items-center justify-between py-2 border-b">
-                      <span className="text-sm text-muted-foreground">Avg. response time</span>
+                      <span className="text-sm text-muted-foreground"><HelpTooltip content="Average time between sending a flurry and receiving a booking confirmation" variant="info">Avg. response time</HelpTooltip></span>
                       <Badge variant="secondary">{metrics?.avgResponseTimeMinutes || 0} min</Badge>
                     </div>
                     <div className="flex items-center justify-between py-2">
-                      <span className="text-sm text-muted-foreground">Flurry fill rate</span>
+                      <span className="text-sm text-muted-foreground"><HelpTooltip content="Percentage of cancellation flurry campaigns that resulted in a filled slot" variant="info">Flurry fill rate</HelpTooltip></span>
                       <Badge variant="outline">{metrics?.flurryFillRate || 0}%</Badge>
                     </div>
                   </div>
 
-                  <div className="p-4 bg-purple-50 rounded-lg">
+                  <div className="p-4 bg-accent/5 rounded-lg">
                     <h4 className="font-medium mb-2 flex items-center gap-2">
                       <Zap className="h-4 w-4" />
                       Cancellation Flurry
@@ -404,7 +409,7 @@ export default function WaitingList() {
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="space-y-2">
-                    <Label>Maximum Waitlist Size</Label>
+                    <Label><HelpTooltip content="Cap on how many clients can join the waiting list at once" variant="info">Maximum Waitlist Size</HelpTooltip></Label>
                     <p className="text-xs text-muted-foreground">
                       The maximum number of clients that can be on the waiting list at once
                     </p>
@@ -423,7 +428,7 @@ export default function WaitingList() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Expiration Time (hours)</Label>
+                    <Label><HelpTooltip content="How long a client stays on the waitlist before being automatically removed if they haven't responded" variant="info">Expiration Time (hours)</HelpTooltip></Label>
                     <p className="text-xs text-muted-foreground">
                       How long a client stays on the waitlist before being automatically removed
                     </p>
@@ -441,7 +446,7 @@ export default function WaitingList() {
                     />
                   </div>
 
-                  <div className="p-4 bg-orange-50 rounded-lg">
+                  <div className="p-4 bg-warning/5 rounded-lg">
                     <h4 className="font-medium mb-2 flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4" />
                       Capacity Tips
@@ -465,7 +470,7 @@ export default function WaitingList() {
                 <CardContent className="space-y-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="auto-remove">Auto-Remove Booked Clients</Label>
+                      <Label htmlFor="auto-remove"><HelpTooltip content="Automatically removes clients from the waitlist once they successfully book an appointment" variant="info">Auto-Remove Booked Clients</HelpTooltip></Label>
                       <p className="text-xs text-muted-foreground mt-1">
                         Automatically remove clients from the waitlist once they book an appointment
                       </p>
@@ -495,7 +500,7 @@ export default function WaitingList() {
                     />
                   </div>
 
-                  <div className="p-4 bg-green-50 rounded-lg">
+                  <div className="p-4 bg-success/5 rounded-lg">
                     <h4 className="font-medium mb-2 flex items-center gap-2">
                       <Target className="h-4 w-4" />
                       Optimization Tips

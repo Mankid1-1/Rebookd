@@ -1,31 +1,5 @@
 /* 🎨 REBOOKED BRANDING SYSTEM */
-
-/* ===== BRAND COLORS ===== */
-:root {
-  /* Primary Colors */
-  --rebooked-navy-900: #0f172a;
-  --rebooked-navy-800: #1e293b;
-  --rebooked-navy-700: #334155;
-  
-  --rebooked-blue-500: #3b82f6;
-  --rebooked-blue-400: #60a5fa;
-  --rebooked-blue-600: #2563eb;
-  
-  --rebooked-emerald-500: #10b981;
-  --rebooked-emerald-400: #34d399;
-  --rebooked-emerald-600: #059669;
-  
-  /* Secondary Colors */
-  --rebooked-purple-500: #a855f7;
-  --rebooked-yellow-500: #eab308;
-  --rebooked-orange-500: #f97316;
-  
-  /* Neutral Colors */
-  --rebooked-slate-900: #0f172a;
-  --rebooked-slate-700: #334155;
-  --rebooked-slate-500: #64748b;
-  --rebooked-slate-300: #cbd5e1;
-}
+/* All colors reference the active theme's CSS custom properties */
 
 /* ===== TYPOGRAPHY ===== */
 .rebooked-font-heading {
@@ -52,7 +26,7 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  color: var(--rebooked-navy-900);
+  color: var(--foreground);
 }
 
 .logo-stacked {
@@ -60,7 +34,7 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  color: var(--rebooked-navy-900);
+  color: var(--foreground);
 }
 
 .logo-icon {
@@ -69,13 +43,13 @@
 
 .logo-wordmark {
   display: block;
-  color: var(--rebooked-navy-900);
+  color: var(--foreground);
 }
 
 /* ===== BRAND COMPONENTS ===== */
 .rebooked-brand-header {
-  background: linear-gradient(135deg, var(--rebooked-navy-900), var(--rebooked-navy-800));
-  color: white;
+  background: linear-gradient(135deg, var(--sidebar), var(--sidebar-accent));
+  color: var(--sidebar-foreground);
   padding: 1rem 2rem;
   display: flex;
   align-items: center;
@@ -83,34 +57,35 @@
 }
 
 .rebooked-brand-footer {
-  background: var(--rebooked-navy-900);
-  color: var(--rebooked-slate-300);
+  background: var(--sidebar);
+  color: var(--sidebar-foreground);
   padding: 2rem;
   text-align: center;
 }
 
 .rebooked-gradient-text {
-  background: linear-gradient(135deg, var(--rebooked-blue-500), var(--rebooked-emerald-500));
+  background: linear-gradient(135deg, var(--primary), var(--success));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .rebooked-gradient-bg {
-  background: linear-gradient(135deg, var(--rebooked-blue-500), var(--rebooked-emerald-500));
+  background: linear-gradient(135deg, var(--primary), var(--success));
 }
 
 .rebooked-card {
-  background: white;
-  border: 1px solid var(--rebooked-slate-300);
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 0.75rem;
   padding: 1.5rem;
+  color: var(--card-foreground);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .rebooked-button-primary {
-  background: var(--rebooked-gradient-bg);
-  color: white;
+  background: var(--primary);
+  color: var(--primary-foreground);
   border: none;
   border-radius: 0.5rem;
   padding: 0.75rem 1.5rem;
@@ -121,13 +96,14 @@
 
 .rebooked-button-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  filter: brightness(1.1);
+  box-shadow: 0 4px 12px color-mix(in oklch, var(--primary) 30%, transparent);
 }
 
 .rebooked-button-secondary {
   background: transparent;
-  color: var(--rebooked-navy-900);
-  border: 2px solid var(--rebooked-navy-900);
+  color: var(--foreground);
+  border: 2px solid var(--foreground);
   border-radius: 0.5rem;
   padding: 0.75rem 1.5rem;
   font-weight: 600;
@@ -136,8 +112,8 @@
 }
 
 .rebooked-button-secondary:hover {
-  background: var(--rebooked-navy-900);
-  color: white;
+  background: var(--foreground);
+  color: var(--background);
 }
 
 /* ===== RESPONSIVE DESIGN ===== */
@@ -145,11 +121,11 @@
   .logo-primary {
     gap: 0.5rem;
   }
-  
+
   .rebooked-brand-header {
     padding: 0.75rem 1rem;
   }
-  
+
   .rebooked-brand-footer {
     padding: 1rem;
   }
@@ -185,45 +161,18 @@
 }
 
 /* ===== UTILITY CLASSES ===== */
-.rebooked-text-navy {
-  color: var(--rebooked-navy-900);
+.rebooked-text-primary {
+  color: var(--primary);
 }
 
-.rebooked-text-blue {
-  color: var(--rebooked-blue-500);
+.rebooked-text-success {
+  color: var(--success);
 }
 
-.rebooked-text-emerald {
-  color: var(--rebooked-emerald-500);
+.rebooked-bg-primary {
+  background-color: var(--primary);
 }
 
-.rebooked-bg-navy {
-  background-color: var(--rebooked-navy-900);
-}
-
-.rebooked-bg-blue {
-  background-color: var(--rebooked-blue-500);
-}
-
-.rebooked-bg-emerald {
-  background-color: var(--rebooked-emerald-500);
-}
-
-/* ===== DARK MODE SUPPORT ===== */
-@media (prefers-color-scheme: dark) {
-  .rebooked-card {
-    background: var(--rebooked-navy-800);
-    border-color: var(--rebooked-navy-700);
-    color: white;
-  }
-  
-  .rebooked-button-secondary {
-    color: white;
-    border-color: white;
-  }
-  
-  .rebooked-button-secondary:hover {
-    background: white;
-    color: var(--rebooked-navy-900);
-  }
+.rebooked-bg-success {
+  background-color: var(--success);
 }

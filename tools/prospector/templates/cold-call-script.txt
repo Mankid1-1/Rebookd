@@ -1,0 +1,45 @@
+===== COLD CALL SCRIPT =====
+Business: {{business_name}} ({{business_type_label}})
+Contact:  {{owner_full_name}} — {{owner_title}}
+Phone:    {{phone}}
+City:     {{city}}, {{state}}
+=====
+
+[1] OPENING (Pattern Interrupt)
+"Hi {{owner_name}}, this is {{sender_name}} — I am not trying to sell you anything, I just have a quick question. Do you have 60 seconds?"
+
+(If yes, continue. If busy: "Totally understand — when is a better time for a 2-minute call?")
+
+[2] IDENTIFY
+"Are you the one who handles the scheduling and client management at {{business_name}}?"
+
+(If no: "Who would be the best person to speak to about that? I will give them a ring.")
+
+[3] PAIN POINT HOOK
+"{{hook}}"
+
+(Let them answer. Listen. Mirror their frustration.)
+
+[4] BRIDGE
+"That is actually exactly why I am calling. I built something specifically for {{business_type_label}}s like yours."
+
+[5] VALUE PROP (One sentence)
+"Rebooked automatically sends smart SMS messages to your no-shows and cancellations — and recovers {{recovery_rate}} of them back into your chair. No apps, no complex setup."
+
+[6] SOCIAL PROOF
+"{{stat}}. Most of that is recoverable with the right text at the right time — and that is what Rebooked does automatically."
+
+[7] THE ASK (Zero risk)
+"Here is what I want to offer you: try it completely free for 35 days. If it does not deliver a positive ROI, you do not pay a single penny. I only make money when you make money."
+
+[8] CLOSE
+"Would you be open to a quick 10-minute demo this week so I can show you exactly how it works for {{business_type_label}}s?"
+
+(If yes: "Amazing — what day works best? I will send you a calendar link right after this call.")
+
+(If not now: "I totally get it. Can I send you a quick one-liner email so you have my details when the timing is right?")
+
+[9] OBJECTION HANDLING
+See objection-handling.txt for common responses.
+
+===== END SCRIPT =====

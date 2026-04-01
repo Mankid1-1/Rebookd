@@ -229,7 +229,7 @@ export function LeadInfoSidebar({ lead, outboundCount, inboundCount }: LeadInfoS
           ))}
           {lead.status === "unsubscribed" && (
             <div className="mt-2 pt-2 border-t border-border">
-              <p className="text-xs text-muted-foreground bg-red-500/10 text-red-400 rounded p-2 leading-relaxed">
+              <p className="text-xs text-muted-foreground bg-destructive/10 text-destructive rounded p-2 leading-relaxed">
                 ⛔ This contact replied STOP and has been unsubscribed.
               </p>
             </div>

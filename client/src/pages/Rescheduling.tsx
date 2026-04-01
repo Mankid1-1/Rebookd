@@ -12,6 +12,7 @@ import {
   RefreshCw, Calendar, Clock, CheckCircle, AlertTriangle,
   Settings, Zap, ArrowRight, MessageSquare, Phone,
 } from "lucide-react";
+import { HelpTooltip } from "@/components/ui/HelpTooltip";
 import { toast } from "sonner";
 import "@/styles/components.css";
 
@@ -40,15 +41,15 @@ function RescheduleBadge({ status }: { status: string }) {
   const config: Record<string, { label: string; className: string }> = {
     completed: {
       label: "Completed",
-      className: "bg-emerald-500/15 text-emerald-500 border-emerald-500/30",
+      className: "bg-success/15 text-success border-success/30",
     },
     pending: {
       label: "Pending",
-      className: "bg-amber-500/15 text-amber-500 border-amber-500/30",
+      className: "bg-warning/15 text-warning border-warning/30",
     },
     failed: {
       label: "Failed",
-      className: "bg-red-500/15 text-red-500 border-red-500/30",
+      className: "bg-destructive/15 text-destructive border-destructive/30",
     },
     cancelled: {
       label: "Cancelled",
@@ -145,42 +146,48 @@ export default function Rescheduling() {
           {[
             {
               title: "Total Reschedules",
+              tooltip: "Total number of rescheduling offers sent to clients via SMS or self-service portal.",
               value: metrics?.totalReschedules ?? 0,
               format: fmtNumber,
               icon: RefreshCw,
-              color: "text-blue-500",
-              bg: "bg-blue-500/10",
+              color: "text-info",
+              bg: "bg-info/10",
             },
             {
               title: "Successful Rebooks",
+              tooltip: "Clients who accepted a reschedule offer and confirmed a new appointment time.",
               value: metrics?.successfulRebooks ?? 0,
               format: fmtNumber,
               icon: CheckCircle,
-              color: "text-emerald-500",
-              bg: "bg-emerald-500/10",
+              color: "text-success",
+              bg: "bg-success/10",
             },
             {
               title: "Prevented No-Shows",
+              tooltip: "Appointments that would have been missed but were rescheduled before the original time.",
               value: metrics?.preventedNoShows ?? 0,
               format: fmtNumber,
               icon: AlertTriangle,
-              color: "text-amber-500",
-              bg: "bg-amber-500/10",
+              color: "text-warning",
+              bg: "bg-warning/10",
             },
             {
               title: "Avg Reschedule Time",
+              tooltip: "Average time between a reschedule offer being sent and the client confirming a new slot.",
               value: metrics?.avgRescheduleTime ?? 0,
               format: fmtDuration,
               icon: Clock,
-              color: "text-purple-500",
-              bg: "bg-purple-500/10",
+              color: "text-accent-foreground",
+              bg: "bg-accent/10",
             },
-          ].map(({ title, value, format, icon: Icon, color, bg }) => (
+          ].map(({ title, tooltip, value, format, icon: Icon, color, bg }) => (
             <Card key={title}>
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-muted-foreground font-medium">{title}</p>
+                    <HelpTooltip content={tooltip} variant="info">
+                      <p className="text-xs text-muted-foreground font-medium">{title}</p>
+                    </HelpTooltip>
                     <p className="text-2xl font-bold mt-1" style={FONT_HEADING}>
                       {metricsLoading ? "—" : format(value)}
                     </p>
@@ -231,14 +238,14 @@ export default function Rescheduling() {
                   </div>
                   <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">Accepted</p>
-                    <p className="text-3xl font-bold text-emerald-500" style={FONT_HEADING}>
+                    <p className="text-3xl font-bold text-success" style={FONT_HEADING}>
                       {metricsLoading ? "—" : fmtNumber(metrics?.successfulRebooks ?? 0)}
                     </p>
                     <p className="text-xs text-muted-foreground">successfully rebooked</p>
                   </div>
                   <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">Conversion Rate</p>
-                    <p className="text-3xl font-bold text-blue-500" style={FONT_HEADING}>
+                    <p className="text-3xl font-bold text-info" style={FONT_HEADING}>
                       {metricsLoading
                         ? "—"
                         : fmtPercent(
@@ -316,7 +323,9 @@ export default function Rescheduling() {
               <CardContent className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
+                    <HelpTooltip content="When a client can't make their appointment, Rebooked automatically offers them new available slots via SMS." variant="info">
                     <Label className="text-sm font-medium">Enable SMS Rescheduling</Label>
+                  </HelpTooltip>
                     <p className="text-xs text-muted-foreground">
                       Clients can reply to SMS to reschedule their appointment
                     </p>
@@ -354,7 +363,9 @@ export default function Rescheduling() {
               <CardContent className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
+                    <HelpTooltip content="AI picks the best available slots to offer clients based on their history and your schedule." variant="info">
                     <Label className="text-sm font-medium">Auto-Suggest Times</Label>
+                  </HelpTooltip>
                     <p className="text-xs text-muted-foreground">
                       AI picks the best available slots based on client and provider history
                     </p>
@@ -385,7 +396,9 @@ export default function Rescheduling() {
                 )}
 
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Reschedule Window</Label>
+                  <HelpTooltip content="Minimum hours before an appointment that a client is allowed to request a reschedule." variant="info">
+                    <Label className="text-sm font-medium">Reschedule Window</Label>
+                  </HelpTooltip>
                   <p className="text-xs text-muted-foreground">
                     Minimum hours before the appointment that a client can reschedule
                   </p>
@@ -500,8 +513,8 @@ export default function Rescheduling() {
                 </div>
 
                 {config.preventSameDayReschedule && (
-                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                  <div className="rounded-lg border border-warning/20 bg-warning/5 p-3 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
                     <p className="text-xs text-muted-foreground">
                       Clients will not be able to reschedule to another time slot on the same day.
                       This can reduce last-minute schedule shuffling but may lower reschedule acceptance rates.

@@ -1,4 +1,6 @@
 import * as React from "react";
+import { useLocale } from "@/contexts/LocaleContext";
+import { useChartColors } from "@/hooks/useChartColors";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { HelpTooltip } from "@/components/ui/HelpTooltip";
@@ -65,15 +67,6 @@ interface RevenueDashboardProps {
   isLoading?: boolean;
 }
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-};
-
 const formatPercent = (value: number) => {
   return `${value.toFixed(1)}%`;
 };
@@ -120,12 +113,12 @@ const MetricCard = ({
           {trend && !isLoading && (
             <div className="flex items-center gap-1 mt-2">
               {trend.isPositive ? (
-                <ArrowUp className="h-3 w-3 text-green-500" />
+                <ArrowUp className="h-3 w-3 text-success" />
               ) : (
-                <ArrowDown className="h-3 w-3 text-red-500" />
+                <ArrowDown className="h-3 w-3 text-destructive" />
               )}
               <span className={`text-xs font-medium ${
-                trend.isPositive ? "text-green-500" : "text-red-500"
+                trend.isPositive ? "text-success" : "text-destructive"
               }`}>
                 {Math.abs(trend.value)}%
               </span>
@@ -141,26 +134,33 @@ const MetricCard = ({
 );
 
 export function RevenueDashboard({ revenueMetrics, revenueTrends, isLoading }: RevenueDashboardProps) {
-  // Calculate trends (mock data for now, would compare with previous period)
-  const recoveryTrend = { value: 12.5, isPositive: true };
-  const bookingTrend = { value: 8.3, isPositive: true };
-  const pipelineTrend = { value: -2.1, isPositive: false };
-
-  // Dynamic colors based on user theme
-const getDynamicChartColors = () => {
-  const isDarkMode = document.documentElement.classList.contains('dark');
-  return {
-    totalLeads: isDarkMode ? "#64748b" : "#94a3b8",
-    contacted: isDarkMode ? "#2563eb" : "#3b82f6", 
-    qualified: isDarkMode ? "#7c3aed" : "#8b5cf6",
-    booked: isDarkMode ? "#16a34a" : "#22c55e",
-    lost: isDarkMode ? "#dc2626" : "#ef4444",
-    revenueGradient: isDarkMode ? "#16a34a" : "#22c55e"
+  const { formatCurrency } = useLocale();
+  const cc = useChartColors();
+  // Calculate real trends by comparing recent half vs earlier half of revenueTrends
+  const trendFromData = (key: string) => {
+    if (!revenueTrends || revenueTrends.length < 4) return { value: 0, isPositive: false };
+    const mid = Math.floor(revenueTrends.length / 2);
+    const recent = revenueTrends.slice(mid);
+    const earlier = revenueTrends.slice(0, mid);
+    const recentSum = recent.reduce((s: number, d: any) => s + (Number(d[key]) || 0), 0);
+    const earlierSum = earlier.reduce((s: number, d: any) => s + (Number(d[key]) || 0), 0);
+    if (earlierSum === 0) return { value: 0, isPositive: recentSum > 0 };
+    const pctChange = ((recentSum - earlierSum) / earlierSum) * 100;
+    return { value: Math.abs(Math.round(pctChange * 10) / 10), isPositive: pctChange >= 0 };
   };
-};
+  const recoveryTrend = trendFromData("revenue");
+  const bookingTrend = trendFromData("bookings");
+  const pipelineTrend = trendFromData("totalLeads");
 
-// Revenue funnel data
-  const chartColors = getDynamicChartColors();
+  // Theme-aware chart colors from CSS custom properties
+  const chartColors = {
+    totalLeads: cc.muted,
+    contacted: cc.chart1,
+    qualified: cc.chart3,
+    booked: cc.chart2,
+    lost: cc.chart5,
+    revenueGradient: cc.success,
+  };
   const funnelData = [
     { stage: "Total Leads", count: revenueMetrics.totalLeadsCount, value: 0, color: chartColors.totalLeads },
     { stage: "Contacted", count: revenueMetrics.contactedLeadsCount, value: revenueMetrics.pipelineRevenue, color: chartColors.contacted },
@@ -182,7 +182,7 @@ const getDynamicChartColors = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-green-500" />
+            <DollarSign className="w-5 h-5 text-success" />
             Revenue Recovery Dashboard
           </h2>
           <p className="text-muted-foreground text-sm mt-1">
@@ -202,8 +202,8 @@ const getDynamicChartColors = () => {
           subtitle={`${revenueMetrics.bookedLeadsCount} bookings`}
           trend={recoveryTrend}
           icon={DollarSign}
-          color="text-green-500"
-          bgColor="bg-green-500/10"
+          color="text-success"
+          bgColor="bg-success/10"
           helpText="Total revenue from all booked appointments"
           isLoading={isLoading}
         />
@@ -214,8 +214,8 @@ const getDynamicChartColors = () => {
           subtitle={`${revenueMetrics.recentBookingsCount} bookings`}
           trend={bookingTrend}
           icon={Calendar}
-          color="text-blue-500"
-          bgColor="bg-blue-500/10"
+          color="text-info"
+          bgColor="bg-info/10"
           helpText="Revenue recovered in the last 30 days"
           isLoading={isLoading}
         />
@@ -225,8 +225,8 @@ const getDynamicChartColors = () => {
           value={formatCurrency(revenueMetrics.potentialRevenue)}
           subtitle={`${revenueMetrics.qualifiedLeadsCount} qualified leads`}
           icon={Target}
-          color="text-purple-500"
-          bgColor="bg-purple-500/10"
+          color="text-accent-foreground"
+          bgColor="bg-accent/10"
           helpText="Estimated revenue from qualified leads"
           isLoading={isLoading}
         />
@@ -237,8 +237,8 @@ const getDynamicChartColors = () => {
           subtitle={`${revenueMetrics.contactedLeadsCount} in pipeline`}
           trend={pipelineTrend}
           icon={Users}
-          color="text-orange-500"
-          bgColor="bg-orange-500/10"
+          color="text-warning"
+          bgColor="bg-warning/10"
           helpText="Estimated value of leads currently in your pipeline"
           isLoading={isLoading}
         />
@@ -256,7 +256,7 @@ const getDynamicChartColors = () => {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center p-4 bg-muted/30 rounded-lg">
-                <div className="text-2xl font-bold text-green-500">
+                <div className="text-2xl font-bold text-success">
                   {formatPercent(revenueMetrics.overallRecoveryRate)}
                 </div>
                 <div className="text-sm text-muted-foreground">Overall Rate</div>
@@ -265,7 +265,7 @@ const getDynamicChartColors = () => {
                 </div>
               </div>
               <div className="text-center p-4 bg-muted/30 rounded-lg">
-                <div className="text-2xl font-bold text-blue-500">
+                <div className="text-2xl font-bold text-info">
                   ${revenueMetrics.avgRevenuePerBooking}
                 </div>
                 <div className="text-sm text-muted-foreground">Avg per Booking</div>
@@ -275,14 +275,14 @@ const getDynamicChartColors = () => {
               </div>
             </div>
             
-            <div className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-200 dark:border-red-800">
+            <div className="flex items-center justify-between p-3 bg-destructive/10 rounded-lg border border-destructive/20">
               <div className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-red-500" />
-                <span className="text-sm font-medium text-red-700 dark:text-red-300">
+                <AlertCircle className="h-4 w-4 text-destructive" />
+                <span className="text-sm font-medium text-destructive">
                   Lost Revenue
                 </span>
               </div>
-              <span className="text-lg font-bold text-red-600 dark:text-red-400">
+              <span className="text-lg font-bold text-destructive">
                 {formatCurrency(revenueMetrics.lostRevenue)}
               </span>
             </div>

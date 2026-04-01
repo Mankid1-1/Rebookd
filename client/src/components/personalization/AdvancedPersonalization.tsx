@@ -158,38 +158,38 @@ export function AdvancedPersonalization({
 
   const getSkillLevelColor = (level: string) => {
     switch (level) {
-      case 'beginner': return 'text-green-600';
-      case 'intermediate': return 'text-yellow-600';
-      case 'advanced': return 'text-orange-600';
-      case 'expert': return 'text-red-600';
-      default: return 'text-gray-600';
+      case 'beginner': return 'text-success';
+      case 'intermediate': return 'text-warning';
+      case 'advanced': return 'text-warning';
+      case 'expert': return 'text-destructive';
+      default: return 'text-muted-foreground';
     }
   };
 
   const getSkillLevelBadge = (level: string) => {
     switch (level) {
-      case 'beginner': return <Badge className="bg-green-100 text-green-800">Beginner</Badge>;
-      case 'intermediate': return <Badge className="bg-yellow-100 text-yellow-800">Intermediate</Badge>;
-      case 'advanced': return <Badge className="bg-orange-100 text-orange-800">Advanced</Badge>;
-      case 'expert': return <Badge className="bg-red-100 text-red-800">Expert</Badge>;
+      case 'beginner': return <Badge className="bg-success/10 text-success">Beginner</Badge>;
+      case 'intermediate': return <Badge className="bg-warning/10 text-warning">Intermediate</Badge>;
+      case 'advanced': return <Badge className="bg-warning/10 text-warning">Advanced</Badge>;
+      case 'expert': return <Badge className="bg-destructive/10 text-destructive">Expert</Badge>;
       default: return <Badge variant="secondary">Unknown</Badge>;
     }
   };
 
   const getImpactColor = (impact: string) => {
     switch (impact) {
-      case 'low': return 'text-gray-600';
-      case 'medium': return 'text-yellow-600';
-      case 'high': return 'text-red-600';
-      default: return 'text-gray-600';
+      case 'low': return 'text-muted-foreground';
+      case 'medium': return 'text-warning';
+      case 'high': return 'text-destructive';
+      default: return 'text-muted-foreground';
     }
   };
 
   const getImplementationBadge = (implementation: string) => {
     switch (implementation) {
-      case 'immediate': return <Badge className="bg-green-100 text-green-800">Immediate</Badge>;
-      case 'gradual': return <Badge className="bg-yellow-100 text-yellow-800">Gradual</Badge>;
-      case 'manual': return <Badge className="bg-blue-100 text-blue-800">Manual</Badge>;
+      case 'immediate': return <Badge className="bg-success/10 text-success">Immediate</Badge>;
+      case 'gradual': return <Badge className="bg-warning/10 text-warning">Gradual</Badge>;
+      case 'manual': return <Badge className="bg-info/10 text-info">Manual</Badge>;
       default: return <Badge variant="secondary">Unknown</Badge>;
     }
   };
@@ -237,7 +237,7 @@ export function AdvancedPersonalization({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Brain className="h-5 w-5 text-blue-500" />
+            <Brain className="h-5 w-5 text-info" />
             Personalization Status
           </CardTitle>
         </CardHeader>
@@ -248,7 +248,7 @@ export function AdvancedPersonalization({
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-medium">Skill Level</div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-muted-foreground">
                     Based on your feature usage and learning progress
                   </div>
                 </div>
@@ -264,7 +264,7 @@ export function AdvancedPersonalization({
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <div className="font-medium">Adaptation Progress</div>
-                  <span className="text-sm text-gray-500">78% optimized</span>
+                  <span className="text-sm text-muted-foreground">78% optimized</span>
                 </div>
                 <Progress value={78} className="h-2" />
               </div>
@@ -272,34 +272,34 @@ export function AdvancedPersonalization({
               {/* Key Metrics */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">
+                  <div className="text-2xl font-bold text-info">
                     {userProfile.behavior.responsePatterns.averageResponseTime.toFixed(1)}m
                   </div>
-                  <div className="text-xs text-gray-500">Avg Response Time</div>
+                  <div className="text-xs text-muted-foreground">Avg Response Time</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">
+                  <div className="text-2xl font-bold text-success">
                     {userProfile.behavior.featureUsage.dashboard}%
                   </div>
-                  <div className="text-xs text-gray-500">Dashboard Usage</div>
+                  <div className="text-xs text-muted-foreground">Dashboard Usage</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600">
+                  <div className="text-2xl font-bold text-accent-foreground">
                     {userProfile.learning.completedTutorials.length}
                   </div>
-                  <div className="text-xs text-gray-500">Completed Tutorials</div>
+                  <div className="text-xs text-muted-foreground">Completed Tutorials</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">
+                  <div className="text-2xl font-bold text-warning">
                     {userProfile.learning.masteredFeatures.length}
                   </div>
-                  <div className="text-xs text-gray-500">Mastered Features</div>
+                  <div className="text-xs text-muted-foreground">Mastered Features</div>
                 </div>
               </div>
             </>
           ) : (
-            <div className="text-center py-8 text-gray-500">
-              <Brain className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+            <div className="text-center py-8 text-muted-foreground">
+              <Brain className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
               <p>Analyzing your user profile...</p>
             </div>
           )}
@@ -310,7 +310,7 @@ export function AdvancedPersonalization({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="h-5 w-5 text-yellow-500" />
+            <Lightbulb className="h-5 w-5 text-warning" />
             AI Insights
           </CardTitle>
         </CardHeader>
@@ -332,11 +332,11 @@ export function AdvancedPersonalization({
                         {insight.impact} impact
                       </Badge>
                     </div>
-                    <p className="text-sm text-gray-600 mb-2">{insight.description}</p>
-                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                    <p className="text-sm text-muted-foreground mb-2">{insight.description}</p>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span>Confidence: {insight.confidence}%</span>
                       {insight.actionable && (
-                        <span className="text-blue-600">• Actionable</span>
+                        <span className="text-info">• Actionable</span>
                       )}
                     </div>
                   </div>
@@ -361,7 +361,7 @@ export function AdvancedPersonalization({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Target className="h-5 w-5 text-green-500" />
+            <Target className="h-5 w-5 text-success" />
             Adaptive Recommendations
           </CardTitle>
         </CardHeader>
@@ -380,9 +380,9 @@ export function AdvancedPersonalization({
                         </Badge>
                         {getImplementationBadge(recommendation.implementation)}
                       </div>
-                      <p className="text-sm text-gray-600 mb-2">{recommendation.description}</p>
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
-                        <span className="text-green-600">Benefit: {recommendation.benefit}</span>
+                      <p className="text-sm text-muted-foreground mb-2">{recommendation.description}</p>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span className="text-success">Benefit: {recommendation.benefit}</span>
                         <span>Priority: {recommendation.priority}</span>
                       </div>
                     </div>

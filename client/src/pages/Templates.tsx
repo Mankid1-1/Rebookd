@@ -1,3 +1,4 @@
+import { useTheme } from "@/contexts/ThemeContext";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,16 +24,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
 import { useAuth } from "@/hooks/useAuth";
+import { HelpTooltip, HelpIcon } from "@/components/ui/HelpTooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Dynamic category styles based on user theme
-const getDynamicCategoryStyles = () => {
-  const isDarkMode = document.documentElement.classList.contains('dark');
+const getDynamicCategoryStyles = (_isDarkMode: boolean) => {
   return {
-    follow_up: isDarkMode ? "bg-blue-500/25 text-blue-300 border-blue-500/40" : "bg-blue-500/15 text-blue-400 border-blue-500/30",
-    reactivation: isDarkMode ? "bg-purple-500/25 text-purple-300 border-purple-500/40" : "bg-purple-500/15 text-purple-400 border-purple-500/30",
-    appointment: isDarkMode ? "bg-green-500/25 text-green-300 border-green-500/40" : "bg-green-500/15 text-green-400 border-green-500/30",
-    welcome: isDarkMode ? "bg-yellow-500/25 text-yellow-300 border-yellow-500/40" : "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
-    custom: isDarkMode ? "bg-gray-500/25 text-gray-300 border-gray-500/40" : "bg-gray-500/15 text-gray-400 border-gray-500/30",
+    follow_up: "bg-info/15 text-info border-info/30",
+    reactivation: "bg-accent/15 text-accent-foreground border-accent/30",
+    appointment: "bg-success/15 text-success border-success/30",
+    welcome: "bg-warning/15 text-warning border-warning/30",
+    custom: "bg-muted text-muted-foreground border-muted-foreground/30",
   };
 };
 
@@ -50,7 +52,8 @@ export default function Templates() {
   const { data: tenant } = trpc.tenant.get.useQuery();
   
   // Dynamic category styles
-  const categoryStyles = getDynamicCategoryStyles();
+  const { isDark: isDarkMode } = useTheme();
+  const categoryStyles = getDynamicCategoryStyles(isDarkMode);
   
   const utils = trpc.useUtils();
   const [showCreate, setShowCreate] = useState(false);
@@ -138,7 +141,10 @@ export default function Templates() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Templates</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Templates</h1>
+              <HelpIcon content={{ basic: "Pre-written messages that automations use when texting your clients", intermediate: "Message templates with merge fields. Edit wording, tone, and variables for each automation type", advanced: "Templates table linked to automations via template_id. Merge fields resolved from lead/tenant context at send time" }} />
+            </div>
             <p className="text-muted-foreground text-sm mt-1">Reusable SMS message templates</p>
           </div>
           <Dialog open={showCreate} onOpenChange={(v) => { if (!v) closeDialog(); else setShowCreate(true); }}>
@@ -158,7 +164,11 @@ export default function Templates() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Category</Label>
+                    <Label>
+                      <HelpTooltip content={{ basic: "Different message types for different situations", intermediate: "Categories match automation triggers: reminders, follow-ups, recovery, welcome, and review requests" }} variant="info">
+                        Category
+                      </HelpTooltip>
+                    </Label>
                     <Select value={category} onValueChange={setCategory}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -171,7 +181,11 @@ export default function Templates() {
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Tone</Label>
+                    <Label>
+                      <HelpTooltip content="Adjusts the writing style of AI-generated messages for your brand voice" variant="info">
+                        Tone
+                      </HelpTooltip>
+                    </Label>
                     <Select value={form.tone} onValueChange={(v) => setForm({ ...form, tone: v })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -187,7 +201,10 @@ export default function Templates() {
                 {/* AI Generator */}
                 <div className="p-3 rounded-xl border border-primary/20 bg-primary/5 space-y-2">
                   <div className="flex items-center gap-2 text-xs font-medium text-primary">
-                    <Bot className="w-3.5 h-3.5" /> AI Message Generator
+                    <Bot className="w-3.5 h-3.5" />
+                    <HelpTooltip content="Uses AI to write a personalized SMS template based on your category and tone selection" variant="tip">
+                      AI Message Generator
+                    </HelpTooltip>
                   </div>
                   <div className="flex gap-2">
                     <Input
@@ -203,7 +220,10 @@ export default function Templates() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>Message body *</Label>
+                  <Label className="inline-flex items-center gap-1">
+                    Message body *
+                    <HelpIcon content={{ basic: "Edit what your automated messages say. Words in curly braces like {name} get replaced with real info", intermediate: "Available variables: {name}, {business}, {date}, {time}, {phone}. AI rewrite optimizes for response rate", advanced: "Variables resolved by template.service.ts renderTemplate(). AI rewrite uses OpenAI/Claude via ai.service with tenant context" }} />
+                  </Label>
                   <Textarea
                     placeholder="Hi {{name}}, we'd love to see you again..."
                     value={form.body}
@@ -212,12 +232,16 @@ export default function Templates() {
                   />
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-muted-foreground">
-                      Variables: {`{{name}}`}, {`{{phone}}`}, {`{{business}}`}
+                      <HelpTooltip content="Dynamic placeholders replaced with real client data when messages are sent" variant="info">
+                        Variables: {`{{name}}`}, {`{{phone}}`}, {`{{business}}`}
+                      </HelpTooltip>
                     </p>
                     {charCount > 0 && (
-                      <p className={`text-xs tabular-nums ${charCount > 160 ? "text-yellow-400" : "text-muted-foreground"}`}>
-                        {charCount} chars · {smsSegments} SMS segment{smsSegments !== 1 ? "s" : ""}
-                      </p>
+                      <HelpTooltip content={{ basic: "Shows how long your message is — shorter messages cost less", intermediate: "SMS segments: 160 chars for standard, 70 for unicode. Multi-segment messages count as multiple SMS", advanced: "GSM-7 encoding allows 160 chars/segment, UCS-2 (unicode) allows 70. Segment count affects per-message billing from SMS provider" }} variant="info">
+                        <p className={`text-xs tabular-nums ${charCount > 160 ? "text-warning" : "text-muted-foreground"}`}>
+                          {charCount} chars · {smsSegments} SMS segment{smsSegments !== 1 ? "s" : ""}
+                        </p>
+                      </HelpTooltip>
                     )}
                   </div>
                 </div>
@@ -254,30 +278,51 @@ export default function Templates() {
                     <div>
                       <h3 className="font-semibold text-sm">{tpl.name}</h3>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] border bg-gray-500/20 text-gray-300 border-gray-500/30 capitalize">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] border bg-muted text-muted-foreground border-muted-foreground/30 capitalize">
                           {(tpl as any).category?.replace("_", " ") || "custom"}
                         </span>
                         <span className="text-[10px] text-muted-foreground capitalize">{tpl.tone}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={() => { navigator.clipboard.writeText(tpl.body); toast.success("Copied!"); }}
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(tpl)}>
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </Button>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => { navigator.clipboard.writeText(tpl.body); toast.success("Copied!"); }}
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Copy this template to clipboard</p></TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(tpl)}>
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Edit this template</p></TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                       <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </AlertDialogTrigger>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </AlertDialogTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Delete this template permanently</p></TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         <AlertDialogContent>
                           <AlertDialogHeader>
                             <AlertDialogTitle>Delete template?</AlertDialogTitle>

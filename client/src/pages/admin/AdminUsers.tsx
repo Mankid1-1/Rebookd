@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { Search, Shield, User } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -32,6 +33,22 @@ export default function AdminUsers() {
     onError: (err: { message: string }) => toast.error(err.message),
   });
 
+  const changeAccountType = trpc.admin.users.changeAccountType.useMutation({
+    onSuccess: () => {
+      toast.success("Account type updated");
+      utils.admin.users.list.invalidate();
+    },
+    onError: (err: { message: string }) => toast.error(err.message),
+  });
+
+  const changeRole = trpc.admin.users.changeRole.useMutation({
+    onSuccess: () => {
+      toast.success("User role updated");
+      utils.admin.users.list.invalidate();
+    },
+    onError: (err: { message: string }) => toast.error(err.message),
+  });
+
   const users = data?.users ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / 20);
@@ -47,8 +64,8 @@ export default function AdminUsers() {
     <DashboardLayout>
       <div className="p-6 space-y-5 max-w-7xl mx-auto">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center">
-            <Shield className="w-4 h-4 text-yellow-400" />
+          <div className="w-8 h-8 rounded-lg bg-warning/10 flex items-center justify-center">
+            <Shield className="w-4 h-4 text-warning" />
           </div>
           <div>
             <h1 className="text-2xl font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Users</h1>
@@ -83,12 +100,12 @@ export default function AdminUsers() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="text-muted-foreground">User</TableHead>
-                    <TableHead className="text-muted-foreground">Email</TableHead>
-                    <TableHead className="text-muted-foreground">Role</TableHead>
-                    <TableHead className="text-muted-foreground">Status</TableHead>
-                    <TableHead className="text-muted-foreground">Joined</TableHead>
-                    <TableHead className="text-muted-foreground">Actions</TableHead>
+                    <TableHead className="text-muted-foreground text-xs">User</TableHead>
+                    <TableHead className="text-muted-foreground text-xs">Role</TableHead>
+                    <TableHead className="text-muted-foreground text-xs">Account Type</TableHead>
+                    <TableHead className="text-muted-foreground text-xs">Status</TableHead>
+                    <TableHead className="text-muted-foreground text-xs">Joined</TableHead>
+                    <TableHead className="text-muted-foreground text-xs">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -99,24 +116,51 @@ export default function AdminUsers() {
                           <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
                             <User className="w-3.5 h-3.5 text-primary" />
                           </div>
-                          <span className="text-sm font-medium">{u.name || "Unnamed"}</span>
+                          <div>
+                            <span className="text-sm font-medium block">{u.name || "Unnamed"}</span>
+                            <span className="text-xs text-muted-foreground">{u.email || "—"}</span>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className="text-xs text-muted-foreground">{u.email || "—"}</span>
+                        <Select
+                          value={u.role}
+                          onValueChange={(val) => {
+                            if (window.confirm(`Change ${u.email} role to ${val}?`)) {
+                              changeRole.mutate({ userId: u.id, role: val as "user" | "admin" });
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-7 w-24 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="user">User</SelectItem>
+                            <SelectItem value="admin">Admin</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={u.role === "admin" ? "default" : "secondary"}
-                          className="text-xs capitalize"
+                        <Select
+                          value={u.accountType || "business"}
+                          onValueChange={(val) => {
+                            changeAccountType.mutate({ userId: u.id, accountType: val as "business" | "referral" | "both" });
+                          }}
                         >
-                          {u.role}
-                        </Badge>
+                          <SelectTrigger className="h-7 w-28 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="business">Business</SelectItem>
+                            <SelectItem value="referral">Referral</SelectItem>
+                            <SelectItem value="both">Both</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={u.active !== false ? "text-green-400 border-green-500/30" : "text-red-400 border-red-500/30"}
+                          className={`text-[10px] ${u.active !== false ? "text-success border-success/30" : "text-destructive border-destructive/30"}`}
                         >
                           {u.active !== false ? "Active" : "Suspended"}
                         </Badge>

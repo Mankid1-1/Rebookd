@@ -1,5 +1,40 @@
 export const automationTemplates = [
   {
+    key: "missed_call_textback",
+    name: "Missed Call Text-Back",
+    category: "lead_capture",
+    trigger: "call.missed",
+    steps: [{ type: "sms", message: "Hi {{name}}, sorry I missed your call! I'd love to help you get booked in — here's my calendar so you can grab a time that works: {{bookingLink}}\nReply STOP to unsubscribe" }],
+  },
+  {
+    key: "missed_call_followup",
+    name: "Missed Call Follow-Up",
+    category: "lead_capture",
+    trigger: "call.missed",
+    steps: [{ type: "delay", value: 14400 }, { type: "sms", message: "Hi {{name}}, I wanted to make sure you saw my earlier text! I have a few spots opening up soon and I'd hate for you to miss out. Book here: {{bookingLink}}\nReply STOP to unsubscribe" }],
+  },
+  {
+    key: "missed_call_final_offer",
+    name: "Missed Call Final Offer",
+    category: "lead_capture",
+    trigger: "call.missed",
+    steps: [{ type: "delay", value: 86400 }, { type: "sms", message: "Hi {{name}}, I still have your info from when you called yesterday. I'd really love to help — my calendar is wide open this week: {{bookingLink}}\nNo pressure at all, just didn't want you to slip through the cracks!\nReply STOP to unsubscribe" }],
+  },
+  {
+    key: "appointment_confirmation",
+    name: "Booking Confirmation",
+    category: "appointment",
+    trigger: "appointment.booked",
+    steps: [{ type: "sms", message: "You're confirmed! {{name}}, your appointment at {{business}} is booked for {{date}} at {{time}}. Reply RESCHEDULE to change.\nReply STOP to unsubscribe" }],
+  },
+  {
+    key: "appointment_reminder_24h",
+    name: "24-Hour Reminder",
+    category: "appointment",
+    trigger: "appointment.reminder",
+    steps: [{ type: "sms", message: "Hi {{name}}, just a reminder that your appointment at {{business}} is tomorrow at {{time}}. Reply CONFIRM to confirm or CANCEL to cancel." }],
+  },
+  {
     key: "appointment_confirmation_chase",
     name: "Confirmation Chase",
     category: "appointment",

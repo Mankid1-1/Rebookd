@@ -9,7 +9,11 @@ import * as UserService from "../services/user.service";
 import * as SystemService from "../services/system.service";
 import * as AiService from "../services/ai.service";
 import * as AdminAuditService from "../services/admin-audit.service";
+import * as DeploymentService from "../services/deployment.service";
+import * as SentinelService from "../services/sentinel.service";
+import { getAnomalyStats } from "../_core/flawless-gate";
 import { EmailService } from "../services/email.service";
+import { BUILD_VERSION } from "../../shared/version";
 
 function clampAdminPagination(input?: { page?: number; limit?: number }) {
   const page = Math.max(1, input?.page ?? 1);
@@ -65,9 +69,48 @@ export const adminRouter = router({
       .input(z.object({ userId: z.number(), active: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
         await UserService.updateUserActive(ctx.db, input.userId, input.active);
+        await auditAdminRead(ctx, "admin.users.toggleActive", { userId: input.userId, active: input.active });
+        return { success: true };
+      }),
+    changeAccountType: adminProcedure
+      .input(z.object({ userId: z.number(), accountType: z.enum(["business", "referral", "both"]) }))
+      .mutation(async ({ ctx, input }) => {
+        await ctx.db.update(users).set({ accountType: input.accountType }).where(eq(users.id, input.userId));
+        await auditAdminRead(ctx, "admin.users.changeAccountType", { userId: input.userId, accountType: input.accountType });
+        return { success: true };
+      }),
+    changeRole: adminProcedure
+      .input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) }))
+      .mutation(async ({ ctx, input }) => {
+        if (input.userId === ctx.user.id) {
+          throw new Error("Cannot change your own role");
+        }
+        await ctx.db.update(users).set({ role: input.role }).where(eq(users.id, input.userId));
+        await auditAdminRead(ctx, "admin.users.changeRole", { userId: input.userId, role: input.role });
         return { success: true };
       }),
   }),
+  changePlan: adminProcedure
+    .input(z.object({ tenantId: z.number(), planId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      // Get or create subscription for this tenant
+      const existingSub = await TenantService.getSubscriptionByTenantId(ctx.db, input.tenantId);
+      if (existingSub) {
+        await ctx.db.update(subscriptions)
+          .set({ planId: input.planId, status: "active" })
+          .where(eq(subscriptions.id, existingSub.id));
+      } else {
+        await ctx.db.insert(subscriptions).values({
+          tenantId: input.tenantId,
+          planId: input.planId,
+          status: "active",
+          currentPeriodStart: sql`NOW()`,
+          currentPeriodEnd: sql`DATE_ADD(NOW(), INTERVAL 30 DAY)`,
+        });
+      }
+      await auditAdminRead(ctx, "admin.changePlan", { tenantId: input.tenantId, planId: input.planId });
+      return { success: true };
+    }),
   systemHealth: router({
     errors: adminProcedure
       .input(z.object({ limit: z.number().int().min(1).max(100).optional() }).optional())
@@ -179,5 +222,205 @@ export const adminRouter = router({
     return atRiskTenants
       .filter((t) => t.riskScore >= 40)
       .sort((a, b) => b.riskScore - a.riskScore);
+  }),
+
+  // ─── Live Update System: Deployments & System Info ──────────────────
+  deployments: router({
+    list: adminProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(50).optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        await auditAdminRead(ctx, "admin.deployments.list");
+        return DeploymentService.getDeployHistory(ctx.db, input?.limit ?? 20);
+      }),
+
+    latest: adminProcedure.query(async ({ ctx }) => {
+      return DeploymentService.getLatestDeployment(ctx.db);
+    }),
+
+    liveStats: adminProcedure.query(async ({ ctx }) => {
+      await auditAdminRead(ctx, "admin.deployments.liveStats");
+
+      const [deployStats, healthModule] = await Promise.all([
+        DeploymentService.getDeployStats(ctx.db),
+        import("../_core/health-check"),
+      ]);
+      const health = await healthModule.performHealthCheck();
+
+      return {
+        deployStats,
+        traffic: health.traffic,
+        sentinel: health.sentinel,
+        circuitBreakers: health.circuitBreakers,
+        disabledFeatures: health.disabledFeatures,
+        clientErrors: health.clientErrors,
+        database: health.database,
+        memory: health.memory,
+      };
+    }),
+
+    record: adminProcedure
+      .input(z.object({
+        version: z.string(),
+        gitHash: z.string().optional(),
+        gitBranch: z.string().optional(),
+        status: z.enum(["started", "uploading", "reloading", "verified", "failed", "rolled_back"]),
+        deployedBy: z.string().optional(),
+        durationMs: z.number().optional(),
+        changelog: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await auditAdminRead(ctx, "admin.deployments.record", { version: input.version });
+        return DeploymentService.recordDeployment(ctx.db, input);
+      }),
+  }),
+
+  systemInfo: adminProcedure.query(async ({ ctx }) => {
+    await auditAdminRead(ctx, "admin.systemInfo");
+
+    const memUsage = process.memoryUsage();
+    const [tenantCount] = await ctx.db.select({ c: sql<number>`COUNT(*)` }).from(tenants);
+    const [userCount] = await ctx.db.select({ c: sql<number>`COUNT(*)` }).from(users);
+    const [leadCount] = await ctx.db.select({ c: sql<number>`COUNT(*)` }).from(leads);
+
+    const latestDeploy = await DeploymentService.getLatestDeployment(ctx.db);
+
+    return {
+      version: BUILD_VERSION,
+      uptime: Math.floor(process.uptime()),
+      startedAt: new Date(Date.now() - process.uptime() * 1000).toISOString(),
+      memory: {
+        rss: Math.round(memUsage.rss / 1024 / 1024),
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+        heapPressure: Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100),
+      },
+      counts: {
+        tenants: Number(tenantCount?.c ?? 0),
+        users: Number(userCount?.c ?? 0),
+        leads: Number(leadCount?.c ?? 0),
+      },
+      latestDeploy: latestDeploy ? {
+        version: latestDeploy.version,
+        status: latestDeploy.status,
+        deployedBy: latestDeploy.deployedBy,
+        createdAt: latestDeploy.createdAt,
+        durationMs: latestDeploy.durationMs,
+      } : null,
+    };
+  }),
+
+  // ─── Autopilot Repair Engine ────────────────────────────────────────────────
+  repairs: router({
+    list: adminProcedure
+      .input(z.object({
+        status: z.enum(["detected", "diagnosing", "patching", "testing", "verifying", "deployed", "failed", "escalated"]).optional(),
+        page: z.number().min(1).default(1).optional(),
+        limit: z.number().min(1).max(100).default(50).optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        await auditAdminRead(ctx, "admin.repairs.list", { status: input?.status });
+        const { page, limit } = clampAdminPagination(input);
+        const offset = (page - 1) * limit;
+        const jobs = await SentinelService.getRepairJobs(ctx.db, {
+          status: input?.status as any,
+          limit,
+          offset,
+        });
+        return { repairs: jobs, page, limit };
+      }),
+
+    getById: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ ctx, input }) => {
+        await auditAdminRead(ctx, "admin.repairs.getById", { repairJobId: input.id });
+        const job = await SentinelService.getRepairJobById(ctx.db, input.id);
+        if (!job) return null;
+        return job;
+      }),
+
+    retry: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await auditAdminRead(ctx, "admin.repairs.retry", { repairJobId: input.id });
+        await SentinelService.updateRepairJobStatus(ctx.db, input.id, "detected");
+        return { success: true };
+      }),
+
+    escalate: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await auditAdminRead(ctx, "admin.repairs.escalate", { repairJobId: input.id });
+        await SentinelService.updateRepairJobStatus(ctx.db, input.id, "escalated");
+        return { success: true };
+      }),
+
+    stats: adminProcedure.query(async ({ ctx }) => {
+      await auditAdminRead(ctx, "admin.repairs.stats");
+      const repairStats = await SentinelService.getRepairStats(ctx.db);
+      const anomalyStats = getAnomalyStats();
+      return { repairStats, anomalyStats };
+    }),
+
+    graphicalProfile: adminProcedure.query(async ({ ctx }) => {
+      await auditAdminRead(ctx, "admin.repairs.graphicalProfile");
+      return SentinelService.getGraphicalErrorProfile(ctx.db);
+    }),
+
+    sentinelHealth: adminProcedure.query(async ({ ctx }) => {
+      await auditAdminRead(ctx, "admin.repairs.sentinelHealth");
+      const [{ getDisabledFeatures }, { performHealthCheck }] = await Promise.all([
+        import("../_core/sentinel-bridge"),
+        import("../_core/health-check"),
+      ]);
+      const [disabledFeatures, health] = await Promise.all([
+        getDisabledFeatures(ctx.db),
+        performHealthCheck(),
+      ]);
+      return { disabledFeatures, sentinel: health.sentinel };
+    }),
+  }),
+
+  // ─── Sentinel Observability Dashboard ─────────────────────────────────────
+  sentinel: router({
+    metricsTimeseries: adminProcedure
+      .input(z.object({
+        hours: z.number().min(1).max(168).default(24).optional(),
+        tenantId: z.number().optional(),
+        metric: z.string().optional(),
+        category: z.string().optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        await auditAdminRead(ctx, "admin.sentinel.metricsTimeseries", input ?? {});
+        return SentinelService.getMetricsTimeseries(ctx.db, {
+          hours: input?.hours,
+          tenantId: input?.tenantId,
+          metric: input?.metric,
+          category: input?.category,
+        });
+      }),
+
+    metricsCategories: adminProcedure.query(async ({ ctx }) => {
+      await auditAdminRead(ctx, "admin.sentinel.metricsCategories");
+      return SentinelService.getMetricsCategories(ctx.db);
+    }),
+
+    analyzerViolations: adminProcedure
+      .input(z.object({ limit: z.number().min(1).max(500).default(100).optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        await auditAdminRead(ctx, "admin.sentinel.analyzerViolations");
+        return SentinelService.getAnalyzerViolations(ctx.db, { limit: input?.limit });
+      }),
+
+    featureDisableHistory: adminProcedure.query(async ({ ctx }) => {
+      await auditAdminRead(ctx, "admin.sentinel.featureDisableHistory");
+      return SentinelService.getFeatureDisableHistory(ctx.db);
+    }),
+
+    repairEffectiveness: adminProcedure
+      .input(z.object({ days: z.number().min(1).max(90).default(14).optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        await auditAdminRead(ctx, "admin.sentinel.repairEffectiveness");
+        return SentinelService.getRepairEffectiveness(ctx.db, { days: input?.days });
+      }),
   }),
 });

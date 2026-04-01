@@ -15,6 +15,7 @@ import {
   templates,
   automations,
   automationJobs,
+  automationLogs,
   aiMessageLogs,
   webhookLogs,
   apiKeys,
@@ -24,7 +25,6 @@ import {
   webhookReceiveDedupes,
   referrals,
   referralPayouts,
-  stripeSubscriptions,
 } from "./schema";
 
 // ─── Tenants ──────────────────────────────────────────────────────────────────
@@ -41,13 +41,13 @@ export const tenantsRelations = relations(tenants, ({ many }) => ({
   templates: many(templates),
   automations: many(automations),
   automationJobs: many(automationJobs),
+  automationLogs: many(automationLogs),
   aiMessageLogs: many(aiMessageLogs),
   webhookLogs: many(webhookLogs),
   apiKeys: many(apiKeys),
   systemErrorLogs: many(systemErrorLogs),
   smsRateLimits: many(smsRateLimits),
   webhookReceiveDedupes: many(webhookReceiveDedupes),
-  stripeSubscriptions: many(stripeSubscriptions),
 }));
 
 // ─── Users ────────────────────────────────────────────────────────────────────
@@ -62,7 +62,6 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   referralsMade: many(referrals, { relationName: "referrer" }),
   referralsReceived: many(referrals, { relationName: "referredUser" }),
   referralPayouts: many(referralPayouts),
-  stripeSubscriptions: many(stripeSubscriptions),
 }));
 
 // ─── Email Verification Tokens ───────────────────────────────────────────────
@@ -107,6 +106,10 @@ export const subscriptionsRelations = relations(
     plan: one(plans, {
       fields: [subscriptions.planId],
       references: [plans.id],
+    }),
+    user: one(users, {
+      fields: [subscriptions.userId],
+      references: [users.id],
     }),
     billingInvoices: many(billingInvoices),
     billingRefunds: many(billingRefunds),
@@ -350,18 +353,22 @@ export const referralPayoutsRelations = relations(
   }),
 );
 
-// ─── Stripe Subscriptions ───────────────────────────────────────────────────
+// ─── Automation Logs ───────────────────────────────────────────────────────
 
-export const stripeSubscriptionsRelations = relations(
-  stripeSubscriptions,
+export const automationLogsRelations = relations(
+  automationLogs,
   ({ one }) => ({
-    user: one(users, {
-      fields: [stripeSubscriptions.userId],
-      references: [users.id],
-    }),
     tenant: one(tenants, {
-      fields: [stripeSubscriptions.tenantId],
+      fields: [automationLogs.tenantId],
       references: [tenants.id],
+    }),
+    automation: one(automations, {
+      fields: [automationLogs.automationId],
+      references: [automations.id],
+    }),
+    lead: one(leads, {
+      fields: [automationLogs.leadId],
+      references: [leads.id],
     }),
   }),
 );

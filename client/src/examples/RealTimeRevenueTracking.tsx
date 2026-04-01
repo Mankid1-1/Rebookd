@@ -1,8 +1,8 @@
 /**
- * 🎯 REAL-TIME REVENUE RECOVERY TRACKING EXAMPLE
- * 
- * Demonstrates how the system tracks actual revenue recovered through automation
- * and shows real statistics to users.
+ * EXAMPLE FILE — NOT USED IN PRODUCTION
+ *
+ * Demonstrates the revenue tracking API pattern.
+ * See RealRevenueRecoveryAnalytics.tsx for the production implementation.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -103,10 +103,10 @@ export function RealTimeRevenueTracking() {
     const randomType = automationTypes[Math.floor(Math.random() * automationTypes.length)];
     
     // Simulate lead IDs (in real app, these would be actual leads)
-    const mockLeadIds = [1, 2, 3, 4, 5];
+    const exampleLeadIds = [1, 2, 3, 4, 5];
     
     console.log(`🚀 Executing real recovery action: ${randomType}`);
-    const result = await executeRecoveryAction(randomType, mockLeadIds);
+    const result = await executeRecoveryAction(randomType, exampleLeadIds);
     
     if (result.success) {
       console.log(`✅ SUCCESS: $${result.recoveredRevenue} recovered`);
@@ -152,15 +152,15 @@ export function RealTimeRevenueTracking() {
           {/* REAL REVENUE METRICS */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="text-center p-4 border rounded-lg">
-              <div className="text-2xl font-bold text-green-600">
+              <div className="text-2xl font-bold text-success">
                 ${realTimeStats?.recoveredRevenue.toLocaleString()}
               </div>
               <div className="text-sm text-muted-foreground">Total Recovered (REAL)</div>
-              {metrics.recoveryRate > 50 && <ArrowUp className="h-4 w-4 text-green-500 mx-auto" />}
+              {metrics.recoveryRate > 50 && <ArrowUp className="h-4 w-4 text-success mx-auto" />}
             </div>
             
             <div className="text-center p-4 border rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">
+              <div className="text-2xl font-bold text-info">
                 {metrics.recoveryRate.toFixed(1)}%
               </div>
               <div className="text-sm text-muted-foreground">Recovery Rate (REAL)</div>
@@ -170,7 +170,7 @@ export function RealTimeRevenueTracking() {
             </div>
             
             <div className="text-center p-4 border rounded-lg">
-              <div className="text-2xl font-bold text-purple-600">
+              <div className="text-2xl font-bold text-accent-foreground">
                 {metrics.automationAttribution.toFixed(1)}%
               </div>
               <div className="text-sm text-muted-foreground">Automation Attribution</div>
@@ -180,7 +180,7 @@ export function RealTimeRevenueTracking() {
             </div>
             
             <div className="text-center p-4 border rounded-lg">
-              <div className="text-2xl font-bold text-orange-600">
+              <div className="text-2xl font-bold text-warning">
                 {metrics.automationROI.toFixed(1)}x
               </div>
               <div className="text-sm text-muted-foreground">Automation ROI (REAL)</div>
@@ -234,7 +234,7 @@ export function RealTimeRevenueTracking() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-bold text-green-600">
+                    <div className="text-lg font-bold text-success">
                       {automation.successRate.toFixed(1)}%
                     </div>
                     <div className="text-xs text-muted-foreground">Success Rate</div>

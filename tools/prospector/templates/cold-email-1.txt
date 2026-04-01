@@ -1,0 +1,16 @@
+Hi {{owner_name}},
+
+I built a tool that recovers {{recovery_rate}} for {{business_type_label}}s like {{business_name}} — automatically, through SMS.
+
+{{stat}}, and most of it is completely preventable with the right follow-up at the right time.
+
+Rebooked sends smart, AI-written texts to your no-shows and cancellations within minutes — rebooking them before that slot goes cold. No apps to install, no complicated setup. Just turn it on.
+
+Here is the deal: it is {{guarantee}}. I only charge {{pricing}}, and only after you see results.
+
+Worth a 10-minute call this week?
+
+Best,
+{{sender_name}}
+Rebooked — {{rebooked_website}}
+{{rebooked_email}}

@@ -1,0 +1,13 @@
+Hi {{owner_name}},
+
+I have reached out a couple of times about helping {{business_name}} recover lost revenue from no-shows and cancellations. I do not want to be a pest, so this will be my last note.
+
+If the timing is not right, no worries at all. But if you ever want to see how other {{business_type_label}}s are recovering thousands per month on autopilot, the door is always open.
+
+One more thing — if you know another {{business_type_label}} owner who would benefit, I pay {{referral}} for every active referral.
+
+Either way, I wish you and {{business_name}} all the best.
+
+{{sender_name}}
+Rebooked — {{rebooked_website}}
+{{rebooked_email}}

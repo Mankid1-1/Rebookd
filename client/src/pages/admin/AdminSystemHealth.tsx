@@ -27,8 +27,8 @@ export default function AdminSystemHealth() {
     <DashboardLayout>
       <div className="p-6 space-y-5 max-w-7xl mx-auto">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center">
-            <Shield className="w-4 h-4 text-yellow-400" />
+          <div className="w-8 h-8 rounded-lg bg-warning/10 flex items-center justify-center">
+            <Shield className="w-4 h-4 text-warning" />
           </div>
           <div>
             <h1 className="text-2xl font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>System Health</h1>
@@ -41,8 +41,8 @@ export default function AdminSystemHealth() {
           <Card className="border-border bg-card">
             <CardContent className="p-5">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
-                  <AlertCircle className="w-5 h-5 text-red-400" />
+                <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center">
+                  <AlertCircle className="w-5 h-5 text-destructive" />
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Recent Errors</p>
@@ -54,8 +54,8 @@ export default function AdminSystemHealth() {
           <Card className="border-border bg-card">
             <CardContent className="p-5">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-green-400" />
+                <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-success" />
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Webhook Success</p>
@@ -67,8 +67,8 @@ export default function AdminSystemHealth() {
           <Card className="border-border bg-card">
             <CardContent className="p-5">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                  <XCircle className="w-5 h-5 text-orange-400" />
+                <div className="w-10 h-10 rounded-xl bg-warning/10 flex items-center justify-center">
+                  <XCircle className="w-5 h-5 text-warning" />
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Webhook Failures</p>
@@ -83,7 +83,7 @@ export default function AdminSystemHealth() {
         <Card className="border-border bg-card">
           <CardHeader className="pb-3 border-b border-border">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-red-400" /> Recent Errors
+              <AlertCircle className="w-4 h-4 text-destructive" /> Recent Errors
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -91,7 +91,7 @@ export default function AdminSystemHealth() {
               <div className="p-6 text-center text-muted-foreground text-sm">Loading...</div>
             ) : errors.length === 0 ? (
               <div className="p-8 text-center">
-                <CheckCircle className="w-8 h-8 text-green-400 mx-auto mb-2" />
+                <CheckCircle className="w-8 h-8 text-success mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground">No errors recorded. System is healthy.</p>
               </div>
             ) : (
@@ -116,7 +116,7 @@ export default function AdminSystemHealth() {
                         <Badge variant="destructive" className="text-xs">{err.type || "error"}</Badge>
                       </TableCell>
                       <TableCell>
-                        <span className="text-xs font-mono text-red-300 line-clamp-1">{err.message}</span>
+                        <span className="text-xs font-mono text-destructive line-clamp-1">{err.message}</span>
                       </TableCell>
                       <TableCell>
                         <span className="text-xs text-muted-foreground">#{err.tenantId || "—"}</span>
@@ -171,9 +171,9 @@ export default function AdminSystemHealth() {
                           variant="outline"
                           className={
                             log.statusCode >= 200 && log.statusCode < 300
-                              ? "text-green-400 border-green-500/30"
+                              ? "text-success border-success/30"
                               : log.statusCode
-                              ? "text-red-400 border-red-500/30"
+                              ? "text-destructive border-destructive/30"
                               : "text-muted-foreground border-border"
                           }
                         >
@@ -184,7 +184,7 @@ export default function AdminSystemHealth() {
                         <span className="text-xs text-muted-foreground">{log.attempts ?? 0}</span>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={log.resolved ? "text-green-400 border-green-500/30" : "text-yellow-400 border-yellow-500/30"}>
+                        <Badge variant="outline" className={log.resolved ? "text-success border-success/30" : "text-warning border-warning/30"}>
                           {log.resolved ? "Yes" : "No"}
                         </Badge>
                       </TableCell>

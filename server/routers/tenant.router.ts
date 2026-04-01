@@ -1,13 +1,24 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { phoneSchema } from "../../shared/schemas/leads";
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and, gte, sql } from "drizzle-orm";
 import { subscriptions, tenants, users, tenantInvitations } from "../../drizzle/schema";
 import { sendEmail } from "../_core/email";
 import { protectedProcedure, tenantProcedure, router } from "../_core/trpc";
 import { randomUUID } from "crypto";
 import * as TenantService from "../services/tenant.service";
 import * as UserService from "../services/user.service";
+import * as PhoneserviceService from "../services/phoneservice.service";
+import { logger } from "../_core/logger";
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
 
 export const tenantRouter = router({
   get: protectedProcedure.query(async ({ ctx }) => {
@@ -92,6 +103,59 @@ export const tenantRouter = router({
     .mutation(async ({ ctx, input }) => {
       await TenantService.setInboundPhoneNumber(ctx.db, ctx.tenantId, input.phoneNumberId);
       return { success: true };
+    }),
+
+  // ─── Phoneservice Device Management ─────────────────────────────────
+
+  generateDeviceSetupToken: tenantProcedure
+    .mutation(async ({ ctx }) => {
+      // Rate limit: max 5 tokens per tenant per hour (checked via simple timestamp tracking)
+      const result = await PhoneserviceService.createSetupToken(ctx.tenantId);
+      if (!result) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create setup token. Is Phoneservice configured?" });
+      logger.info({ tenantId: ctx.tenantId, userId: ctx.user.id }, "Device setup token generated");
+      return result;
+    }),
+
+  getPhoneserviceDevices: tenantProcedure
+    .query(async ({ ctx }) => {
+      const devices = await PhoneserviceService.listDevices(ctx.tenantId);
+      // Auto-sync: ensure device phone numbers exist in Rebooked's phoneNumbers table
+      if (devices.length > 0) {
+        const existingNumbers = await TenantService.getPhoneNumbersByTenantId(ctx.db, ctx.tenantId);
+        const existingSet = new Set(existingNumbers.map((p: { number: string }) => p.number));
+        for (const device of devices) {
+          if (device.phoneNumber && !existingSet.has(device.phoneNumber)) {
+            try {
+              await TenantService.addPhoneNumber(ctx.db, ctx.tenantId, {
+                number: device.phoneNumber,
+                title: device.label || "Phoneservice Device",
+              });
+            } catch (error: any) {
+              // Only ignore duplicate entry errors — log everything else
+              const isDuplicate = error?.code === "SQLITE_CONSTRAINT" || error?.message?.includes("UNIQUE") || error?.message?.includes("duplicate");
+              if (!isDuplicate) {
+                logger.warn({ tenantId: ctx.tenantId, phoneNumber: device.phoneNumber, error: String(error) }, "Failed to sync device phone number");
+              }
+            }
+          }
+        }
+      }
+      return devices;
+    }),
+
+  deactivatePhoneserviceDevice: tenantProcedure
+    .input(z.object({ deviceId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      // Pass tenantId for ownership verification on the Phoneservice server
+      const success = await PhoneserviceService.deactivateDevice(input.deviceId, ctx.tenantId);
+      if (!success) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to deactivate device" });
+      logger.info({ tenantId: ctx.tenantId, userId: ctx.user.id, deviceId: input.deviceId }, "Device deactivated");
+      return { success: true };
+    }),
+
+  getPhoneserviceStats: tenantProcedure
+    .query(async ({ ctx }) => {
+      return PhoneserviceService.getTenantStats(ctx.tenantId);
     }),
 
   // ─── Feature Settings ───────────────────────────────────────────────
@@ -238,14 +302,13 @@ export const tenantRouter = router({
         }
 
         const token = randomUUID();
-        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
         await ctx.db.insert(tenantInvitations).values({
           tenantId: ctx.tenantId,
           email: input.email,
           role: "employee",
           token,
-          expiresAt,
+          expiresAt: sql`DATE_ADD(NOW(), INTERVAL 7 DAY)`,
         });
 
         // Send invitation email
@@ -258,7 +321,7 @@ export const tenantRouter = router({
           to: input.email,
           subject: `You've been invited to join ${businessName} on Rebooked`,
           text: `You've been invited to join ${businessName} as an employee on Rebooked. Click here to accept: ${inviteUrl}`,
-          html: `<p>You've been invited to join <strong>${businessName}</strong> as an employee on Rebooked.</p><p><a href="${inviteUrl}">Accept Invitation</a></p><p>This invitation expires in 7 days.</p>`,
+          html: `<p>You've been invited to join <strong>${escapeHtml(businessName)}</strong> as an employee on Rebooked.</p><p><a href="${escapeHtml(inviteUrl)}">Accept Invitation</a></p><p>This invitation expires in 7 days.</p>`,
         });
 
         return { success: true };
@@ -328,8 +391,7 @@ export const tenantRouter = router({
         }
 
         // Extend expiration
-        const newExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-        await ctx.db.update(tenantInvitations).set({ expiresAt: newExpiresAt }).where(eq(tenantInvitations.id, input.invitationId));
+        await ctx.db.update(tenantInvitations).set({ expiresAt: sql`DATE_ADD(NOW(), INTERVAL 7 DAY)` }).where(eq(tenantInvitations.id, input.invitationId));
 
         const appUrl = process.env.APP_URL || "http://localhost:3000";
         const inviteUrl = `${appUrl}/login?invite=${encodeURIComponent(invitation.token)}`;
@@ -340,7 +402,7 @@ export const tenantRouter = router({
           to: invitation.email,
           subject: `Reminder: You've been invited to join ${businessName} on Rebooked`,
           text: `You've been invited to join ${businessName} as an employee on Rebooked. Click here to accept: ${inviteUrl}`,
-          html: `<p>Reminder: You've been invited to join <strong>${businessName}</strong> as an employee on Rebooked.</p><p><a href="${inviteUrl}">Accept Invitation</a></p><p>This invitation expires in 7 days.</p>`,
+          html: `<p>Reminder: You've been invited to join <strong>${escapeHtml(businessName)}</strong> as an employee on Rebooked.</p><p><a href="${escapeHtml(inviteUrl)}">Accept Invitation</a></p><p>This invitation expires in 7 days.</p>`,
         });
 
         return { success: true };
@@ -349,9 +411,12 @@ export const tenantRouter = router({
 
 // ─── Feature Config Router ────────────────────────────────────────────────────
 // Persists arbitrary per-feature JSON config blobs inside the tenant settings.
+// Feature names must be alphanumeric + hyphens/underscores only to prevent key injection
+const featureNameSchema = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/, "Invalid feature name");
+
 export const featureConfigRouter = router({
   get: tenantProcedure
-    .input(z.object({ feature: z.string() }))
+    .input(z.object({ feature: featureNameSchema }))
     .query(async ({ ctx, input }) => {
       const settings = await TenantService.getSettings(ctx.db, ctx.tenantId);
       const config = (settings as Record<string, unknown>)?.[`featureConfig_${input.feature}`] ?? null;
@@ -359,7 +424,7 @@ export const featureConfigRouter = router({
     }),
 
   save: tenantProcedure
-    .input(z.object({ feature: z.string(), config: z.record(z.string(), z.unknown()) }))
+    .input(z.object({ feature: featureNameSchema, config: z.record(z.string(), z.unknown()) }))
     .mutation(async ({ ctx, input }) => {
       await TenantService.updateFeatureConfig(
         ctx.db,
@@ -374,6 +439,7 @@ export const featureConfigRouter = router({
 export const onboardingRouter = router({
   setup: protectedProcedure.input(z.object({
     businessName: z.string().min(1),
+    phone: z.string().optional(),
     website: z.string().optional(),
     referralSource: z.string().optional(),
     city: z.string().optional(),
@@ -407,6 +473,7 @@ export const onboardingRouter = router({
       country: input.country || null,
       settings: {
         city: input.city || null,
+        phone: input.phone || null,
         website: input.website || null,
         referralSource: input.referralSource || null,
         avgAppointmentValue: input.avgAppointmentValue || 100,
@@ -422,15 +489,14 @@ export const onboardingRouter = router({
     await ctx.db.update(users).set({ tenantId }).where(eq(users.id, ctx.user.id));
 
     // Create a trial subscription (30 days)
-    const trialEnd = new Date();
-    trialEnd.setDate(trialEnd.getDate() + 30);
+    // Use sql`NOW()` and sql`DATE_ADD(...)` to avoid MariaDB TIMESTAMP millisecond precision errors
     await ctx.db.insert(subscriptions).values({
       tenantId,
       planId: 1, // default plan
       status: "trialing",
-      trialEndsAt: trialEnd,
-      currentPeriodStart: new Date(),
-      currentPeriodEnd: trialEnd,
+      trialEndsAt: sql`DATE_ADD(NOW(), INTERVAL 30 DAY)`,
+      currentPeriodStart: sql`NOW()`,
+      currentPeriodEnd: sql`DATE_ADD(NOW(), INTERVAL 30 DAY)`,
     });
 
     return { success: true, tenantId };

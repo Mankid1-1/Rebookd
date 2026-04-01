@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { safeStripeRedirect } from '@/utils/safeRedirect';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -65,7 +66,7 @@ export function StripeCheckout({ onSuccess, onCancel, referralCode }: StripeChec
 
       if (data.success) {
         // Redirect to Stripe Checkout
-        window.location.href = data.checkoutUrl;
+        safeStripeRedirect(data.checkoutUrl);
       } else {
         setError(data.message || 'Failed to create checkout session');
       }
@@ -101,61 +102,61 @@ export function StripeCheckout({ onSuccess, onCancel, referralCode }: StripeChec
               </div>
               <div className="space-y-2">
                 <div className="text-3xl font-bold">${fixedPrice}</div>
-                <div className="text-sm text-gray-500">per month</div>
+                <div className="text-sm text-muted-foreground">per month</div>
               </div>
               <ul className="space-y-2 text-sm">
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-green-500" />
+                  <Check className="w-4 h-4 text-success" />
                   Unlimited leads & contacts
                 </li>
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-green-500" />
+                  <Check className="w-4 h-4 text-success" />
                   All automation features
                 </li>
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-green-500" />
+                  <Check className="w-4 h-4 text-success" />
                   SMS & email messaging
                 </li>
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-green-500" />
+                  <Check className="w-4 h-4 text-success" />
                   Analytics & reporting
                 </li>
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-green-500" />
+                  <Check className="w-4 h-4 text-success" />
                   Priority support
                 </li>
               </ul>
             </div>
 
             {/* Metered Price */}
-            <div className="border rounded-lg p-6 space-y-4 bg-gradient-to-br from-blue-50 to-indigo-50">
+            <div className="border rounded-lg p-6 space-y-4 bg-gradient-to-br from-info/10 to-info/15">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Revenue Recovery</h3>
-                <Badge className="bg-blue-100 text-blue-800">Performance</Badge>
+                <Badge className="bg-info/15 text-info-foreground">Performance</Badge>
               </div>
               <div className="space-y-2">
                 <div className="text-3xl font-bold">{revenueSharePercent}%</div>
-                <div className="text-sm text-gray-500">of recovered revenue</div>
+                <div className="text-sm text-muted-foreground">of recovered revenue</div>
               </div>
               <ul className="space-y-2 text-sm">
                 <li className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-blue-500" />
+                  <TrendingUp className="w-4 h-4 text-info" />
                   AI-powered recovery
                 </li>
                 <li className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-blue-500" />
+                  <TrendingUp className="w-4 h-4 text-info" />
                   Automated follow-ups
                 </li>
                 <li className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-blue-500" />
+                  <TrendingUp className="w-4 h-4 text-info" />
                   Smart scheduling
                 </li>
                 <li className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-blue-500" />
+                  <TrendingUp className="w-4 h-4 text-info" />
                   Real-time tracking
                 </li>
                 <li className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-blue-500" />
+                  <TrendingUp className="w-4 h-4 text-info" />
                   No upfront cost
                 </li>
               </ul>
@@ -164,10 +165,10 @@ export function StripeCheckout({ onSuccess, onCancel, referralCode }: StripeChec
 
           {/* Referral Code */}
           {referralCode && (
-            <Alert className="bg-green-50 border-green-200">
-              <Check className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800">
-                <strong>Referral Applied:</strong> You're using referral code <code className="bg-green-100 px-1 rounded">{referralCode}</code>
+            <Alert className="bg-success/10 border-success/20">
+              <Check className="h-4 w-4 text-success" />
+              <AlertDescription className="text-success-foreground">
+                <strong>Referral Applied:</strong> You're using referral code <code className="bg-success/15 px-1 rounded">{referralCode}</code>
               </AlertDescription>
             </Alert>
           )}
@@ -187,9 +188,9 @@ export function StripeCheckout({ onSuccess, onCancel, referralCode }: StripeChec
 
           {/* Error Display */}
           {error && (
-            <Alert className="border-red-200 bg-red-50">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <AlertDescription className="text-red-800">
+            <Alert className="border-destructive/20 bg-destructive/10">
+              <AlertCircle className="h-4 w-4 text-destructive" />
+              <AlertDescription className="text-destructive-foreground">
                 {error}
               </AlertDescription>
             </Alert>
@@ -216,7 +217,7 @@ export function StripeCheckout({ onSuccess, onCancel, referralCode }: StripeChec
               )}
             </Button>
 
-            <div className="flex items-center gap-4 text-sm text-gray-500">
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
                 <Shield className="w-4 h-4" />
                 Secure payment via Stripe
@@ -242,14 +243,14 @@ export function StripeCheckout({ onSuccess, onCancel, referralCode }: StripeChec
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <h4 className="font-semibold mb-2">Fixed Monthly Fee</h4>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 ${fixedPrice} per month for unlimited access to all platform features, 
                 including automation, messaging, and analytics.
               </p>
             </div>
             <div>
               <h4 className="font-semibold mb-2">Performance-Based Fee</h4>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 {revenueSharePercent}% of revenue recovered through our AI-powered system. 
                 Only pay for actual results - no recovery, no fee.
               </p>
@@ -258,7 +259,7 @@ export function StripeCheckout({ onSuccess, onCancel, referralCode }: StripeChec
           
           <div className="border-t pt-4">
             <h4 className="font-semibold mb-2">Example Monthly Bill</h4>
-            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+            <div className="bg-muted/50 rounded-lg p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span>Platform Access (Fixed)</span>
                 <span>${fixedPrice}.00</span>

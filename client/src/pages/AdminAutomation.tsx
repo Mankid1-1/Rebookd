@@ -36,7 +36,7 @@ export default function AdminAutomation() {
     reschedulingWindow: 48 // hours after cancellation
   });
 
-  const { data: metrics, isLoading } = trpc.analytics.adminAutomationMetrics.useQuery(undefined, { refetchInterval: 30000 });
+  const { data: metrics, isLoading } = trpc.analytics.adminAutomationMetrics.useQuery(undefined, { refetchInterval: 60_000 });
   const { data: settings } = trpc.tenant.settings.useQuery(undefined, { retry: false });
   const updateConfig = trpc.tenant.updateAdminAutomationConfig.useMutation({
     onSuccess: () => toast.success("Admin automation configuration updated"),
@@ -112,8 +112,8 @@ export default function AdminAutomation() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                  <Zap className="h-6 w-6 text-blue-600" />
+                <div className="p-2 bg-info/10 rounded-lg mr-3">
+                  <Zap className="h-6 w-6 text-info" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Active Automations</p>
@@ -126,8 +126,8 @@ export default function AdminAutomation() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg mr-3">
-                  <CheckCircle className="h-6 w-6 text-green-600" />
+                <div className="p-2 bg-success/10 rounded-lg mr-3">
+                  <CheckCircle className="h-6 w-6 text-success" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Runs</p>
@@ -140,8 +140,8 @@ export default function AdminAutomation() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-100 rounded-lg mr-3">
-                  <MessageSquare className="h-6 w-6 text-purple-600" />
+                <div className="p-2 bg-accent/10 rounded-lg mr-3">
+                  <MessageSquare className="h-6 w-6 text-accent-foreground" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Messages Sent</p>
@@ -154,8 +154,8 @@ export default function AdminAutomation() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-orange-100 rounded-lg mr-3">
-                  <Timer className="h-6 w-6 text-orange-600" />
+                <div className="p-2 bg-warning/10 rounded-lg mr-3">
+                  <Timer className="h-6 w-6 text-warning" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Time Saved</p>
@@ -206,7 +206,7 @@ export default function AdminAutomation() {
                         max={168}
                       />
                     </div>
-                    <div className="p-4 bg-blue-50 rounded-lg">
+                    <div className="p-4 bg-info/5 rounded-lg">
                       <h4 className="font-medium mb-2">Confirmation Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• 24-hour confirmation system</li>
@@ -250,7 +250,7 @@ export default function AdminAutomation() {
                         ))}
                       </div>
                     </div>
-                    <div className="p-4 bg-green-50 rounded-lg">
+                    <div className="p-4 bg-success/5 rounded-lg">
                       <h4 className="font-medium mb-2">Follow-up Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• 1, 3, 7 day follow-up schedule</li>
@@ -287,7 +287,7 @@ export default function AdminAutomation() {
                         max={168}
                       />
                     </div>
-                    <div className="p-4 bg-purple-50 rounded-lg">
+                    <div className="p-4 bg-accent/5 rounded-lg">
                       <h4 className="font-medium mb-2">Rescheduling Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Customer-controlled rescheduling</li>
@@ -301,7 +301,7 @@ export default function AdminAutomation() {
                 
                 <TabsContent value="advanced" className="space-y-6 mt-6">
                   <div className="space-y-4">
-                    <div className="p-4 bg-orange-50 rounded-lg">
+                    <div className="p-4 bg-warning/5 rounded-lg">
                       <h4 className="font-medium mb-2">Advanced Options</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Custom automation rules</li>
@@ -323,29 +323,29 @@ export default function AdminAutomation() {
             <CardContent>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="text-center p-4 bg-blue-50 rounded-lg">
-                    <Bot className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+                  <div className="text-center p-4 bg-info/5 rounded-lg">
+                    <Bot className="h-8 w-8 text-info mx-auto mb-2" />
                     <h3 className="font-medium">Automated Confirmations</h3>
-                    <Badge className={config.automatedConfirmations ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
+                    <Badge className={config.automatedConfirmations ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}>
                       {config.automatedConfirmations ? "Active" : "Inactive"}
                     </Badge>
                   </div>
-                  <div className="text-center p-4 bg-green-50 rounded-lg">
-                    <MessageSquare className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                  <div className="text-center p-4 bg-success/5 rounded-lg">
+                    <MessageSquare className="h-8 w-8 text-success mx-auto mb-2" />
                     <h3 className="font-medium">Follow-up Campaigns</h3>
-                    <Badge className={config.automatedFollowUps ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
+                    <Badge className={config.automatedFollowUps ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}>
                       {config.automatedFollowUps ? "Active" : "Inactive"}
                     </Badge>
                   </div>
-                  <div className="text-center p-4 bg-purple-50 rounded-lg">
-                    <RefreshCw className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+                  <div className="text-center p-4 bg-accent/5 rounded-lg">
+                    <RefreshCw className="h-8 w-8 text-accent-foreground mx-auto mb-2" />
                     <h3 className="font-medium">Self-Service Rescheduling</h3>
-                    <Badge className={config.selfServiceRescheduling ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
+                    <Badge className={config.selfServiceRescheduling ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}>
                       {config.selfServiceRescheduling ? "Active" : "Inactive"}
                     </Badge>
                   </div>
-                  <div className="text-center p-4 bg-orange-50 rounded-lg">
-                    <Timer className="h-8 w-8 text-orange-600 mx-auto mb-2" />
+                  <div className="text-center p-4 bg-warning/5 rounded-lg">
+                    <Timer className="h-8 w-8 text-warning mx-auto mb-2" />
                     <h3 className="font-medium">Time Savings</h3>
                     <p className="text-lg font-bold">{estimatedTimeSaved}h/week</p>
                   </div>
@@ -372,16 +372,16 @@ export default function AdminAutomation() {
           <CardContent>
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <p className="text-2xl font-bold text-blue-600">{totalRuns}</p>
+                <div className="text-center p-3 bg-info/5 rounded-lg">
+                  <p className="text-2xl font-bold text-info">{totalRuns}</p>
                   <p className="text-sm text-muted-foreground">Total Automation Runs</p>
                 </div>
-                <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <p className="text-2xl font-bold text-green-600">{successRate}%</p>
+                <div className="text-center p-3 bg-success/5 rounded-lg">
+                  <p className="text-2xl font-bold text-success">{successRate}%</p>
                   <p className="text-sm text-muted-foreground">Success Rate</p>
                 </div>
-                <div className="text-center p-3 bg-purple-50 rounded-lg">
-                  <p className="text-2xl font-bold text-purple-600">{estimatedTimeSaved}h</p>
+                <div className="text-center p-3 bg-accent/5 rounded-lg">
+                  <p className="text-2xl font-bold text-accent-foreground">{estimatedTimeSaved}h</p>
                   <p className="text-sm text-muted-foreground">Time Saved/Week</p>
                 </div>
               </div>
@@ -391,9 +391,9 @@ export default function AdminAutomation() {
                 <div className="flex items-center space-x-2">
                   <div className="flex-1">
                     <div className="text-sm text-muted-foreground mb-1">Admin Time Converted to Revenue</div>
-                    <div className="w-full bg-gray-200 rounded-full h-2 relative">
+                    <div className="w-full bg-muted rounded-full h-2 relative">
                       <div
-                        className="h-2 bg-green-500 rounded-full"
+                        className="h-2 bg-success rounded-full"
                         style={{ width: `${Math.min(100, successRate)}%` }}
                       />
                     </div>

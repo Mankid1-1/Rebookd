@@ -1,6 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import Stripe from "stripe";
-import { billingInvoices, billingRefunds, subscriptions, plans, leads, usage, tenants } from "../../drizzle/schema";
+import { billingInvoices, billingRefunds, subscriptions, plans, leads, usage, tenants, recoveryEvents } from "../../drizzle/schema";
 import type { Db } from "../_core/context";
 
 // ─── Revenue Share Constants ─────────────────────────────────────────────────
@@ -10,12 +10,15 @@ const DEFAULT_MONTHLY_FEE_CENTS = 19900; // $199 in cents
 const EARLY_ADOPTER_SLOTS = 20;
 const DEFAULT_AVG_APPOINTMENT_VALUE = 150; // $150 default
 
-// During soft launch, ALL clients get ROI guarantee (not just early adopters)
-const SOFT_LAUNCH_MODE = true;
+// FIX #21: Soft launch mode now driven by env var (admin-toggleable)
+const SOFT_LAUNCH_MODE = process.env.ROI_SOFT_LAUNCH !== "false"; // defaults to true
 // ROI must exceed this threshold before billing kicks in (10% safety margin)
 const ROI_SAFETY_MARGIN_PERCENT = 10;
+// FIX #20: ROI guarantee expires after this many days
+const ROI_GUARANTEE_DAYS = parseInt(process.env.ROI_GUARANTEE_DAYS || "35", 10);
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", { apiVersion: "2022-11-15" });
+// Use centralized Stripe singleton from _core/stripe.ts
+import { stripe } from "../_core/stripe";
 
 export async function listInvoicesByTenant(db: Db, tenantId: number) {
   return db
@@ -181,24 +184,56 @@ export async function calculateRevenueShare(db: Db, tenantId: number) {
     }
   }
 
-  // Check tenant settings for per-tenant avgAppointmentValue override
+  // Check tenant settings and billingType for per-tenant overrides
   const [tenant] = await db
-    .select({ settings: tenants.settings, currency: tenants.currency })
+    .select({ settings: tenants.settings, currency: tenants.currency, billingType: tenants.billingType })
     .from(tenants)
     .where(eq(tenants.id, tenantId))
     .limit(1);
   const avgAppointmentValue =
     (tenant?.settings as any)?.avgAppointmentValue ?? DEFAULT_AVG_APPOINTMENT_VALUE;
   const currency = tenant?.currency ?? "usd";
+  const billingType = tenant?.billingType ?? "standard";
 
-  // Count booked leads as recovered appointments
+  // Founder clients get $0 base fee (free-forever tier, 20 spots)
+  const effectiveMonthlyFeeCents = billingType === "founder" ? 0 : monthlyFeeCents;
+
+  // FIX #14: Prefer REALIZED revenue from recovery events (confirmed payments)
+  // over simple booked lead counts.
+  let realizedRevenueCents = 0;
+  let realizedCount = 0;
+  try {
+    const [realizedRow] = await db
+      .select({
+        totalRealized: sql<number>`COALESCE(SUM(${recoveryEvents.realizedRevenue}), 0)`,
+        realizedCount: sql<number>`COUNT(*)`,
+      })
+      .from(recoveryEvents)
+      .where(
+        and(
+          eq(recoveryEvents.tenantId, tenantId),
+          eq(recoveryEvents.isPrimaryAttribution, true),
+          sql`${recoveryEvents.status} IN ('realized', 'manual_realized')`,
+        )
+      );
+    realizedRevenueCents = Number(realizedRow?.totalRealized ?? 0);
+    realizedCount = Number(realizedRow?.realizedCount ?? 0);
+  } catch {
+    // Fallback: recovery_events table may not exist yet
+  }
+
+  // Also count booked leads for estimated metrics
   const [bookedRows] = await Promise.all([
     db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tenantId), eq(leads.status, "booked"))),
   ]);
-  const recoveredAppointments = Number(bookedRows[0]?.c ?? 0);
-  const recoveredRevenue = recoveredAppointments * avgAppointmentValue;
+  const bookedCount = Number(bookedRows[0]?.c ?? 0);
+  const recoveredAppointments = realizedCount > 0 ? realizedCount : bookedCount;
+  // Bill on realized revenue when available; fall back to estimated (booked × avgValue)
+  const recoveredRevenue = realizedRevenueCents > 0
+    ? realizedRevenueCents / 100
+    : bookedCount * avgAppointmentValue;
   const revenueShareOwed = Math.round(recoveredRevenue * (revenueSharePercent / 100) * 100) / 100;
-  const monthlyFee = monthlyFeeCents / 100;
+  const monthlyFee = effectiveMonthlyFeeCents / 100;
 
   return {
     recoveredAppointments,
@@ -207,6 +242,7 @@ export async function calculateRevenueShare(db: Db, tenantId: number) {
     revenueSharePercent,
     revenueShareOwed,
     monthlyFee,
+    billingType,
     totalCost: monthlyFee + revenueShareOwed,
     netSavings: recoveredRevenue - (monthlyFee + revenueShareOwed),
     currency,
@@ -235,25 +271,50 @@ export async function checkRoiGuarantee(db: Db, tenantId: number) {
   const earlyAdopterCount = Number(promoCount[0]?.c ?? 0);
   const slotsRemaining = Math.max(0, planPromoSlots - earlyAdopterCount);
 
-  // Calculate ROI
+  // Calculate ROI (includes billingType-aware fee calculation)
   const share = await calculateRevenueShare(db, tenantId);
   const roiPercent = share.totalCost > 0 ? Math.round((share.netSavings / share.totalCost) * 100) : 0;
 
-  // During soft launch, ROI guarantee applies to ALL tenants, not just promotional ones.
-  // Guarantee stays active until ROI exceeds the safety margin (10%), not just > 0%.
+  // FIX #20: Check if the guarantee period has expired (35 days from subscription start)
+  const subscriptionStartDate = sub?.currentPeriodStart ?? sub?.createdAt;
+  const daysSinceSubscriptionStart = subscriptionStartDate
+    ? (Date.now() - new Date(subscriptionStartDate).getTime()) / (1000 * 60 * 60 * 24)
+    : 0;
+  const guaranteePeriodExpired = daysSinceSubscriptionStart > ROI_GUARANTEE_DAYS;
+
+  // Founder clients always get the guarantee (free-forever tier)
+  // During soft launch, ALL clients get ROI guarantee
+  // Guarantee stays active until ROI exceeds the safety margin (10%) OR period expires
+  const isFounder = share.billingType === "founder";
   const hasPositiveRoi = roiPercent > ROI_SAFETY_MARGIN_PERCENT;
-  const guaranteeActive = SOFT_LAUNCH_MODE
-    ? !hasPositiveRoi  // Soft launch: every client gets guarantee
-    : isPromotional && !hasPositiveRoi; // Post-launch: only early adopters
+
+  let guaranteeActive: boolean;
+  if (isFounder) {
+    // Founders: guarantee until ROI positive (no time limit — free-forever tier)
+    guaranteeActive = !hasPositiveRoi;
+  } else if (guaranteePeriodExpired) {
+    // FIX #20: Non-founders lose guarantee after 35 days regardless of ROI
+    guaranteeActive = false;
+  } else if (SOFT_LAUNCH_MODE) {
+    // Soft launch: every client gets guarantee (within 35-day window)
+    guaranteeActive = !hasPositiveRoi;
+  } else {
+    // Post-launch: only early adopters get guarantee (within 35-day window)
+    guaranteeActive = isPromotional && !hasPositiveRoi;
+  }
 
   return {
     isEarlyAdopter: isPromotional,
+    isFounder,
     earlyAdopterCount,
     slotsRemaining,
     softLaunchMode: SOFT_LAUNCH_MODE,
     hasPositiveRoi,
     roiPercent,
     guaranteeActive,
+    guaranteePeriodExpired,
+    daysSinceSubscriptionStart: Math.floor(daysSinceSubscriptionStart),
+    guaranteeDaysRemaining: Math.max(0, ROI_GUARANTEE_DAYS - Math.floor(daysSinceSubscriptionStart)),
     ...share,
   };
 }

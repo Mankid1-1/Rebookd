@@ -9,12 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Clock, 
-  Moon, 
-  Sun, 
-  MessageSquare, 
-  Users, 
+import {
+  Clock,
+  Moon,
+  Sun,
+  MessageSquare,
+  Users,
   Settings,
   Bell,
   CheckCircle,
@@ -25,6 +25,7 @@ import {
   Target,
   Zap,
 } from "lucide-react";
+import { HelpTooltip } from "@/components/ui/HelpTooltip";
 import { toast } from "sonner";
 import "@/styles/components.css";
 
@@ -42,7 +43,7 @@ export default function AfterHours() {
     responseDelay: 5 // 5 minutes
   });
 
-  const { data: metrics, isLoading } = trpc.analytics.afterHoursMetrics.useQuery(undefined, { refetchInterval: 30000 });
+  const { data: metrics, isLoading } = trpc.analytics.afterHoursMetrics.useQuery(undefined, { refetchInterval: 60_000 });
   const { data: settings } = trpc.tenant.settings.useQuery(undefined, { retry: false });
   const updateConfig = trpc.tenant.updateAfterHoursConfig.useMutation({
     onSuccess: () => toast.success("After-hours configuration updated"),
@@ -59,12 +60,17 @@ export default function AfterHours() {
     updateConfig.mutate(config);
   };
 
+  const processQueue = trpc.analytics.processAfterHoursQueue.useMutation({
+    onSuccess: (data) => toast.success(`Processed ${data.processedLeads} queued after-hours leads`),
+    onError: (err) => toast.error(err.message),
+  });
+
   const handleTestResponse = () => {
-    toast.info("Test response not yet implemented");
+    toast.info("After-hours auto-responses trigger automatically when leads message outside business hours.");
   };
 
   const handleProcessQueue = () => {
-    toast.info("Queue processing not yet implemented");
+    processQueue.mutate();
   };
 
   if (isLoading) return <DashboardLayout>Loading...</DashboardLayout>;
@@ -107,14 +113,17 @@ export default function AfterHours() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold">After-Hours Management</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold">After-Hours Management</h1>
+              <HelpTooltip content="Captures leads who call or message outside business hours and automatically responds so you never miss an opportunity." variant="info"><span /></HelpTooltip>
+            </div>
             <p className="text-muted-foreground mt-2">
               Capture leads 24/7 with instant responses and booking links when business is closed
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <div className={`flex items-center gap-2 px-3 py-1 rounded-lg ${isAfterHours() ? 'bg-red-100' : 'bg-green-100'}`}>
-              {isAfterHours() ? <Moon className="h-4 w-4 text-red-600" /> : <Sun className="h-4 w-4 text-green-600" />}
+            <div className={`flex items-center gap-2 px-3 py-1 rounded-lg ${isAfterHours() ? 'bg-destructive/10' : 'bg-success/10'}`}>
+              {isAfterHours() ? <Moon className="h-4 w-4 text-destructive" /> : <Sun className="h-4 w-4 text-success" />}
               <span className="text-sm font-medium">
                 {isAfterHours() ? 'After Hours' : 'Business Hours'}
               </span>
@@ -123,9 +132,9 @@ export default function AfterHours() {
               <MessageSquare className="h-4 w-4 mr-2" />
               Test Response (Coming Soon)
             </Button>
-            <Button onClick={handleProcessQueue} variant="outline" disabled>
+            <Button onClick={handleProcessQueue} variant="outline" disabled={processQueue.isPending}>
               <Bell className="h-4 w-4 mr-2" />
-              Process Queue (Coming Soon)
+              {processQueue.isPending ? "Processing..." : "Process Queue"}
             </Button>
             <Button onClick={handleSaveConfig}>
               <Settings className="h-4 w-4 mr-2" />
@@ -139,8 +148,8 @@ export default function AfterHours() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                  <Users className="h-6 w-6 text-blue-600" />
+                <div className="p-2 bg-info/10 rounded-lg mr-3">
+                  <Users className="h-6 w-6 text-info" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Leads</p>
@@ -153,8 +162,8 @@ export default function AfterHours() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-100 rounded-lg mr-3">
-                  <Moon className="h-6 w-6 text-purple-600" />
+                <div className="p-2 bg-accent/10 rounded-lg mr-3">
+                  <Moon className="h-6 w-6 text-accent" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">After-Hours Leads</p>
@@ -167,8 +176,8 @@ export default function AfterHours() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg mr-3">
-                  <TrendingUp className="h-6 w-6 text-green-600" />
+                <div className="p-2 bg-success/10 rounded-lg mr-3">
+                  <TrendingUp className="h-6 w-6 text-success" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Captured Leads</p>
@@ -181,11 +190,13 @@ export default function AfterHours() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-orange-100 rounded-lg mr-3">
-                  <Calendar className="h-6 w-6 text-orange-600" />
+                <div className="p-2 bg-warning/10 rounded-lg mr-3">
+                  <Calendar className="h-6 w-6 text-warning" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Capture Rate</p>
+                  <HelpTooltip content="Percentage of after-hours leads who submitted their details and were added to your pipeline." variant="info">
+                    <p className="text-sm font-medium text-muted-foreground">Capture Rate</p>
+                  </HelpTooltip>
                   <p className="text-2xl font-bold">{metrics?.captureRate || 0}%</p>
                 </div>
               </div>
@@ -211,7 +222,9 @@ export default function AfterHours() {
                 <TabsContent value="response" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="after-hours-enabled">After-Hours Response</Label>
+                      <HelpTooltip content="Sends an automated reply to clients who text outside your business hours, letting them know when you'll respond." variant="info">
+                        <Label htmlFor="after-hours-enabled">After-Hours Response</Label>
+                      </HelpTooltip>
                       <Switch
                         id="after-hours-enabled"
                         checked={config.afterHoursEnabled}
@@ -221,7 +234,9 @@ export default function AfterHours() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="instant-response">Instant Response</Label>
+                      <HelpTooltip content="Replies immediately when a lead texts after hours, rather than waiting until the next business day." variant="info">
+                        <Label htmlFor="instant-response">Instant Response</Label>
+                      </HelpTooltip>
                       <Switch
                         id="instant-response"
                         checked={config.instantResponse}
@@ -231,7 +246,9 @@ export default function AfterHours() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="response-delay">Response Delay (minutes)</Label>
+                      <HelpTooltip content="How many minutes to wait before sending the after-hours reply, to avoid appearing robotic." variant="info">
+                        <Label htmlFor="response-delay">Response Delay (minutes)</Label>
+                      </HelpTooltip>
                       <Input
                         id="response-delay"
                         type="number"
@@ -243,7 +260,7 @@ export default function AfterHours() {
                         max={60}
                       />
                     </div>
-                    <div className="p-4 bg-blue-50 rounded-lg">
+                    <div className="p-4 bg-info/10 rounded-lg">
                       <h4 className="font-medium mb-2">Response Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• 24/7 lead capture</li>
@@ -258,7 +275,9 @@ export default function AfterHours() {
                 <TabsContent value="business" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="business-start">Business Hours Start</Label>
+                      <HelpTooltip content="The time your business opens. Rebooked treats messages before this time as after-hours." variant="info">
+                        <Label htmlFor="business-start">Business Hours Start</Label>
+                      </HelpTooltip>
                       <Input
                         id="business-start"
                         type="time"
@@ -298,7 +317,7 @@ export default function AfterHours() {
                         }
                       />
                     </div>
-                    <div className="p-4 bg-green-50 rounded-lg">
+                    <div className="p-4 bg-success/10 rounded-lg">
                       <h4 className="font-medium mb-2">Business Hours</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Monday - Friday: {config.businessHours.start} - {config.businessHours.end}</li>
@@ -313,7 +332,9 @@ export default function AfterHours() {
                 <TabsContent value="queue" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="booking-link-expiry">Booking Link Expiry (hours)</Label>
+                      <HelpTooltip content="How long a booking link sent to a queued lead stays active before it expires." variant="info">
+                        <Label htmlFor="booking-link-expiry">Booking Link Expiry (hours)</Label>
+                      </HelpTooltip>
                       <Input
                         id="booking-link-expiry"
                         type="number"
@@ -325,7 +346,7 @@ export default function AfterHours() {
                         max={168}
                       />
                     </div>
-                    <div className="p-4 bg-purple-50 rounded-lg">
+                    <div className="p-4 bg-accent/10 rounded-lg">
                       <h4 className="font-medium mb-2">Queue Management</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Automatic queue processing</li>
@@ -339,7 +360,7 @@ export default function AfterHours() {
                 
                 <TabsContent value="advanced" className="space-y-6 mt-6">
                   <div className="space-y-4">
-                    <div className="p-4 bg-orange-50 rounded-lg">
+                    <div className="p-4 bg-warning/10 rounded-lg">
                       <h4 className="font-medium mb-2">Advanced Options</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Custom response templates</li>
@@ -392,16 +413,16 @@ export default function AfterHours() {
           <CardContent>
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <p className="text-2xl font-bold text-blue-600">{metrics?.totalLeads || 0}</p>
+                <div className="text-center p-3 bg-info/10 rounded-lg">
+                  <p className="text-2xl font-bold text-info">{metrics?.totalLeads || 0}</p>
                   <p className="text-sm text-muted-foreground">Total Leads</p>
                 </div>
-                <div className="text-center p-3 bg-purple-50 rounded-lg">
-                  <p className="text-2xl font-bold text-purple-600">{metrics?.afterHoursLeads || 0}</p>
+                <div className="text-center p-3 bg-accent/10 rounded-lg">
+                  <p className="text-2xl font-bold text-accent">{metrics?.afterHoursLeads || 0}</p>
                   <p className="text-sm text-muted-foreground">After-Hours Leads</p>
                 </div>
-                <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <p className="text-2xl font-bold text-green-600">{metrics?.captureRate || 0}%</p>
+                <div className="text-center p-3 bg-success/10 rounded-lg">
+                  <p className="text-2xl font-bold text-success">{metrics?.captureRate || 0}%</p>
                   <p className="text-sm text-muted-foreground">Capture Rate</p>
                 </div>
               </div>
@@ -411,9 +432,9 @@ export default function AfterHours() {
                 <div className="flex items-center space-x-2">
                   <div className="flex-1">
                     <div className="text-sm text-muted-foreground mb-1">After-Hours Coverage</div>
-                    <div className="w-full bg-gray-200 rounded-full h-2 relative">
+                    <div className="w-full bg-muted rounded-full h-2 relative">
                       <div 
-                        className="h-2 bg-green-500 rounded-full" 
+                        className="h-2 bg-success rounded-full" 
                         style={{ width: `${Math.min(100, Math.max(0, metrics?.captureRate || 0))}%` }} 
                       />
                     </div>

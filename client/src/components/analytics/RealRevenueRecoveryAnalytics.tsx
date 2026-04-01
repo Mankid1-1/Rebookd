@@ -6,6 +6,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useChartColors } from '@/hooks/useChartColors';
+import { useLocale } from '@/contexts/LocaleContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,25 +31,22 @@ import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisc
 // Stub for trackFeatureUsage — not yet wired up to a backend event
 function trackFeatureUsage(_feature: string) {}
 
-// Dynamic colors based on user theme
-const getDynamicAnalyticsColors = () => {
-  const isDarkMode = document.documentElement.classList.contains('dark');
-  return {
-    success: isDarkMode ? "#34d399" : "#22c55e",
-    danger: isDarkMode ? "#f87171" : "#ef4444",
-    warning: isDarkMode ? "#fbbf24" : "#eab308",
-    primary: isDarkMode ? "#60a5fa" : "#3b82f6",
-    info: isDarkMode ? "#a78bfa" : "#8b5cf6"
-  };
-};
+// Colors are now derived from CSS custom properties via useChartColors() inside the component.
 
 export function RealRevenueRecoveryAnalytics() {
   const { context } = useProgressiveDisclosureContext();
   const getRecoveryProbability = useDynamicRecoveryProbability();
   const getRevenueImpact = useDynamicRevenueImpact();
   
-  // Dynamic colors based on user theme
-  const colors = getDynamicAnalyticsColors();
+  // Theme-aware chart colors from CSS custom properties
+  const cc = useChartColors();
+  const colors = {
+    success: cc.success,
+    danger: cc.danger,
+    warning: cc.warning,
+    primary: cc.primary,
+    info: cc.info,
+  };
   
   // Real data queries
   const { data: recoveryAnalytics } = trpc.analytics.recoveryAnalytics.useQuery();
@@ -152,15 +151,7 @@ export function RealRevenueRecoveryAnalytics() {
 
   const predictedRecovery = calculatePredictedRecovery();
 
-  // Format currency
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
+  const { formatCurrency } = useLocale();
 
   if (!stats) {
     return (
@@ -187,25 +178,25 @@ export function RealRevenueRecoveryAnalytics() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">
+              <div className="text-2xl font-bold text-success">
                 {formatCurrency(stats.totalRecovered)}
               </div>
               <div className="text-sm text-muted-foreground">Total Recovered</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">
+              <div className="text-2xl font-bold text-info">
                 {stats.realRecoveryRate.toFixed(1)}%
               </div>
               <div className="text-sm text-muted-foreground">Recovery Rate</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">
+              <div className="text-2xl font-bold text-accent-foreground">
                 {stats.automationAttributionRate.toFixed(1)}%
               </div>
               <div className="text-sm text-muted-foreground">Automation Attribution</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-orange-600">
+              <div className="text-2xl font-bold text-warning">
                 {stats.automationROI.toFixed(1)}x
               </div>
               <div className="text-sm text-muted-foreground">Automation ROI</div>
@@ -248,7 +239,7 @@ export function RealRevenueRecoveryAnalytics() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-lg font-bold text-green-600">
+                  <div className="text-lg font-bold text-success">
                     {automation.successRate.toFixed(1)}%
                   </div>
                   <div className="text-xs text-muted-foreground">Success Rate</div>

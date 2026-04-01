@@ -10,7 +10,7 @@ export function SmsCharCounter({ text }: SmsCharCounterProps) {
   const isWarning = segments >= 3;
 
   return (
-    <div className={`flex items-center gap-2 text-xs ${isWarning ? "text-yellow-500" : "text-muted-foreground"}`}>
+    <div className={`flex items-center gap-2 text-xs ${isWarning ? "text-warning" : "text-muted-foreground"}`}>
       <span>{length} / {segments * 160} chars</span>
       <span>({segments} {segments === 1 ? "segment" : "segments"})</span>
       {isMultiSegment && (
@@ -19,7 +19,7 @@ export function SmsCharCounter({ text }: SmsCharCounterProps) {
         </span>
       )}
       {isWarning && (
-        <span className="text-yellow-500 font-medium">
+        <span className="text-warning font-medium">
           Long messages cost more
         </span>
       )}

@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import "@/styles/components.css";
+import { HelpTooltip } from "@/components/ui/HelpTooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function SmartScheduling() {
   const [activeTab, setActiveTab] = useState("gaps");
@@ -34,7 +36,7 @@ export default function SmartScheduling() {
     gapThreshold: 30 // 30 minutes minimum gap
   });
 
-  const { data: metrics, isLoading } = trpc.analytics.smartSchedulingMetrics.useQuery(undefined, { refetchInterval: 30000 });
+  const { data: metrics, isLoading } = trpc.analytics.smartSchedulingMetrics.useQuery(undefined, { refetchInterval: 60_000 });
   const { data: settings } = trpc.tenant.settings.useQuery(undefined, { retry: false });
   const updateConfig = trpc.tenant.updateSmartSchedulingConfig.useMutation({
     onSuccess: () => toast.success("Smart scheduling configuration updated"),
@@ -51,16 +53,44 @@ export default function SmartScheduling() {
     updateConfig.mutate(config);
   };
 
-  const handleDetectGaps = () => {
-    toast.success("Gap detection initiated successfully");
+  const [gaps, setGaps] = useState<any[]>([]);
+  const [gapsLoading, setGapsLoading] = useState(false);
+  const { data: calendarConnections } = trpc.calendar.listConnections.useQuery(undefined, { retry: false });
+  const hasCalendar = (calendarConnections?.length ?? 0) > 0;
+
+  const handleDetectGaps = async () => {
+    if (!hasCalendar) {
+      toast.error("Connect a calendar first to detect scheduling gaps");
+      return;
+    }
+    setGapsLoading(true);
+    try {
+      const now = new Date();
+      const weekLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const result = await (trpc as any).calendar.getGaps.query({
+        start: now.toISOString(),
+        end: weekLater.toISOString(),
+        gapThresholdMinutes: config.gapThreshold,
+      });
+      setGaps(result ?? []);
+      toast.success(`Found ${result?.length ?? 0} scheduling gaps`);
+    } catch {
+      toast.error("Failed to detect gaps — check your calendar connection");
+    } finally {
+      setGapsLoading(false);
+    }
   };
 
   const handleTriggerAutoFill = () => {
-    toast.success("Auto-fill campaigns triggered");
+    if (gaps.length === 0) {
+      toast.info("Run gap detection first to find open slots");
+      return;
+    }
+    window.location.href = "/automations";
   };
 
   const handleTriggerOffPeak = () => {
-    toast.success("Off-peak offers activated");
+    window.location.href = "/automations";
   };
 
   if (isLoading) return <DashboardLayout>Loading...</DashboardLayout>;
@@ -101,8 +131,8 @@ export default function SmartScheduling() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                  <Calendar className="h-6 w-6 text-blue-600" />
+                <div className="p-2 bg-info/10 rounded-lg mr-3">
+                  <Calendar className="h-6 w-6 text-info" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Slots</p>
@@ -115,8 +145,8 @@ export default function SmartScheduling() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg mr-3">
-                  <TrendingUp className="h-6 w-6 text-green-600" />
+                <div className="p-2 bg-success/10 rounded-lg mr-3">
+                  <TrendingUp className="h-6 w-6 text-success" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Filled Slots</p>
@@ -129,11 +159,15 @@ export default function SmartScheduling() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-100 rounded-lg mr-3">
-                  <BarChart3 className="h-6 w-6 text-purple-600" />
+                <div className="p-2 bg-accent/10 rounded-lg mr-3">
+                  <BarChart3 className="h-6 w-6 text-accent" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Utilization Rate</p>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    <HelpTooltip content="Percentage of your available appointment slots that are filled. Aim for 80%+ for healthy revenue." variant="info">
+                      Utilization Rate
+                    </HelpTooltip>
+                  </p>
                   <p className="text-2xl font-bold">{metrics?.utilizationRate || 0}%</p>
                 </div>
               </div>
@@ -143,11 +177,15 @@ export default function SmartScheduling() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-orange-100 rounded-lg mr-3">
-                  <Zap className="h-6 w-6 text-orange-600" />
+                <div className="p-2 bg-warning/10 rounded-lg mr-3">
+                  <Zap className="h-6 w-6 text-warning" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Gaps Filled</p>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    <HelpTooltip content="Slots that were empty but filled by Rebooked's automated waitlist and gap-fill campaigns" variant="info">
+                      Gaps Filled
+                    </HelpTooltip>
+                  </p>
                   <p className="text-2xl font-bold">{metrics?.gapsFilled || 0}</p>
                 </div>
               </div>
@@ -183,7 +221,11 @@ export default function SmartScheduling() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Gap Threshold (minutes)</Label>
+                      <Label>
+                        <HelpTooltip content="Appointment gaps shorter than this are considered too small to fill automatically" variant="info">
+                          Gap Threshold (minutes)
+                        </HelpTooltip>
+                      </Label>
                       <Input
                         type="number"
                         value={config.gapThreshold}
@@ -194,7 +236,7 @@ export default function SmartScheduling() {
                         max={120}
                       />
                     </div>
-                    <div className="p-4 bg-blue-50 rounded-lg">
+                    <div className="p-4 bg-info/10 rounded-lg">
                       <h4 className="font-medium mb-2">Gap Detection Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Intelligent gap identification</li>
@@ -209,7 +251,11 @@ export default function SmartScheduling() {
                 <TabsContent value="autofill" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="auto-fill-campaigns">Auto-Fill Campaigns</Label>
+                      <Label htmlFor="auto-fill-campaigns">
+                        <HelpTooltip content="Automatically send SMS to your waitlist when a cancellation creates an opening" variant="info">
+                          Auto-Fill Campaigns
+                        </HelpTooltip>
+                      </Label>
                       <Switch
                         id="auto-fill-campaigns"
                         checked={config.autoFillCampaigns}
@@ -218,7 +264,7 @@ export default function SmartScheduling() {
                         }
                       />
                     </div>
-                    <div className="p-4 bg-green-50 rounded-lg">
+                    <div className="p-4 bg-success/10 rounded-lg">
                       <h4 className="font-medium mb-2">Auto-Fill Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Priority-based lead selection</li>
@@ -233,7 +279,11 @@ export default function SmartScheduling() {
                 <TabsContent value="offpeak" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="off-peak-offers">Off-Peak Offers</Label>
+                      <Label htmlFor="off-peak-offers">
+                        <HelpTooltip content="Send discount or special offers to clients during your slowest time slots to incentivize bookings" variant="info">
+                          Off-Peak Offers
+                        </HelpTooltip>
+                      </Label>
                       <Switch
                         id="off-peak-offers"
                         checked={config.offPeakOffers}
@@ -242,7 +292,7 @@ export default function SmartScheduling() {
                         }
                       />
                     </div>
-                    <div className="p-4 bg-purple-50 rounded-lg">
+                    <div className="p-4 bg-accent/10 rounded-lg">
                       <h4 className="font-medium mb-2">Off-Peak Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Discounted off-peak bookings</li>
@@ -257,7 +307,11 @@ export default function SmartScheduling() {
                 <TabsContent value="advanced" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label>Utilization Target (%)</Label>
+                      <Label>
+                        <HelpTooltip content="Your goal utilization rate. Rebooked alerts you when you fall below this." variant="info">
+                          Utilization Target (%)
+                        </HelpTooltip>
+                      </Label>
                       <Input
                         type="number"
                         value={config.utilizationTarget}
@@ -268,7 +322,7 @@ export default function SmartScheduling() {
                         max={100}
                       />
                     </div>
-                    <div className="p-4 bg-orange-50 rounded-lg">
+                    <div className="p-4 bg-warning/10 rounded-lg">
                       <h4 className="font-medium mb-2">Advanced Options</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Custom gap detection rules</li>
@@ -293,16 +347,16 @@ export default function SmartScheduling() {
                   {['9AM', '10AM', '11AM', '12PM', '1PM', '2PM', '3PM'].map((time, index) => (
                     <div key={index} className="text-center p-2 bg-muted rounded">
                       <p className="text-xs font-medium">{time}</p>
-                      <div className="w-full h-2 bg-gray-200 rounded mt-1 relative">
+                      <div className="w-full h-2 bg-muted rounded mt-1 relative">
                         <div 
-                          className="h-2 bg-blue-500 rounded" 
+                          className="h-2 bg-info rounded" 
                           style={{ width: `${Math.min(100, Math.max(0, (metrics?.utilizationRate || 60) + (index - 3) * 10))}%` }} 
                         />
                       </div>
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <div className="mt-4 p-3 bg-info/10 rounded-lg">
                   <h4 className="font-medium mb-2">Current Utilization</h4>
                   <div className="flex items-center space-x-2">
                     <Progress value={metrics?.utilizationRate || 0} className="flex-1" />
@@ -328,26 +382,47 @@ export default function SmartScheduling() {
                 <div className="space-y-4">
                   <h4 className="font-medium">Today's Gaps</h4>
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                    <div className="flex items-center justify-between p-3 bg-destructive/10 rounded-lg">
                       <div>
                         <p className="font-medium">9:00 AM - 9:30 AM</p>
-                        <p className="text-sm text-muted-foreground">High Priority</p>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <p className="text-sm text-muted-foreground cursor-help">High Priority</p>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Priority based on slot value and time until the appointment</p></TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
-                      <Badge className="bg-red-100 text-red-800">30 min</Badge>
+                      <Badge className="bg-destructive/10 text-destructive">30 min</Badge>
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+                    <div className="flex items-center justify-between p-3 bg-warning/10 rounded-lg">
                       <div>
                         <p className="font-medium">11:30 AM - 12:15 PM</p>
-                        <p className="text-sm text-muted-foreground">Medium Priority</p>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <p className="text-sm text-muted-foreground cursor-help">Medium Priority</p>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Priority based on slot value and time until the appointment</p></TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
-                      <Badge className="bg-orange-100 text-orange-800">105 min</Badge>
+                      <Badge className="bg-warning/10 text-warning-foreground">105 min</Badge>
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                    <div className="flex items-center justify-between p-3 bg-warning/10 rounded-lg">
                       <div>
                         <p className="font-medium">2:45 PM - 3:30 PM</p>
-                        <p className="text-sm text-muted-foreground">Low Priority</p>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <p className="text-sm text-muted-foreground cursor-help">Low Priority</p>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Priority based on slot value and time until the appointment</p></TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
-                      <Badge className="bg-yellow-100 text-yellow-800">45 min</Badge>
+                      <Badge className="bg-warning/10 text-warning-foreground">45 min</Badge>
                     </div>
                   </div>
                 </div>
@@ -378,20 +453,32 @@ export default function SmartScheduling() {
           <CardContent>
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <PieChart className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-                  <p className="text-2xl font-bold text-blue-600">{metrics?.utilizationRate || 0}%</p>
-                  <p className="text-sm text-muted-foreground">Utilization Rate</p>
+                <div className="text-center p-3 bg-info/10 rounded-lg">
+                  <PieChart className="h-8 w-8 text-info mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-info">{metrics?.utilizationRate || 0}%</p>
+                  <p className="text-sm text-muted-foreground">
+                    <HelpTooltip content="Percentage of your available appointment slots that are filled. Aim for 80%+ for healthy revenue." variant="info">
+                      Utilization Rate
+                    </HelpTooltip>
+                  </p>
                 </div>
-                <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <Activity className="h-8 w-8 text-green-600 mx-auto mb-2" />
-                  <p className="text-2xl font-bold text-green-600">{metrics?.gapsFilled || 0}</p>
-                  <p className="text-sm text-muted-foreground">Gaps Filled</p>
+                <div className="text-center p-3 bg-success/10 rounded-lg">
+                  <Activity className="h-8 w-8 text-success mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-success">{metrics?.gapsFilled || 0}</p>
+                  <p className="text-sm text-muted-foreground">
+                    <HelpTooltip content="Slots that were empty but filled by Rebooked's automated waitlist and gap-fill campaigns" variant="info">
+                      Gaps Filled
+                    </HelpTooltip>
+                  </p>
                 </div>
-                <div className="text-center p-3 bg-purple-50 rounded-lg">
-                  <Zap className="h-8 w-8 text-purple-600 mx-auto mb-2" />
-                  <p className="text-2xl font-bold text-purple-600">${((metrics?.revenueImpact || 0) / 100).toFixed(0)}</p>
-                  <p className="text-sm text-muted-foreground">Revenue Impact</p>
+                <div className="text-center p-3 bg-accent/10 rounded-lg">
+                  <Zap className="h-8 w-8 text-accent mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-accent">${((metrics?.revenueImpact || 0) / 100).toFixed(0)}</p>
+                  <p className="text-sm text-muted-foreground">
+                    <HelpTooltip content="Estimated additional revenue if all current gaps were filled" variant="info">
+                      Revenue Impact
+                    </HelpTooltip>
+                  </p>
                 </div>
               </div>
             </div>

@@ -1,6 +1,6 @@
 import { build as viteBuild } from "vite";
 import { build as esbuild } from "esbuild";
-import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync, cpSync } from "fs";
 import { join, resolve } from "path";
 
 const root = resolve(process.cwd());
@@ -83,10 +83,24 @@ try {
     },
   });
 
+  await esbuild({
+    entryPoints: [resolve(root, "server/sentinel.ts")],
+    platform: "node",
+    packages: "external",
+    bundle: true,
+    format: "esm",
+    outfile: join(tempDist, "sentinel.js"),
+    define: {
+      "globalThis.__BUILD_VERSION__": JSON.stringify(BUILD_VERSION),
+    },
+  });
+
+  // Windows file locks can prevent rename — use copy instead
   if (existsSync(finalDist)) {
     rmSync(finalDist, { recursive: true, force: true });
   }
-  renameSync(tempDist, finalDist);
+  cpSync(tempDist, finalDist, { recursive: true });
+  rmSync(tempDist, { recursive: true, force: true });
 } catch (error) {
   rmSync(tempDist, { recursive: true, force: true });
   throw error;

@@ -3,10 +3,11 @@ import { Button } from "./button";
 import { Card, CardContent, CardHeader, CardTitle } from "./card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./dialog";
 import { Badge } from "./badge";
-import { ArrowRight, Sparkles, Users, MessageSquare, BarChart3, Zap } from "lucide-react";
+import { ArrowRight, Sparkles, Users, MessageSquare, BarChart3, Zap, Palette, Check } from "lucide-react";
 import { getItem, setItem } from "@/utils/storage";
 import { useAuth } from "@/hooks/useAuth";
 import { useProgressiveDisclosureContext } from "./ProgressiveDisclosure";
+import { useTheme, THEME_META, type ThemeName } from "@/contexts/ThemeContext";
 
 interface TourStep {
   id: string;
@@ -15,18 +16,19 @@ interface TourStep {
   icon: React.ReactNode;
   action?: string;
   tips?: string[];
+  /** If set, renders custom content below description instead of tips */
+  customContentId?: string;
 }
 
 // Dynamic tour steps based on user skill level and business type
 const getDynamicTourSteps = (userSkill: any, businessType?: string) => {
-  const isDarkMode = document.documentElement.classList.contains('dark');
   
   const baseSteps = [
     {
       id: "welcome",
       title: "Welcome to Rebooked! 🎉",
       description: "Let's get you started with a quick tour of your new lead management system.",
-      icon: <Sparkles className={`h-6 w-6 ${isDarkMode ? 'text-yellow-400' : 'text-yellow-500'}`} />,
+      icon: <Sparkles className="h-6 w-6 text-warning" />,
       tips: [
         "This tour will take about 2 minutes",
         "You can skip any step if you're already familiar",
@@ -34,10 +36,17 @@ const getDynamicTourSteps = (userSkill: any, businessType?: string) => {
       ]
     },
     {
+      id: "theme",
+      title: "Choose Your Theme",
+      description: "Personalise your Rebooked experience with a theme that matches your style. Pick one below — you can change it anytime from the sidebar.",
+      icon: <Palette className="h-6 w-6 text-accent-foreground" />,
+      customContentId: "theme_picker",
+    },
+    {
       id: "dashboard",
       title: "Your Dashboard",
       description: "Get a bird's-eye view of your business performance at a glance.",
-      icon: <BarChart3 className={`h-6 w-6 ${isDarkMode ? 'text-blue-400' : 'text-blue-500'}`} />,
+      icon: <BarChart3 className="h-6 w-6 text-primary" />,
       action: "View key metrics like total leads, conversion rates, and revenue",
       tips: [
         "Check your dashboard daily for important updates",
@@ -49,7 +58,7 @@ const getDynamicTourSteps = (userSkill: any, businessType?: string) => {
       id: "leads",
       title: "Manage Your Leads",
       description: "This is where you'll manage all your potential customers.",
-      icon: <Users className={`h-6 w-6 ${isDarkMode ? 'text-green-400' : 'text-green-500'}`} />,
+      icon: <Users className="h-6 w-6 text-success" />,
       action: "Add, view, and manage your leads from the Leads page",
       tips: [
         "Click 'Add Lead' to manually add new customers",
@@ -61,7 +70,7 @@ const getDynamicTourSteps = (userSkill: any, businessType?: string) => {
     id: "messaging",
     title: "Send Messages",
     description: "Communicate with your leads via SMS and email.",
-    icon: <MessageSquare className="h-6 w-6 text-purple-500" />,
+    icon: <MessageSquare className="h-6 w-6 text-accent-foreground" />,
     action: "Send personalized messages to convert leads into customers",
     tips: [
       "Messages are automatically tracked and organized",
@@ -73,7 +82,7 @@ const getDynamicTourSteps = (userSkill: any, businessType?: string) => {
     id: "automation",
     title: "Smart Automation",
     description: "Let Rebooked work for you with powerful automation features.",
-    icon: <Zap className="h-6 w-6 text-orange-500" />,
+    icon: <Zap className="h-6 w-6 text-warning" />,
     action: "Set up automated follow-ups and lead nurturing",
     tips: [
       "Welcome messages are sent automatically to new leads",
@@ -93,12 +102,49 @@ interface OnboardingTourProps {
   onComplete?: () => void;
 }
 
+/** Compact inline theme picker for the onboarding tour */
+function InlineTourThemePicker() {
+  const { theme, setTheme } = useTheme();
+  const PREVIEW_COLORS: Record<ThemeName, string> = {
+    abyss: "#d4a843", light: "#3b7cf5", corporate: "#d44030", pink: "#d44090", emerald: "#2a9060",
+  };
+  return (
+    <div className="grid grid-cols-1 gap-2 mt-2">
+      {(Object.keys(THEME_META) as ThemeName[]).map((t) => (
+        <button
+          key={t}
+          onClick={() => setTheme(t)}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all text-left ${
+            theme === t
+              ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+              : "border-border hover:border-primary/40 hover:bg-accent/50"
+          }`}
+        >
+          <span
+            className="w-5 h-5 rounded-full shrink-0 border-2"
+            style={{
+              backgroundColor: PREVIEW_COLORS[t],
+              borderColor: theme === t ? PREVIEW_COLORS[t] : "transparent",
+            }}
+          />
+          <div className="flex-1 min-w-0">
+            <span className={`text-sm font-medium ${theme === t ? "text-primary" : "text-foreground"}`}>
+              {THEME_META[t].label}
+            </span>
+            <span className="text-xs text-muted-foreground ml-2">{THEME_META[t].description}</span>
+          </div>
+          {theme === t && <Check className="w-4 h-4 text-primary shrink-0" />}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function OnboardingTour({ isOpen, onClose, onComplete }: OnboardingTourProps) {
   const [currentStep, setCurrentStep] = React.useState(0);
   const [isCompleted, setIsCompleted] = React.useState(false);
-
   // Get dynamic tour steps
-  const tourSteps = getDynamicTourSteps(null, null);
+  const tourSteps = getDynamicTourSteps(null);
   const currentStepData = tourSteps[currentStep];
   const isLastStep = currentStep === tourSteps.length - 1;
 
@@ -202,14 +248,19 @@ export function OnboardingTour({ isOpen, onClose, onComplete }: OnboardingTourPr
                 </p>
                 
                 {currentStepData.action && (
-                  <div className="bg-blue-50 dark:bg-blue-950/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                  <div className="bg-primary/5 p-3 rounded-lg border border-primary/20">
+                    <p className="text-sm font-medium text-primary">
                       💡 {currentStepData.action}
                     </p>
                   </div>
                 )}
 
-                {currentStepData.tips && (
+                {/* Custom content for special steps */}
+                {currentStepData.customContentId === "theme_picker" && (
+                  <InlineTourThemePicker />
+                )}
+
+                {currentStepData.tips && !currentStepData.customContentId && (
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-muted-foreground">Quick Tips:</p>
                     <ul className="space-y-1">

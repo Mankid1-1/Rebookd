@@ -48,20 +48,20 @@ export function UsageMeter({ label, used, limit, unit = "" }: UsageMeterProps) {
     <div className="space-y-2">
       <div className="flex items-center justify-between text-sm">
         <span className="text-muted-foreground">{label}</span>
-        <span className={isOverLimit ? "text-destructive font-medium" : isNearLimit ? "text-yellow-500 font-medium" : ""}>
+        <span className={isOverLimit ? "text-destructive font-medium" : isNearLimit ? "text-warning font-medium" : ""}>
           {used.toLocaleString()}{unit} / {limit.toLocaleString()}{unit}
         </span>
       </div>
       <div className="h-2 rounded-full bg-muted overflow-hidden">
         <div
           className={`h-full rounded-full transition-all ${
-            isOverLimit ? "bg-destructive" : isNearLimit ? "bg-yellow-500" : "bg-primary"
+            isOverLimit ? "bg-destructive" : isNearLimit ? "bg-warning" : "bg-primary"
           }`}
           style={{ width: `${Math.min(100, percentage)}%` }}
         />
       </div>
       {isNearLimit && !isOverLimit && (
-        <p className="text-xs text-yellow-500">
+        <p className="text-xs text-warning">
           Approaching limit — consider upgrading for more capacity
         </p>
       )}

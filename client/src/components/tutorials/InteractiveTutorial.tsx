@@ -408,14 +408,14 @@ export function InteractiveTutorial({ tutorial, onComplete, onSkip }: Interactiv
       <Card className="w-full max-w-md mx-auto">
         <CardContent className="p-6 text-center">
           <div className="mb-4">
-            <div className="p-3 bg-blue-100 rounded-full w-12 h-12 mx-auto flex items-center justify-center mb-4">
+            <div className="p-3 bg-info/10 rounded-full w-12 h-12 mx-auto flex items-center justify-center mb-4">
               {tutorial.icon}
             </div>
             <h3 className="text-lg font-semibold">{tutorial.name}</h3>
-            <p className="text-sm text-gray-600 mt-1">{tutorial.description}</p>
+            <p className="text-sm text-muted-foreground mt-1">{tutorial.description}</p>
           </div>
           
-          <div className="flex items-center justify-center gap-4 text-sm text-gray-500 mb-6">
+          <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground mb-6">
             <Badge variant="outline">{tutorial.category}</Badge>
             <span>•</span>
             <span>{tutorial.estimatedTime} min</span>
@@ -447,7 +447,7 @@ export function InteractiveTutorial({ tutorial, onComplete, onSkip }: Interactiv
       {/* Highlight overlay */}
       {highlightedElement && (
         <div
-          className="absolute border-4 border-blue-500 rounded-lg pointer-events-none z-40"
+          className="absolute border-4 border-primary rounded-lg pointer-events-none z-40"
           style={{
             top: highlightedElement.getBoundingClientRect().top - 4,
             left: highlightedElement.getBoundingClientRect().left - 4,
@@ -482,20 +482,20 @@ export function InteractiveTutorial({ tutorial, onComplete, onSkip }: Interactiv
           
           {/* Progress */}
           <div className="mb-3">
-            <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <div className="flex justify-between text-xs text-muted-foreground mb-1">
               <span>Step {currentStep + 1} of {tutorial.steps.length}</span>
               <span>{Math.round(progress)}%</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-1">
+            <div className="w-full bg-muted rounded-full h-1">
               <div
-                className="bg-blue-500 h-1 rounded-full transition-all duration-300"
+                className="bg-primary h-1 rounded-full transition-all duration-300"
                 style={{ width: `${progress}%` }}
               />
             </div>
           </div>
           
           {/* Content */}
-          <p className="text-sm text-gray-700 mb-4">{currentStepData.content}</p>
+          <p className="text-sm text-muted-foreground mb-4">{currentStepData.content}</p>
           
           {/* Navigation */}
           <div className="flex justify-between items-center">
@@ -616,7 +616,7 @@ export function TutorialLauncher() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-xl font-semibold">Interactive Tutorials</h3>
-                  <p className="text-sm text-gray-600 mt-1">Learn how to use Rebooked effectively</p>
+                  <p className="text-sm text-muted-foreground mt-1">Learn how to use Rebooked effectively</p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => setShowLibrary(false)}>
                   <X className="h-4 w-4" />
@@ -628,15 +628,15 @@ export function TutorialLauncher() {
                   <Card key={tutorial.id} className="p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-3">
-                        <div className="p-2 bg-blue-100 rounded-lg">
+                        <div className="p-2 bg-info/10 rounded-lg">
                           {tutorial.icon}
                         </div>
                         <div>
                           <h4 className="font-medium">{tutorial.name}</h4>
-                          <p className="text-sm text-gray-600 mt-1">{tutorial.description}</p>
+                          <p className="text-sm text-muted-foreground mt-1">{tutorial.description}</p>
                           <div className="flex items-center gap-3 mt-2">
                             <Badge variant="outline">{tutorial.category}</Badge>
-                            <span className="text-xs text-gray-500">{tutorial.estimatedTime} min</span>
+                            <span className="text-xs text-muted-foreground">{tutorial.estimatedTime} min</span>
                             <Badge variant={tutorial.difficulty === 'beginner' ? 'default' : 'secondary'}>
                               {tutorial.difficulty}
                             </Badge>

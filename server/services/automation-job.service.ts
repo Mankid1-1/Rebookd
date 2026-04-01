@@ -11,6 +11,29 @@ export async function enqueueAutomationJob(db: Db, input: {
   stepIndex: number;
   nextRunAt: Date;
 }) {
+  // FIX #8: Dedup check — prevent duplicate jobs for same tenant+lead+automation+step
+  // Only check pending jobs (completed/failed ones are fine to re-enqueue)
+  if (input.leadId) {
+    const [existing] = await db
+      .select({ id: automationJobs.id })
+      .from(automationJobs)
+      .where(
+        and(
+          eq(automationJobs.tenantId, input.tenantId),
+          eq(automationJobs.automationId, input.automationId),
+          eq(automationJobs.leadId, input.leadId),
+          eq(automationJobs.stepIndex, input.stepIndex),
+          eq(automationJobs.status, "pending"),
+        )
+      )
+      .limit(1);
+
+    if (existing) {
+      // Duplicate pending job — skip enqueue
+      return;
+    }
+  }
+
   await db.insert(automationJobs).values({
     tenantId: input.tenantId,
     automationId: input.automationId,

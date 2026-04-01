@@ -1,0 +1,14 @@
+Hi {{owner_name}},
+
+Just circling back on my last note.
+
+Quick stat that might hit home: {{stat}}. That is revenue walking out the door every month — and a 2-minute SMS sent at the right time brings most of it back.
+
+Rebooked handles it all automatically. 19 built-in automations for reminders, no-show recovery, cancellation rescues, win-backs — the works.
+
+I am offering {{business_type_label}} owners a completely risk-free trial. 35 days. If the ROI is not there, you owe nothing.
+
+Can I show you how it works in 10 minutes?
+
+{{sender_name}}
+{{rebooked_email}}

@@ -8,13 +8,26 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>Rebooked — AI-Powered SMS Re-engagement</title>
     <meta name="description" content="Rebooked — AI-powered SMS re-engagement for appointment businesses. Reduce no-shows, recover cancellations, and win back lapsed clients automatically." />
-    <meta name="theme-color" content="#1e1e2e" />
+    <meta name="theme-color" content="#0D1B2A" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/logo.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- Umami Analytics — free, cookie-free, GDPR-compliant -->
+    <!-- Sign up at https://cloud.umami.is, add your site, and replace YOUR_WEBSITE_ID below -->
+    <script defer src="https://cloud.umami.is/script.js" data-website-id="57500d62-29f5-4761-87be-e96cb4b1174f"></script>
   </head>
 
   <body>
+    <script>
+      (function(){
+        var t = localStorage.getItem('rebooked-theme') || 'abyss';
+        if (!['abyss','light','corporate','pink','emerald'].includes(t)) t = 'abyss';
+        document.documentElement.setAttribute('data-theme', t);
+        if (t === 'abyss') document.documentElement.classList.add('dark');
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
 

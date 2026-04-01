@@ -308,10 +308,12 @@ class SDKServer {
       throw new ForbiddenError("User not found");
     }
 
-    await UserService.upsertUser(database, {
-      openId: user.openId,
-      lastSignedIn: signedInAt,
-    });
+    // Update last signed in (non-blocking — don't break auth if this fails)
+    try {
+      await UserService.updateLastSignedIn(database, user.id);
+    } catch (e) {
+      console.warn("[Auth] Failed to update lastSignedIn (non-fatal):", (e as Error).message);
+    }
 
     return user;
   }

@@ -132,7 +132,7 @@ export function LeadMessageComposer({ leadId, leadName }: LeadMessageComposerPro
           />
           <div className="absolute bottom-2 right-3 text-[10px] text-muted-foreground tabular-nums">
             {charCount > 0 && (
-              <span className={charCount > 160 ? "text-yellow-400" : ""}>
+              <span className={charCount > 160 ? "text-warning" : ""}>
                 {charCount}/{smsLimit} · {smsSegments} SMS
               </span>
             )}

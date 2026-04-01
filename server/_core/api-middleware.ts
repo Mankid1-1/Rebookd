@@ -27,10 +27,10 @@ export function securityHeadersMiddleware(req: Request, res: Response, next: Nex
   // Enable XSS protection
   res.setHeader('X-XSS-Protection', '1; mode=block');
   
-  // Content Security Policy
+  // Content Security Policy — no unsafe-inline for scripts (styles still need it for CSS-in-JS)
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;"
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.stripe.com https://js.stripe.com; font-src 'self' https://fonts.gstatic.com; frame-src https://js.stripe.com;"
   );
   
   // Referrer Policy
@@ -86,19 +86,20 @@ export function requestLoggingMiddleware(req: Request, res: Response, next: Next
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 const MAX_RATE_LIMIT_ENTRIES = 10_000;
 
-// Cleanup expired rate limit entries every 60 seconds
+// Cleanup expired rate limit entries every 30 seconds with proper TTL eviction
 setInterval(() => {
   const now = Date.now();
   for (const [key, val] of rateLimitStore) {
     if (val.resetTime <= now) rateLimitStore.delete(key);
   }
-  // Hard cap: if still too large, evict oldest entries
+  // Hard cap: if still too large after TTL eviction, evict oldest entries
   if (rateLimitStore.size > MAX_RATE_LIMIT_ENTRIES) {
-    const excess = rateLimitStore.size - MAX_RATE_LIMIT_ENTRIES;
-    const keys = rateLimitStore.keys();
-    for (let i = 0; i < excess; i++) keys.next().value && rateLimitStore.delete(keys.next().value as string);
+    const entries = Array.from(rateLimitStore.entries())
+      .sort((a, b) => a[1].resetTime - b[1].resetTime);
+    const toEvict = entries.slice(0, rateLimitStore.size - MAX_RATE_LIMIT_ENTRIES);
+    for (const [key] of toEvict) rateLimitStore.delete(key);
   }
-}, 60_000).unref();
+}, 30_000).unref();
 
 export function createRateLimitMiddleware(
   windowMs: number = 60 * 1000, // 1 minute
@@ -234,6 +235,17 @@ export function errorHandlingMiddleware(
 
   const statusCode = err.statusCode || 500;
   const message = err.userMessage || 'Internal server error';
+
+  // Feed 500+ errors to sentinel for detection and auto-repair
+  if (statusCode >= 500) {
+    const { reportToSentinel } = require("./sentinel-bridge");
+    reportToSentinel({
+      type: "system" as const,
+      message: `[EXPRESS] ${err instanceof Error ? err.message : String(err)}`,
+      detail: err instanceof Error ? err.stack : undefined,
+      severity: "high" as const,
+    });
+  }
 
   res.status(statusCode).json({
     error: message,

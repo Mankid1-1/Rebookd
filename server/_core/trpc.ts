@@ -46,7 +46,30 @@ const requireTenant = t.middleware(async ({ ctx, next }) => {
   return next({ ctx: { ...ctx, user: ctx.user, tenantId } });
 });
 
-export const tenantProcedure = t.procedure.use(requireTenant);
+// ─── Sentinel gate — block requests to features disabled by sentinel ─────────
+const sentinelGate = t.middleware(async ({ ctx, next, path }) => {
+  const routerName = path.split(".")[0];
+  const featureMap: Record<string, string> = {
+    ai: "ai_chat",
+    automations: "automations",
+    billing: "billing",
+    webhooks: "webhooks",
+  };
+  const feature = featureMap[routerName];
+  if (feature && ctx.db) {
+    const { isFeatureDisabled } = await import("./sentinel-bridge");
+    const disabled = await isFeatureDisabled(ctx.db, feature, (ctx as any).tenantId);
+    if (disabled) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "This feature is temporarily disabled for maintenance. Our automated systems are working on a fix.",
+      });
+    }
+  }
+  return next();
+});
+
+export const tenantProcedure = t.procedure.use(requireTenant).use(sentinelGate);
 
 // ─── Admin middleware ─────────────────────────────────────────────────────────
 const requireAdmin = t.middleware(async ({ ctx, next }) => {

@@ -7,12 +7,22 @@ import { dirname } from 'path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '..', 'dist');
 
+// Credentials must be provided via environment variables — never hardcode them.
+// Set DEPLOY_HOST, DEPLOY_USER, and either DEPLOY_PASSWORD or DEPLOY_KEY_PATH
+// in your shell or CI/CD secrets before running this script.
 const config = {
-  host: '173.249.56.141',
-  port: 22,
-  username: 'rebooked',
-  password: 'MuvxqubynWbm69BbBgRc',
+  host: process.env.DEPLOY_HOST,
+  port: parseInt(process.env.DEPLOY_PORT || '22'),
+  username: process.env.DEPLOY_USER,
+  ...(process.env.DEPLOY_KEY_PATH
+    ? { privateKey: readFileSync(process.env.DEPLOY_KEY_PATH) }
+    : { password: process.env.DEPLOY_PASSWORD }),
 };
+
+if (!config.host || !config.username) {
+  console.error('Error: DEPLOY_HOST and DEPLOY_USER environment variables must be set.');
+  process.exit(1);
+}
 
 function uploadFile(sftp, localPath, remotePath) {
   return new Promise((resolve, reject) => {
@@ -45,6 +55,8 @@ async function deploy() {
         await uploadFile(sftp, join(distDir, 'index.js'), '/home/rebooked/app/index.js');
         console.log('Uploading worker.js...');
         await uploadFile(sftp, join(distDir, 'worker.js'), '/home/rebooked/app/worker.js');
+        console.log('Uploading sentinel.js...');
+        await uploadFile(sftp, join(distDir, 'sentinel.js'), '/home/rebooked/app/sentinel.js');
 
         // Upload public/index.html
         console.log('Uploading index.html...');

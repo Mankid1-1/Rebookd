@@ -21,6 +21,7 @@ import {
   ArrowRight
 } from "lucide-react";
 import { toast } from "sonner";
+import { HelpTooltip } from "@/components/ui/HelpTooltip";
 
 export default function BookingConversion() {
   const [activeTab, setActiveTab] = useState("overview");
@@ -32,7 +33,11 @@ export default function BookingConversion() {
     autoFillEnabled: true
   });
 
-  const { data: metrics, isLoading } = trpc.analytics.bookingConversionMetrics.useQuery(undefined, { refetchInterval: 30000 });
+  const { data: metrics, isLoading, error: metricsError } = trpc.analytics.bookingConversionMetrics.useQuery(undefined, {
+    refetchInterval: 60_000,
+    retry: 2,
+    retryDelay: 3000,
+  });
   const { data: settings } = trpc.tenant.settings.useQuery(undefined, { retry: false });
   const updateConfig = trpc.tenant.updateBookingConversionConfig.useMutation({
     onSuccess: () => toast.success("Booking conversion configuration updated"),
@@ -49,15 +54,8 @@ export default function BookingConversion() {
     updateConfig.mutate(config);
   };
 
-  const handleTestBooking = () => {
-    toast.success("Test booking flow initiated successfully");
-  };
-
-  const handlePreviewMobile = () => {
-    toast.success("Mobile preview opened in new window");
-  };
-
-  if (isLoading) return <DashboardLayout>Loading...</DashboardLayout>;
+  if (isLoading && !metricsError) return <DashboardLayout><div className="flex items-center justify-center h-64"><div className="animate-pulse text-muted-foreground">Loading booking conversion data...</div></div></DashboardLayout>;
+  if (metricsError) return <DashboardLayout><div className="flex flex-col items-center justify-center h-64 gap-4"><p className="text-muted-foreground">Unable to load booking metrics right now.</p><Button variant="outline" onClick={() => window.location.reload()}>Retry</Button></div></DashboardLayout>;
 
   return (
     <DashboardLayout>
@@ -65,21 +63,16 @@ export default function BookingConversion() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold">Booking Conversion</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold">Booking Conversion</h1>
+              <HelpTooltip content="Tracks how many of your leads convert into actual booked appointments and helps improve that rate." variant="info"><span /></HelpTooltip>
+            </div>
             <p className="text-muted-foreground mt-2">
               Maximize conversions with mobile-first booking and frictionless customer experience
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={handleTestBooking} variant="outline">
-              <Calendar className="h-4 w-4 mr-2" />
-              Test Booking
-            </Button>
-            <Button onClick={handlePreviewMobile} variant="outline">
-              <Smartphone className="h-4 w-4 mr-2" />
-              Mobile Preview
-            </Button>
-            <Button onClick={handleSaveConfig}>
+          <div className="flex gap-2 flex-wrap justify-end">
+            <Button onClick={handleSaveConfig} className="whitespace-nowrap">
               <CheckCircle className="h-4 w-4 mr-2" />
               Save Configuration
             </Button>
@@ -91,8 +84,8 @@ export default function BookingConversion() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg mr-3">
-                  <Users className="h-6 w-6 text-green-600" />
+                <div className="p-2 bg-success/10 rounded-lg mr-3">
+                  <Users className="h-6 w-6 text-success" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Leads</p>
@@ -105,11 +98,15 @@ export default function BookingConversion() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                  <TrendingUp className="h-6 w-6 text-blue-600" />
+                <div className="p-2 bg-info/10 rounded-lg mr-3">
+                  <TrendingUp className="h-6 w-6 text-info" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Conversions</p>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    <HelpTooltip content="Leads who completed a booking after clicking a Rebooked booking link" variant="info">
+                      Conversions
+                    </HelpTooltip>
+                  </p>
                   <p className="text-2xl font-bold">{metrics?.bookingsGenerated || 0}</p>
                 </div>
               </div>
@@ -119,11 +116,15 @@ export default function BookingConversion() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-100 rounded-lg mr-3">
-                  <Smartphone className="h-6 w-6 text-purple-600" />
+                <div className="p-2 bg-accent/10 rounded-lg mr-3">
+                  <Smartphone className="h-6 w-6 text-accent" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Mobile Rate</p>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    <HelpTooltip content="Percentage of bookings completed on a mobile device. High mobile rate = friction-free flow is critical." variant="info">
+                      Mobile Rate
+                    </HelpTooltip>
+                  </p>
                   <p className="text-2xl font-bold">{metrics?.mobileOptimization || 0}%</p>
                 </div>
               </div>
@@ -133,11 +134,15 @@ export default function BookingConversion() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-orange-100 rounded-lg mr-3">
-                  <Zap className="h-6 w-6 text-orange-600" />
+                <div className="p-2 bg-warning/10 rounded-lg mr-3">
+                  <Zap className="h-6 w-6 text-warning" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Revenue Impact</p>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    <HelpTooltip content="Estimated monthly revenue increase from reducing booking friction" variant="info">
+                      Revenue Impact
+                    </HelpTooltip>
+                  </p>
                   <p className="text-2xl font-bold">${((metrics?.revenueImpact || 0) / 100).toFixed(0)}</p>
                 </div>
               </div>
@@ -163,7 +168,11 @@ export default function BookingConversion() {
                 <TabsContent value="overview" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="one-click">One-Click Booking</Label>
+                      <Label htmlFor="one-click">
+                        <HelpTooltip content="Lets clients book with a single tap — no account creation or form filling required" variant="info">
+                          One-Click Booking
+                        </HelpTooltip>
+                      </Label>
                       <Switch
                         id="one-click"
                         checked={config.oneClickBooking}
@@ -173,7 +182,11 @@ export default function BookingConversion() {
                       />
                     </div>
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="frictionless">Frictionless Flow</Label>
+                      <Label htmlFor="frictionless">
+                        <HelpTooltip content="Removes extra confirmation steps from the booking process to reduce drop-off" variant="info">
+                          Frictionless Flow
+                        </HelpTooltip>
+                      </Label>
                       <Switch
                         id="frictionless"
                         checked={config.frictionlessFlow}
@@ -183,7 +196,11 @@ export default function BookingConversion() {
                       />
                     </div>
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="auto-fill">Auto-Fill Enabled</Label>
+                      <Label htmlFor="auto-fill">
+                        <HelpTooltip content="Pre-fills client details from their SMS conversation so they don't have to retype them" variant="info">
+                          Auto-Fill Enabled
+                        </HelpTooltip>
+                      </Label>
                       <Switch
                         id="auto-fill"
                         checked={config.autoFillEnabled}
@@ -198,7 +215,11 @@ export default function BookingConversion() {
                 <TabsContent value="mobile" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="mobile-first">Mobile-First Design</Label>
+                      <Label htmlFor="mobile-first">
+                        <HelpTooltip content="Optimizes the booking page layout specifically for small screens" variant="info">
+                          Mobile-First Design
+                        </HelpTooltip>
+                      </Label>
                       <Switch
                         id="mobile-first"
                         checked={config.mobileFirstEnabled}
@@ -207,7 +228,7 @@ export default function BookingConversion() {
                         }
                       />
                     </div>
-                    <div className="p-4 bg-blue-50 rounded-lg">
+                    <div className="p-4 bg-info/10 rounded-lg">
                       <h4 className="font-medium mb-2">Mobile Optimization Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Touch-friendly interface</li>
@@ -230,7 +251,11 @@ export default function BookingConversion() {
                 <TabsContent value="booking" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="sms-booking">SMS Booking</Label>
+                      <Label htmlFor="sms-booking">
+                        <HelpTooltip content="Allows clients to book directly by replying to an SMS with a keyword like YES or BOOK" variant="info">
+                          SMS Booking
+                        </HelpTooltip>
+                      </Label>
                       <Switch
                         id="sms-booking"
                         checked={config.smsBookingEnabled}
@@ -239,7 +264,7 @@ export default function BookingConversion() {
                         }
                       />
                     </div>
-                    <div className="p-4 bg-green-50 rounded-lg">
+                    <div className="p-4 bg-success/10 rounded-lg">
                       <h4 className="font-medium mb-2">Booking Flow Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Direct SMS-to-booking conversion</li>
@@ -254,7 +279,7 @@ export default function BookingConversion() {
                 
                 <TabsContent value="advanced" className="space-y-6 mt-6">
                   <div className="space-y-4">
-                    <div className="p-4 bg-orange-50 rounded-lg">
+                    <div className="p-4 bg-warning/10 rounded-lg">
                       <h4 className="font-medium mb-2">Advanced Options</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Custom booking templates</li>
@@ -281,7 +306,7 @@ export default function BookingConversion() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between p-3 bg-white rounded border">
                       <span className="text-sm">One-Click Booking</span>
-                      <Badge className="bg-green-100 text-green-800">Active</Badge>
+                      <Badge className="bg-success/10 text-success">Active</Badge>
                     </div>
                     <div className="p-3 bg-white rounded border">
                       <p className="text-sm mb-2">Select your preferred time:</p>
@@ -301,10 +326,7 @@ export default function BookingConversion() {
                   </div>
                 </div>
                 <div className="flex justify-center">
-                  <Button onClick={handlePreviewMobile} variant="outline">
-                    <ArrowRight className="h-4 w-4 mr-2" />
-                    Open Full Preview
-                  </Button>
+                  <p className="text-xs text-muted-foreground">Preview of your booking experience</p>
                 </div>
               </div>
             </CardContent>

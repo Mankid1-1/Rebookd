@@ -228,16 +228,26 @@ function generateAfterHoursMessage(
 }
 
 /**
- * Check if current time is outside business hours
+ * Check if current time is outside business hours.
+ *
+ * Uses the lead's own timezone when available (e.g. "America/Chicago"),
+ * falling back to the tenant's configured business-hours timezone.
+ * This prevents automations from firing during the lead's local after-hours
+ * (e.g. a New York business texting a Pacific-time client at 6 AM their time).
  */
-function isOutsideBusinessHours(): boolean {
+function isOutsideBusinessHours(leadTimezone?: string | null): boolean {
   const now = new Date();
   const businessHours = DEFAULT_CONFIG.businessHours;
+  const tz = leadTimezone || businessHours.timezone;
 
-  // Get current time in business timezone
-  const localTime = new Date(now.toLocaleString("en-US", {
-    timeZone: businessHours.timezone
-  }));
+  // Get current time in the relevant timezone
+  let localTime: Date;
+  try {
+    localTime = new Date(now.toLocaleString("en-US", { timeZone: tz }));
+  } catch {
+    // Invalid timezone string — fall back to business default
+    localTime = new Date(now.toLocaleString("en-US", { timeZone: businessHours.timezone }));
+  }
 
   const currentHour = localTime.getHours();
   const currentDay = localTime.getDay();
@@ -277,8 +287,17 @@ export async function processAfterHoursQueue(
       .limit(DEFAULT_CONFIG.maxQueueSize);
 
     let processedLeads = 0;
+    let skippedQuietHours = 0;
 
     for (const lead of afterHoursLeads) {
+      // Respect the lead's local timezone — don't send during their after-hours
+      // (e.g. don't text a Pacific-time lead at 5 AM just because it's 8 AM Eastern)
+      const leadTz = (lead as any).timezone;
+      if (leadTz && isOutsideBusinessHours(leadTz)) {
+        skippedQuietHours++;
+        continue; // Will be picked up on the next cycle when it's business hours in their zone
+      }
+
       // Generate booking link
       const bookingLink = generateAfterHoursBookingLink(tenantId, lead.id);
 
@@ -286,6 +305,10 @@ export async function processAfterHoursQueue(
       await sendAfterHoursResponse(db, tenantId, lead.id, bookingLink, true);
 
       processedLeads++;
+    }
+
+    if (skippedQuietHours > 0) {
+      logger.info('After-hours queue: skipped leads in quiet hours', { skippedQuietHours });
     }
 
     logger.info('After-hours queue processed', {

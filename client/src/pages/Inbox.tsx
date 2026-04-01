@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { useMemo, useState, useRef, useEffect } from "react";
+import { HelpTooltip, HelpIcon } from "@/components/ui/HelpTooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function Inbox() {
   const [activeLeadId, setActiveLeadId] = useState<number | null>(null);
@@ -28,11 +30,13 @@ export default function Inbox() {
         <div className="col-span-4">
           <Card className="h-[calc(100vh-5rem)] overflow-y-auto">
             <CardContent>
-              <h2 className="text-lg font-semibold mb-2">Leads</h2>
+              <HelpTooltip content={{ basic: "Your text message conversations", intermediate: "Unified inbox for all SMS conversations across leads", advanced: "Messages table joined with leads, ordered by last_message_at. Real-time polling every 10s" }} variant="info">
+                <h2 className="text-lg font-semibold mb-2">Inbox</h2>
+              </HelpTooltip>
               {leads?.leads?.map((lead) => (
                 <button
                   key={lead.id}
-                  className={`block w-full text-left bg-white/5 border rounded p-2 mb-2 ${activeLeadId === lead.id ? "border-blue-500" : "border-transparent"}`}
+                  className={`block w-full text-left bg-white/5 border rounded p-2 mb-2 ${activeLeadId === lead.id ? "border-info" : "border-transparent"}`}
                   onClick={() => setActiveLeadId(lead.id)}
                 >
                   {lead.name || lead.phone}
@@ -45,7 +49,9 @@ export default function Inbox() {
         <div className="col-span-8">
           <Card className="h-[calc(100vh-5rem)] flex flex-col">
             <CardContent className="flex-1 overflow-y-auto">
-              <h2 className="text-lg font-semibold mb-2">Conversation</h2>
+              <HelpTooltip content={{ basic: "Find a conversation by name or number", intermediate: "Search across all conversations by lead name, phone, or message content", advanced: "Full-text search against leads.name, leads.phone, and messages.body columns" }} variant="info">
+                <h2 className="text-lg font-semibold mb-2">Conversation</h2>
+              </HelpTooltip>
               {!activeLead && <p className="text-muted-foreground">Select a lead to view messages.</p>}
               {activeLead && (
                 <div>
@@ -62,10 +68,19 @@ export default function Inbox() {
                   ) : (
                     <div className="space-y-2">
                       {messages?.map((msg) => (
-                        <div key={msg.id} className={`p-2 rounded ${msg.direction === "outbound" ? "bg-blue-100" : "bg-gray-100"}`}>
-                          <p className="text-sm">{msg.body}</p>
-                          <p className="text-xs text-muted-foreground">{new Date(msg.createdAt).toLocaleString()}</p>
-                        </div>
+                        <TooltipProvider key={msg.id}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className={`p-2 rounded cursor-default ${msg.direction === "outbound" ? "bg-info/10" : "bg-muted"}`}>
+                                <p className="text-sm">{msg.body}</p>
+                                <p className="text-xs text-muted-foreground">{new Date(msg.createdAt).toLocaleString()}</p>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{msg.direction === "outbound" ? "Sent by Rebooked" : "Reply from lead"} · {new Date(msg.createdAt).toLocaleString()}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       ))}
                       <div ref={messagesEndRef} />
                     </div>
@@ -77,7 +92,12 @@ export default function Inbox() {
             {activeLead && (
               <div className="p-3 border-t border-border">
                 <div className="flex items-center gap-2">
-                  <Input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a reply..." />
+                  <HelpTooltip content="Type a manual reply to send to this lead via SMS. This is logged in the conversation history and counts toward your monthly message allowance." variant="info">
+                    <Input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a reply..." className="flex-1" />
+                  </HelpTooltip>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
                   <Button
                     onClick={() => {
                       if (!activeLeadId || !draft.trim()) return;
@@ -99,6 +119,10 @@ export default function Inbox() {
                   >
                     Send
                   </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Send this message as an SMS to the selected lead</p></TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               </div>
             )}

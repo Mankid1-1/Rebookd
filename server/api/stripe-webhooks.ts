@@ -8,10 +8,9 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { publicProcedure, router } from '../_core/trpc';
 import { stripeConnectService } from '../services/stripe-connect.service';
-import { processStripeWebhook } from '../webhooks/stripe-webhook-handler';
 import { TRPCError } from '@trpc/server';
 import { getDb } from '../db';
-import { users, subscriptions, stripeSubscriptions, billingInvoices, tenants, systemErrorLogs } from '../../drizzle/schema';
+import { users, subscriptions, billingInvoices, tenants, systemErrorLogs } from '../../drizzle/schema';
 import { EmailService } from '../services/email.service';
 import { logger } from '../_core/logger';
 
@@ -24,7 +23,7 @@ const webhookEventTypes = [
   'account.updated',
   'payout.created',
   'payout.failed',
-  'invoice.payment_succeeded',
+  'invoice.paid',
   'invoice.payment_failed',
 ] as const;
 
@@ -94,7 +93,7 @@ export const processWebhookEvent = publicProcedure
           await handlePayoutFailed(stripeObject);
           break;
 
-        case 'invoice.payment_succeeded':
+        case 'invoice.paid':
           stripeObject = event.data.object;
           logger.info(`[Webhook] Invoice payment succeeded: $${stripeObject.amount_paid / 100}`);
           await handleInvoicePaymentSucceeded(stripeObject);
@@ -139,12 +138,12 @@ async function findUserByStripeCustomerId(customerId: string) {
   return result[0] ?? null;
 }
 
-async function findStripeSubscription(subscriptionId: string) {
+async function findSubscriptionByStripeId(stripeSubId: string) {
   const db = await getDb();
   const result = await db
     .select()
-    .from(stripeSubscriptions)
-    .where(eq(stripeSubscriptions.id, subscriptionId))
+    .from(subscriptions)
+    .where(eq(subscriptions.stripeSubscriptionId, stripeSubId))
     .limit(1);
   return result[0] ?? null;
 }
@@ -167,21 +166,13 @@ async function handleSubscriptionTrialEnding(subscription: any) {
 
     // Update subscription trial reminder flag in the database
     const db = await getDb();
-    const existingSub = await findStripeSubscription(subscription.id);
+    const existingSub = await findSubscriptionByStripeId(subscription.id);
 
     if (existingSub) {
       await db
-        .update(stripeSubscriptions)
-        .set({ status: 'trialing', updatedAt: new Date() })
-        .where(eq(stripeSubscriptions.id, subscription.id));
-    }
-
-    // Also update the subscriptions table if there is a matching record
-    if (existingSub?.tenantId) {
-      await db
         .update(subscriptions)
-        .set({ trialReminderSent: true, updatedAt: new Date() })
-        .where(eq(subscriptions.tenantId, existingSub.tenantId));
+        .set({ status: 'trialing', trialReminderSent: true, updatedAt: new Date() })
+        .where(eq(subscriptions.stripeSubscriptionId, subscription.id));
     }
 
     // Send trial ending notification email
@@ -231,24 +222,18 @@ async function handleSubscriptionDeleted(subscription: any) {
 
     const db = await getDb();
 
-    // Update the stripe subscription status to canceled
-    const existingSub = await findStripeSubscription(subscription.id);
+    // Update the subscription status to canceled
+    const existingSub = await findSubscriptionByStripeId(subscription.id);
     if (existingSub) {
       await db
-        .update(stripeSubscriptions)
+        .update(subscriptions)
         .set({
           status: 'canceled',
           canceledAt: new Date(),
           endedAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(stripeSubscriptions.id, subscription.id));
-
-      // Also update the tenant's subscription record
-      await db
-        .update(subscriptions)
-        .set({ status: 'canceled', updatedAt: new Date() })
-        .where(eq(subscriptions.tenantId, existingSub.tenantId));
+        .where(eq(subscriptions.stripeSubscriptionId, subscription.id));
     }
 
     // Find the user to send cancellation email
@@ -287,11 +272,31 @@ async function handleSubscriptionDeleted(subscription: any) {
 
 async function handleCheckoutSessionCompleted(session: any) {
   try {
-    // Process the successful checkout using our comprehensive webhook handler
-    await processStripeWebhook({
-      type: 'checkout.session.completed',
-      data: { object: session }
-    });
+    // Persist subscription to DB using proper Drizzle ORM
+    const db = await getDb();
+    const stripeSubId = typeof session.subscription === 'string' ? session.subscription : undefined;
+    const tenantId = session.metadata?.tenantId ? Number(session.metadata.tenantId) : undefined;
+
+    if (stripeSubId && tenantId) {
+      const { stripe } = await import('../_core/stripe');
+      const sub = await stripe.subscriptions.retrieve(stripeSubId, { expand: ['items.data.price'] }).catch(() => null);
+      const existing = await db.select().from(subscriptions).where(eq(subscriptions.tenantId, tenantId)).limit(1);
+      const payload = {
+        stripeId: stripeSubId,
+        stripeSubscriptionId: stripeSubId,
+        stripeCustomerId: typeof session.customer === 'string' ? session.customer : undefined,
+        status: ((sub?.status ?? 'active') as 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid' | 'incomplete'),
+        currentPeriodStart: sub?.current_period_start ? new Date(sub.current_period_start * 1000) : undefined,
+        currentPeriodEnd: sub?.current_period_end ? new Date(sub.current_period_end * 1000) : undefined,
+        trialEndsAt: sub?.trial_end ? new Date(sub.trial_end * 1000) : undefined,
+        updatedAt: new Date(),
+      };
+      if (existing[0]) {
+        await db.update(subscriptions).set(payload).where(eq(subscriptions.tenantId, tenantId));
+      } else {
+        await db.insert(subscriptions).values({ tenantId, ...payload });
+      }
+    }
 
     // Send confirmation email if we have a customer email
     const customerEmail = session.customer_details?.email || session.customer_email;
@@ -662,22 +667,16 @@ async function handleInvoicePaymentSucceeded(invoice: any) {
         ? invoice.subscription
         : invoice.subscription?.id;
 
-      const existingSub = await findStripeSubscription(subId);
+      const existingSub = await findSubscriptionByStripeId(subId);
       if (existingSub) {
         await db
-          .update(stripeSubscriptions)
+          .update(subscriptions)
           .set({
             status: 'active',
             latestInvoiceId: invoice.id,
             updatedAt: new Date(),
           })
-          .where(eq(stripeSubscriptions.id, subId));
-
-        // Also ensure the tenant subscription is active
-        await db
-          .update(subscriptions)
-          .set({ status: 'active', updatedAt: new Date() })
-          .where(eq(subscriptions.tenantId, existingSub.tenantId));
+          .where(eq(subscriptions.stripeSubscriptionId, subId));
       }
     }
 
@@ -757,21 +756,16 @@ async function handleInvoicePaymentFailed(invoice: any) {
         ? invoice.subscription
         : invoice.subscription?.id;
 
-      const existingSub = await findStripeSubscription(subId);
+      const existingSub = await findSubscriptionByStripeId(subId);
       if (existingSub) {
         await db
-          .update(stripeSubscriptions)
+          .update(subscriptions)
           .set({
             status: 'past_due',
             latestInvoiceId: invoice.id,
             updatedAt: new Date(),
           })
-          .where(eq(stripeSubscriptions.id, subId));
-
-        await db
-          .update(subscriptions)
-          .set({ status: 'past_due', updatedAt: new Date() })
-          .where(eq(subscriptions.tenantId, existingSub.tenantId));
+          .where(eq(subscriptions.stripeSubscriptionId, subId));
       }
     }
 

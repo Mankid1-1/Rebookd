@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import { useLocale } from "@/contexts/LocaleContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,6 +47,8 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { HelpTooltip } from "@/components/ui/HelpTooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -59,13 +62,7 @@ const TOTAL_PER_REFERRAL = PAYOUT_PER_MONTH * PAYOUT_MONTHS;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const fmtCurrency = (n: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(n);
+// fmtCurrency is provided by useLocale() inside the component
 
 const fmtDate = (d: string | Date) =>
   new Date(d).toLocaleDateString("en-US", {
@@ -114,11 +111,11 @@ function StatusBadge({ status }: { status: ReferralStatus }) {
   > = {
     active: {
       label: "Active",
-      className: "bg-emerald-500/15 text-emerald-500 border-emerald-500/30",
+      className: "bg-success/15 text-success border-success/30",
     },
     churned: {
       label: "Churned",
-      className: "bg-red-500/15 text-red-500 border-red-500/30",
+      className: "bg-destructive/15 text-destructive border-destructive/30",
     },
     expired: {
       label: "Completed",
@@ -143,17 +140,17 @@ function PayoutStatusBadge({
   const config: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
     paid: {
       label: "Paid",
-      className: "bg-emerald-500/15 text-emerald-500 border-emerald-500/30",
+      className: "bg-success/15 text-success border-success/30",
       icon: <CheckCircle2 className="w-3 h-3" />,
     },
     upcoming: {
       label: "Upcoming",
-      className: "bg-amber-500/15 text-amber-500 border-amber-500/30",
+      className: "bg-warning/15 text-warning border-warning/30",
       icon: <Clock className="w-3 h-3" />,
     },
     forfeited: {
       label: "Forfeited",
-      className: "bg-red-500/15 text-red-500 border-red-500/30",
+      className: "bg-destructive/15 text-destructive border-destructive/30",
       icon: <XCircle className="w-3 h-3" />,
     },
   };
@@ -169,15 +166,16 @@ function PayoutStatusBadge({
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function Referral() {
+  const { formatCurrency: fmtCurrency } = useLocale();
   const [termsOpen, setTermsOpen] = useState(false);
   const [showAllPayouts, setShowAllPayouts] = useState(false);
 
   // ─── Queries ────────────────────────────────────────────────────────────
-  const { data: codeData } = trpc.referral.getMyCode.useQuery(undefined, {
+  const { data: codeData } = trpc.referral.getCode.useQuery(undefined, {
     retry: false,
   });
 
-  const { data: statsData } = trpc.referral.getStats.useQuery(undefined, {
+  const { data: statsData } = trpc.referral.stats.useQuery(undefined, {
     retry: false,
   });
 
@@ -197,14 +195,26 @@ export default function Referral() {
 
   const stats = {
     totalEarned: statsData?.totalEarned ?? 0,
-    pendingPayouts: statsData?.pendingPayouts ?? 0,
+    pendingPayouts: statsData?.pendingPayout ?? 0,
     lifetimeEarnings: statsData?.lifetimeEarnings ?? statsData?.totalEarned ?? 0,
-    activeReferrals: statsData?.activeReferrals ?? 0,
+    activeReferrals: statsData?.completedReferrals ?? 0,
     totalReferrals: statsData?.totalReferrals ?? 0,
-    nextPayoutDate: statsData?.nextPayoutDate ?? null,
+    nextPayoutDate: null as string | null,
   };
 
-  const referrals: ReferralItem[] = referralList ?? [];
+  const referrals: ReferralItem[] = (referralList ?? []).map((r: any) => ({
+    id: String(r.id),
+    code: r.referralCode,
+    referredAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
+    status: r.status === "completed" ? "active" as const : r.status === "expired" ? "expired" as const : "churned" as const,
+    monthsActive: r.completedAt
+      ? Math.min(6, Math.floor((Date.now() - new Date(r.completedAt).getTime()) / (30 * 24 * 60 * 60 * 1000)) + 1)
+      : 0,
+    totalEarned: r.completedAt
+      ? Math.min(6, Math.floor((Date.now() - new Date(r.completedAt).getTime()) / (30 * 24 * 60 * 60 * 1000)) + 1) * 50
+      : 0,
+    nextPayoutDate: r.payoutScheduledAt ? new Date(r.payoutScheduledAt).toISOString() : null,
+  }));
 
   const leaderboard: LeaderboardEntry[] = (leaderboardData ?? []).map((entry: any) => ({
     rank: entry.rank,
@@ -288,9 +298,9 @@ export default function Referral() {
         {/* ================================================================
             1. HERO CARD
             ================================================================ */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600/20 via-primary/15 to-violet-600/10 border border-emerald-500/20 p-8 md:p-12">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-success/20 via-primary/15 to-accent/10 border border-success/20 p-8 md:p-12">
           {/* Background decoration */}
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-400/5 via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-success/5 via-transparent to-transparent" />
           <div className="absolute -top-10 -right-10 opacity-[0.07]">
             <Gift className="w-56 h-56" />
           </div>
@@ -300,21 +310,24 @@ export default function Referral() {
 
           <div className="relative z-10 max-w-2xl">
             <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="w-5 h-5 text-emerald-400" />
-              <span className="text-sm font-semibold text-emerald-400 uppercase tracking-wider">
+              <Sparkles className="w-5 h-5 text-success" />
+              <span className="text-sm font-semibold text-success uppercase tracking-wider">
                 Referral Program
               </span>
             </div>
-            <h1
-              className="text-3xl md:text-5xl font-bold tracking-tight mb-3"
-              style={FONT_HEADING}
-            >
-              Earn{" "}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-emerald-300">
-                {fmtCurrency(TOTAL_PER_REFERRAL)}
-              </span>{" "}
-              per referral
-            </h1>
+            <div className="flex items-start gap-2 mb-3">
+              <h1
+                className="text-3xl md:text-5xl font-bold tracking-tight"
+                style={FONT_HEADING}
+              >
+                Earn{" "}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-success to-success/70">
+                  {fmtCurrency(TOTAL_PER_REFERRAL)}
+                </span>{" "}
+                per referral
+              </h1>
+              <HelpTooltip content="Earn $50/month for 6 months for every business you refer that stays active on Rebooked." variant="info"><span /></HelpTooltip>
+            </div>
             <p className="text-muted-foreground text-lg leading-relaxed mb-8 max-w-xl">
               Refer a friend to Rebooked and earn{" "}
               <span className="text-foreground font-semibold">
@@ -327,7 +340,7 @@ export default function Referral() {
               <Button
                 size="lg"
                 onClick={copyLink}
-                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20"
+                className="gap-2 bg-success hover:bg-success/90 text-success-foreground shadow-lg shadow-success/20"
               >
                 <Share2 className="w-4 h-4" />
                 Copy Referral Link
@@ -365,13 +378,17 @@ export default function Referral() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                    <DollarSign className="w-5 h-5 text-emerald-500" />
+                  <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center">
+                    <DollarSign className="w-5 h-5 text-success" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Earned</p>
+                    <p className="text-sm text-muted-foreground">
+                      <HelpTooltip content="Your cumulative referral earnings. Paid out on the 1st of each month." variant="info">
+                        Total Earned
+                      </HelpTooltip>
+                    </p>
                     <p
-                      className="text-2xl font-bold tracking-tight text-emerald-500"
+                      className="text-2xl font-bold tracking-tight text-success"
                       style={FONT_HEADING}
                     >
                       {fmtCurrency(stats.totalEarned)}
@@ -384,8 +401,8 @@ export default function Referral() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                    <Clock className="w-5 h-5 text-amber-500" />
+                  <div className="h-10 w-10 rounded-lg bg-warning/10 flex items-center justify-center">
+                    <Clock className="w-5 h-5 text-warning" />
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">
@@ -426,11 +443,15 @@ export default function Referral() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                    <Calendar className="w-5 h-5 text-blue-500" />
+                  <div className="h-10 w-10 rounded-lg bg-info/10 flex items-center justify-center">
+                    <Calendar className="w-5 h-5 text-info" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Next Payout</p>
+                    <p className="text-sm text-muted-foreground">
+                      <HelpTooltip content="Referral commissions are paid on the 1st of the following month after 30 days of active subscription" variant="info">
+                        Next Payout
+                      </HelpTooltip>
+                    </p>
                     <p
                       className="text-2xl font-bold tracking-tight"
                       style={FONT_HEADING}
@@ -458,7 +479,9 @@ export default function Referral() {
               style={FONT_HEADING}
             >
               <Gift className="w-5 h-5 text-primary" />
-              Your Referral Code
+              <HelpTooltip content="Share this link or code with other appointment businesses. You earn $50/month for each active referral." variant="info">
+                Your Referral Code
+              </HelpTooltip>
             </CardTitle>
             <CardDescription>
               Share your unique code or link with friends and colleagues
@@ -470,14 +493,21 @@ export default function Referral() {
               <div className="flex-1 bg-muted/50 border-2 border-dashed border-primary/30 rounded-xl px-6 py-5 font-mono text-2xl md:text-3xl font-bold tracking-[0.25em] text-center select-all">
                 {referralCode}
               </div>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={copyCode}
-                className="h-14 w-14 shrink-0 rounded-xl"
-              >
-                <Copy className="w-5 h-5" />
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={copyCode}
+                      className="h-14 w-14 shrink-0 rounded-xl"
+                    >
+                      <Copy className="w-5 h-5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Copy referral link to clipboard</p></TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
 
             <Separator />
@@ -491,14 +521,21 @@ export default function Referral() {
                 <div className="flex-1 bg-muted/50 border rounded-lg px-4 py-3 text-sm text-muted-foreground truncate select-all">
                   {referralLink}
                 </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={copyLink}
-                  className="h-12 w-12 shrink-0"
-                >
-                  <Copy className="w-4 h-4" />
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={copyLink}
+                        className="h-12 w-12 shrink-0"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Copy referral link to clipboard</p></TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </div>
 
@@ -544,7 +581,9 @@ export default function Referral() {
                   style={FONT_HEADING}
                 >
                   <Users className="w-5 h-5 text-primary" />
-                  Active Referrals
+                  <HelpTooltip content="Referrals who are still subscribed and paying. Each earns you $50/month for up to 6 months." variant="info">
+                    Active Referrals
+                  </HelpTooltip>
                 </CardTitle>
                 <CardDescription className="mt-1">
                   Track the status and earnings of each person you referred
@@ -604,7 +643,20 @@ export default function Referral() {
                           {fmtDate(ref.referredAt)}
                         </TableCell>
                         <TableCell>
-                          <StatusBadge status={ref.status} />
+                          {ref.status === "churned" ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    <StatusBadge status={ref.status} />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent><p>This referral has cancelled their subscription. Earnings from them have ended.</p></TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (
+                            <StatusBadge status={ref.status} />
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2.5 min-w-[120px]">
@@ -612,9 +664,9 @@ export default function Referral() {
                               <div
                                 className={`h-full rounded-full transition-all duration-500 ${
                                   ref.status === "active"
-                                    ? "bg-emerald-500"
+                                    ? "bg-success"
                                     : ref.status === "churned"
-                                      ? "bg-red-500"
+                                      ? "bg-destructive"
                                       : "bg-muted-foreground"
                                 }`}
                                 style={{
@@ -627,7 +679,7 @@ export default function Referral() {
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-right font-semibold text-emerald-500">
+                        <TableCell className="text-right font-semibold text-success">
                           {fmtCurrency(ref.totalEarned)}
                         </TableCell>
                         <TableCell className="text-right text-muted-foreground">
@@ -679,7 +731,7 @@ export default function Referral() {
                     <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                       Paid
                     </p>
-                    <p className="text-lg font-bold text-emerald-500" style={FONT_HEADING}>
+                    <p className="text-lg font-bold text-success" style={FONT_HEADING}>
                       {fmtCurrency(paidPayouts.length * PAYOUT_PER_MONTH)}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -690,7 +742,7 @@ export default function Referral() {
                     <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                       Upcoming
                     </p>
-                    <p className="text-lg font-bold text-amber-500" style={FONT_HEADING}>
+                    <p className="text-lg font-bold text-warning" style={FONT_HEADING}>
                       {fmtCurrency(upcomingPayouts.length * PAYOUT_PER_MONTH)}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -708,7 +760,16 @@ export default function Referral() {
                         <TableHead>Referral</TableHead>
                         <TableHead className="text-center">Month</TableHead>
                         <TableHead className="text-right">Amount</TableHead>
-                        <TableHead className="text-right">Status</TableHead>
+                        <TableHead className="text-right">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="cursor-help">Status</span>
+                              </TooltipTrigger>
+                              <TooltipContent><p>Paid = transferred to your account; Upcoming = scheduled for next payout date; Forfeited = referral cancelled before payout</p></TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -729,9 +790,9 @@ export default function Referral() {
                           <TableCell
                             className={`text-right font-semibold ${
                               payout.status === "paid"
-                                ? "text-emerald-500"
+                                ? "text-success"
                                 : payout.status === "forfeited"
-                                  ? "text-red-500 line-through"
+                                  ? "text-destructive line-through"
                                   : "text-foreground"
                             }`}
                           >
@@ -787,21 +848,21 @@ export default function Referral() {
                 icon: Share2,
                 title: "Share your link",
                 desc: "Send your unique referral code or link to friends and colleagues via email, SMS, or social media.",
-                accent: "from-blue-500/20 to-blue-500/5",
+                accent: "from-info/20 to-info/5",
               },
               {
                 step: 2,
                 icon: Users,
                 title: "They sign up & subscribe",
                 desc: "Your friend creates a Rebooked account using your link and subscribes to a paid plan.",
-                accent: "from-violet-500/20 to-violet-500/5",
+                accent: "from-accent/20 to-accent/5",
               },
               {
                 step: 3,
                 icon: DollarSign,
                 title: `You earn ${fmtCurrency(PAYOUT_PER_MONTH)}/mo for ${PAYOUT_MONTHS} months`,
                 desc: `You receive ${fmtCurrency(PAYOUT_PER_MONTH)} every month your referral stays subscribed, up to ${fmtCurrency(TOTAL_PER_REFERRAL)} total per referral.`,
-                accent: "from-emerald-500/20 to-emerald-500/5",
+                accent: "from-success/20 to-success/5",
               },
             ].map((item, idx) => (
               <div key={item.step} className="relative">
@@ -819,7 +880,13 @@ export default function Referral() {
                       <item.icon className="w-5 h-5 text-primary" />
                     </div>
                     <h3 className="font-semibold mb-2" style={FONT_HEADING}>
-                      {item.title}
+                      {item.step === 3 ? (
+                        <HelpTooltip content="$50/month per referral for 6 months, starting 30 days after their subscription begins" variant="tip">
+                          {item.title}
+                        </HelpTooltip>
+                      ) : (
+                        item.title
+                      )}
                     </h3>
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       {item.desc}
@@ -939,7 +1006,7 @@ export default function Referral() {
                 className="flex items-center gap-2"
                 style={FONT_HEADING}
               >
-                <Trophy className="w-5 h-5 text-amber-500" />
+                <Trophy className="w-5 h-5 text-warning" />
                 Referral Leaderboard
               </CardTitle>
               <CardDescription>
@@ -963,10 +1030,10 @@ export default function Referral() {
                         <span
                           className={`text-lg font-bold ${
                             entry.rank === 1
-                              ? "text-amber-400"
+                              ? "text-warning"
                               : entry.rank === 2
-                                ? "text-gray-400"
-                                : "text-amber-700"
+                                ? "text-muted-foreground"
+                                : "text-warning/60"
                           }`}
                           style={FONT_HEADING}
                         >
@@ -1007,7 +1074,7 @@ export default function Referral() {
 
                     {/* Earnings */}
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-bold text-emerald-500">
+                      <p className="text-sm font-bold text-success">
                         {fmtCurrency(entry.earned)}
                       </p>
                     </div>

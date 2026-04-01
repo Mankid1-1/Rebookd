@@ -13,22 +13,7 @@ import {
 import { format, subDays } from "date-fns";
 import { TrendingUp, TrendingDown, DollarSign, Users, MessageSquare } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-
-// Dynamic colors based on user theme
-const getDynamicChartColors = () => {
-  const isDarkMode = document.documentElement.classList.contains('dark');
-  return {
-    status: {
-      new: isDarkMode ? "#60a5fa" : "#3b82f6",
-      contacted: isDarkMode ? "#fbbf24" : "#eab308",
-      qualified: isDarkMode ? "#c084fc" : "#a855f7",
-      booked: isDarkMode ? "#34d399" : "#22c55e",
-      lost: isDarkMode ? "#f87171" : "#ef4444",
-      pending: isDarkMode ? "#9ca3af" : "#6b7280",
-    },
-    chart: [isDarkMode ? "#60a5fa" : "#3b82f6", isDarkMode ? "#fbbf24" : "#eab308", isDarkMode ? "#34d399" : "#22c55e", isDarkMode ? "#f87171" : "#ef4444", isDarkMode ? "#c084fc" : "#a855f7", isDarkMode ? "#9ca3af" : "#6b7280"]
-  };
-};
+import { useChartColors } from "@/hooks/useChartColors";
 
 interface RevenueChartProps {
   data: Array<{
@@ -40,7 +25,7 @@ interface RevenueChartProps {
 }
 
 export function RevenueChart({ data, loading }: RevenueChartProps) {
-  const colors = getDynamicChartColors();
+  const cc = useChartColors();
   
   if (loading) {
     return (
@@ -50,7 +35,7 @@ export function RevenueChart({ data, loading }: RevenueChartProps) {
         </CardHeader>
         <CardContent>
           <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-300"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-muted-foreground/30"></div>
           </div>
         </CardContent>
       </Card>
@@ -66,7 +51,7 @@ export function RevenueChart({ data, loading }: RevenueChartProps) {
         <CardContent>
           <div className="h-[300px] flex items-center justify-center text-muted-foreground">
             <div className="text-center">
-              <DollarSign className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+              <DollarSign className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
               <p>No revenue data available</p>
               <p className="text-sm mt-2">Start generating bookings to see revenue trends</p>
             </div>
@@ -88,11 +73,11 @@ export function RevenueChart({ data, loading }: RevenueChartProps) {
           <CardTitle>Revenue Trend</CardTitle>
           <div className="flex items-center mt-1">
             {trend > 0 ? (
-              <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
+              <TrendingUp className="h-4 w-4 text-success mr-1" />
             ) : (
-              <TrendingDown className="h-4 w-4 text-red-500 mr-1" />
+              <TrendingDown className="h-4 w-4 text-destructive mr-1" />
             )}
-            <span className={`text-sm ${trend > 0 ? 'text-green-500' : 'text-red-500'}`}>
+            <span className={`text-sm ${trend > 0 ? 'text-success' : 'text-destructive'}`}>
               {Math.abs(trend).toFixed(1)}% vs last week
             </span>
           </div>
@@ -121,16 +106,17 @@ export function RevenueChart({ data, loading }: RevenueChartProps) {
                 name === 'revenue' ? 'Revenue' : 'Bookings'
               ]}
               contentStyle={{
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                border: '1px solid #e2e8f0',
+                backgroundColor: 'hsl(var(--card))',
+                border: '1px solid hsl(var(--border))',
                 borderRadius: '6px',
+                color: 'hsl(var(--foreground))',
               }}
             />
-            <Area 
-              type="monotone" 
-              dataKey="revenue" 
-              stroke="#3b82f6" 
-              fill="#3b82f6" 
+            <Area
+              type="monotone"
+              dataKey="revenue"
+              stroke={cc.chart1}
+              fill={cc.chart1}
               fillOpacity={0.3}
               strokeWidth={2}
             />
@@ -150,7 +136,18 @@ interface LeadStatusChartProps {
 }
 
 export function LeadStatusChart({ data, loading }: LeadStatusChartProps) {
-  const colors = getDynamicChartColors();
+  const cc = useChartColors();
+  const colors = {
+    status: {
+      new: cc.chart1,
+      contacted: cc.chart4,
+      qualified: cc.chart3,
+      booked: cc.chart2,
+      lost: cc.chart5,
+      pending: cc.muted,
+    },
+    chart: [cc.chart1, cc.chart4, cc.chart2, cc.chart5, cc.chart3, cc.muted],
+  };
   
   if (loading) {
     return (
@@ -160,7 +157,7 @@ export function LeadStatusChart({ data, loading }: LeadStatusChartProps) {
         </CardHeader>
         <CardContent>
           <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-300"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-muted-foreground/30"></div>
           </div>
         </CardContent>
       </Card>
@@ -176,7 +173,7 @@ export function LeadStatusChart({ data, loading }: LeadStatusChartProps) {
         <CardContent>
           <div className="h-[300px] flex items-center justify-center text-muted-foreground">
             <div className="text-center">
-              <Users className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+              <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
               <p>No lead data available</p>
               <p className="text-sm mt-2">Leads will appear here as they are generated</p>
             </div>
@@ -211,7 +208,7 @@ export function LeadStatusChart({ data, loading }: LeadStatusChartProps) {
               labelLine={false}
               label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
               outerRadius={80}
-              fill="#8884d8"
+              fill={cc.chart1}
               dataKey="count"
             >
               {data.map((entry, index) => (
@@ -221,9 +218,10 @@ export function LeadStatusChart({ data, loading }: LeadStatusChartProps) {
             <Tooltip 
               formatter={(value) => [`${value} leads`, 'Count']}
               contentStyle={{
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                border: '1px solid #e2e8f0',
+                backgroundColor: 'hsl(var(--card))',
+                border: '1px solid hsl(var(--border))',
                 borderRadius: '6px',
+                color: 'hsl(var(--foreground))',
               }}
             />
           </PieChart>
@@ -257,6 +255,7 @@ interface MessageVolumeChartProps {
 }
 
 export function MessageVolumeChart({ data, loading }: MessageVolumeChartProps) {
+  const cc = useChartColors();
   if (loading) {
     return (
       <Card>
@@ -265,7 +264,7 @@ export function MessageVolumeChart({ data, loading }: MessageVolumeChartProps) {
         </CardHeader>
         <CardContent>
           <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-300"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-muted-foreground/30"></div>
           </div>
         </CardContent>
       </Card>
@@ -281,7 +280,7 @@ export function MessageVolumeChart({ data, loading }: MessageVolumeChartProps) {
         <CardContent>
           <div className="h-[300px] flex items-center justify-center text-muted-foreground">
             <div className="text-center">
-              <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+              <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
               <p>No message data available</p>
               <p className="text-sm mt-2">Start sending messages to see volume trends</p>
             </div>
@@ -309,15 +308,16 @@ export function MessageVolumeChart({ data, loading }: MessageVolumeChartProps) {
             <Tooltip 
               labelFormatter={(value) => format(new Date(value as string), 'MMM dd, yyyy')}
               contentStyle={{
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                border: '1px solid #e2e8f0',
+                backgroundColor: 'hsl(var(--card))',
+                border: '1px solid hsl(var(--border))',
                 borderRadius: '6px',
+                color: 'hsl(var(--foreground))',
               }}
             />
             <Legend />
-            <Bar dataKey="sent" fill="#3b82f6" name="Sent" />
-            <Bar dataKey="received" fill="#22c55e" name="Received" />
-            <Bar dataKey="delivered" fill="#eab308" name="Delivered" />
+            <Bar dataKey="sent" fill={cc.chart1} name="Sent" />
+            <Bar dataKey="received" fill={cc.chart2} name="Received" />
+            <Bar dataKey="delivered" fill={cc.chart4} name="Delivered" />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>
@@ -343,7 +343,7 @@ export function ConversionFunnel({ data, loading }: ConversionFunnelProps) {
         </CardHeader>
         <CardContent>
           <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-300"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-muted-foreground/30"></div>
           </div>
         </CardContent>
       </Card>
@@ -359,7 +359,7 @@ export function ConversionFunnel({ data, loading }: ConversionFunnelProps) {
         <CardContent>
           <div className="h-[300px] flex items-center justify-center text-muted-foreground">
             <div className="text-center">
-              <TrendingUp className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+              <TrendingUp className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
               <p>No conversion data available</p>
               <p className="text-sm mt-2">Lead conversion will appear here</p>
             </div>
@@ -391,9 +391,9 @@ export function ConversionFunnel({ data, loading }: ConversionFunnelProps) {
                     </span>
                   </div>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="w-full bg-muted rounded-full h-2">
                   <div
-                    className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                    className="bg-info h-2 rounded-full transition-all duration-500"
                     style={{ width: `${widthPercentage}%` }}
                   ></div>
                 </div>

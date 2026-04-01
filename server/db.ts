@@ -36,8 +36,13 @@ export async function getDb() {
         connectTimeout: 10_000,
         idleTimeout: 60_000,
         maxIdle: parseInt(process.env.DB_MAX_IDLE || "5", 10),
-        // Only use SSL for remote connections
-        ...(dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1') ? {} : { ssl: { rejectUnauthorized: false } }),
+        // SSL for remote connections — verify certificates in production
+        ...(dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1') ? {} : {
+          ssl: {
+            rejectUnauthorized: process.env.NODE_ENV === "production",
+            ...(process.env.DB_SSL_CA ? { ca: process.env.DB_SSL_CA } : {}),
+          },
+        }),
       });
 
       // Prevent unhandled 'error' events from crashing Node

@@ -1,5 +1,6 @@
 import { createContext, useContext, useCallback, type ReactNode } from "react";
 import { trpc } from "@/lib/trpc";
+import { registerSkillContext } from "@/components/ui/HelpTooltip";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -24,6 +25,9 @@ const SkillLevelContext = createContext<SkillLevelContextValue>({
   setSkillLevel: async () => {},
   isLoading: false,
 });
+
+// Register so HelpTooltip can read skill level without direct import
+registerSkillContext(SkillLevelContext);
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 

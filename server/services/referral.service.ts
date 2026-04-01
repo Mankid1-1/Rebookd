@@ -14,14 +14,16 @@ import { getDb } from "../db";
 import { logger } from "../_core/logger";
 import { TRPCError } from "@trpc/server";
 import { and, eq, isNull, lte, count, sum, desc, sql, ne } from "drizzle-orm";
-import { referrals, referralPayouts, users } from "../../drizzle/schema";
+import { referrals, referralPayouts, users, subscriptions } from "../../drizzle/schema";
 import { stripe } from "../_core/stripe";
 
 // ─── V2 Payout Constants ──────────────────────────────────────────────────────
-const MONTHLY_PAYOUT_AMOUNT = 50;    // $50 per month (in dollars)
-const TOTAL_PAYOUT_MONTHS = 6;       // 6 monthly payouts = $300 total per referral
-const TOTAL_REFERRAL_VALUE = 300;    // $300 total per successful referral
-const REFERRAL_EXPIRY_DAYS = 90;     // Referral links expire after 90 days
+const MONTHLY_PAYOUT_AMOUNT_CENTS = 5000;  // $50 per month (in cents)
+const MONTHLY_PAYOUT_AMOUNT_DOLLARS = 50;  // $50 per month (display)
+const TOTAL_PAYOUT_MONTHS = 6;             // 6 monthly payouts = $300 total per referral
+const TOTAL_REFERRAL_VALUE_CENTS = 30000;  // $300 total per successful referral (in cents)
+const TOTAL_REFERRAL_VALUE_DOLLARS = 300;  // $300 total (display)
+const REFERRAL_EXPIRY_DAYS = 90;           // Referral links expire after 90 days
 const REFERRAL_CODE_LENGTH = 8;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -58,10 +60,12 @@ export interface ReferralRow {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function generateCode(): string {
-  return Math.random()
-    .toString(36)
-    .substring(2, 2 + REFERRAL_CODE_LENGTH)
-    .toUpperCase();
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let code = "RB-";
+  for (let i = 0; i < REFERRAL_CODE_LENGTH; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
 }
 
 function getReferralLink(code: string): string {
@@ -115,7 +119,7 @@ export async function getOrCreateReferralCode(db: Db, userId: number): Promise<s
     referredUserId: userId, // placeholder until a user signs up via this code
     referralCode: code,
     status: "pending",
-    rewardAmount: MONTHLY_PAYOUT_AMOUNT,
+    rewardAmount: MONTHLY_PAYOUT_AMOUNT_CENTS,
     rewardCurrency: "USD",
     expiresAt,
   });
@@ -236,7 +240,7 @@ export async function completeReferral(
         ...(referral.metadata as any ?? {}),
         monthsPayedOut: 0,
         totalMonths: TOTAL_PAYOUT_MONTHS,
-        payoutAmountPerMonth: MONTHLY_PAYOUT_AMOUNT,
+        payoutAmountPerMonth: MONTHLY_PAYOUT_AMOUNT_CENTS,
       },
     })
     .where(eq(referrals.id, referral.id));
@@ -284,6 +288,33 @@ export async function processMonthlyPayouts(db: Db): Promise<{
         continue;
       }
 
+      // FIX #17: Check that the referred user's subscription is still active
+      // Don't pay out if the referred user has cancelled
+      if (referral.referredUserId) {
+        const [referredUser] = await db
+          .select({ tenantId: users.tenantId })
+          .from(users)
+          .where(eq(users.id, referral.referredUserId))
+          .limit(1);
+
+        if (referredUser?.tenantId) {
+          const [refSub] = await db
+            .select({ status: subscriptions.status })
+            .from(subscriptions)
+            .where(eq(subscriptions.tenantId, referredUser.tenantId))
+            .orderBy(desc(subscriptions.createdAt))
+            .limit(1);
+
+          if (!refSub || refSub.status === "canceled" || refSub.status === "unpaid") {
+            logger.info("Referral payout skipped — referred user subscription inactive", {
+              referralId: referral.id, referredUserId: referral.referredUserId, status: refSub?.status,
+            });
+            skipped++;
+            continue;
+          }
+        }
+      }
+
       // Look up referrer's Stripe Connect account
       const [referrer] = await db
         .select({ stripeCustomerId: users.stripeCustomerId, tenantId: users.tenantId })
@@ -299,7 +330,7 @@ export async function processMonthlyPayouts(db: Db): Promise<{
 
       // Create Stripe transfer
       const transfer = await stripe.transfers.create({
-        amount: MONTHLY_PAYOUT_AMOUNT * 100, // $50 in cents
+        amount: MONTHLY_PAYOUT_AMOUNT_CENTS, // $50.00 = 5000 cents
         currency: "usd",
         destination: referrer.stripeCustomerId,
         description: `Rebooked referral payout — month ${monthsPayedOut + 1} of ${TOTAL_PAYOUT_MONTHS}`,
@@ -314,7 +345,7 @@ export async function processMonthlyPayouts(db: Db): Promise<{
       // Record the payout
       await db.insert(referralPayouts).values({
         userId: referral.referrerId,
-        amount: MONTHLY_PAYOUT_AMOUNT * 100, // store in cents
+        amount: MONTHLY_PAYOUT_AMOUNT_CENTS, // $50.00 = 5000 cents
         currency: "usd",
         status: "completed",
         method: "stripe",
@@ -345,14 +376,12 @@ export async function processMonthlyPayouts(db: Db): Promise<{
 
       processed++;
     } catch (error: any) {
-      console.error(`Failed to process payout for referral ${referral.id}:`, error);
+      logger.error(`Failed to process payout for referral ${referral.id}`, {
+        error: error instanceof Error ? error.message : String(error),
+        referralId: referral.id,
+        referrerId: referral.referrerId,
+      });
       failed++;
-      await db.insert(systemErrorLogs).values({
-          type: 'billing',
-          message: `Failed to process payout for referral ${referral.id}`,
-          detail: error instanceof Error ? error.message : String(error),
-          tenantId: tenantId,
-      }).catch((logErr) => logger.error("Failed to log referral payout error", { error: String(logErr) }));
     }
   }
 
@@ -378,17 +407,15 @@ export async function getReferralStats(db: Db, userId: number): Promise<Referral
   const completed = userReferrals.filter((r) => r.status === "completed");
   const pending = userReferrals.filter((r) => r.status === "pending");
 
-  // Calculate earnings based on months paid out
-  let totalEarned = 0;
-  let totalPaidOut = 0;
+  // Calculate earnings based on months paid out (all in cents)
+  let totalEarnedCents = 0;
+  let totalPaidOutCents = 0;
   for (const r of completed) {
     const meta = (r.metadata as any) ?? {};
     const monthsPayedOut = meta.monthsPayedOut ?? 0;
-    totalPaidOut += monthsPayedOut * MONTHLY_PAYOUT_AMOUNT;
-    totalEarned += Math.min(TOTAL_PAYOUT_MONTHS, monthsPayedOut + 1) * MONTHLY_PAYOUT_AMOUNT;
+    totalPaidOutCents += monthsPayedOut * MONTHLY_PAYOUT_AMOUNT_CENTS;
+    totalEarnedCents += Math.min(TOTAL_PAYOUT_MONTHS, monthsPayedOut + 1) * MONTHLY_PAYOUT_AMOUNT_CENTS;
   }
-  // Pending referrals haven't earned yet but represent potential
-  const pendingPotential = pending.length * TOTAL_REFERRAL_VALUE;
 
   // Get the referral code (first active one)
   const [codeRow] = await db
@@ -408,10 +435,10 @@ export async function getReferralStats(db: Db, userId: number): Promise<Referral
     totalReferrals: userReferrals.length,
     completedReferrals: completed.length,
     pendingReferrals: pending.length,
-    totalEarned,
-    totalPaidOut,
-    pendingPayout: totalEarned - totalPaidOut,
-    lifetimeEarnings: completed.length * TOTAL_REFERRAL_VALUE,
+    totalEarned: totalEarnedCents / 100,          // Return in dollars for display
+    totalPaidOut: totalPaidOutCents / 100,
+    pendingPayout: (totalEarnedCents - totalPaidOutCents) / 100,
+    lifetimeEarnings: (completed.length * TOTAL_REFERRAL_VALUE_CENTS) / 100,
     referralCode,
     referralLink: referralCode ? getReferralLink(referralCode) : null,
   };
@@ -483,53 +510,19 @@ export async function getReferralLeaderboard(db: Db, limit = 10) {
 
 /**
  * Process scheduled referral payouts (called by cron job).
- * This function processes all eligible monthly payouts for active referrals.
+ * Delegates to processMonthlyPayouts which handles the actual Stripe transfers.
  */
 export async function processScheduledPayouts(db: Db): Promise<{
   processed: number;
   totalAmount: number;
   errors: string[];
 }> {
-  const errors: string[] = [];
-  let processed = 0;
-  let totalAmount = 0;
-
-  try {
-    // Get all pending payouts that are due
-    const duePayouts = await db
-      .select()
-      .from(referralPayouts)
-      .where(
-        and(
-          eq(referralPayouts.status, 'pending'),
-          lte(referralPayouts.scheduledFor, new Date())
-        )
-      );
-
-    for (const payout of duePayouts) {
-      try {
-        // Process the payout via Stripe Connect
-        // This would integrate with your Stripe Connect setup
-        // For now, we'll mark as processed
-        await db
-          .update(referralPayouts)
-          .set({
-            status: 'completed',
-            processedAt: new Date(),
-          })
-          .where(eq(referralPayouts.id, payout.id));
-
-        processed++;
-        totalAmount += payout.amount;
-      } catch (error) {
-        errors.push(`Failed to process payout ${payout.id}: ${error}`);
-      }
-    }
-  } catch (error) {
-    errors.push(`Failed to fetch due payouts: ${error}`);
-  }
-
-  return { processed, totalAmount, errors };
+  const result = await processMonthlyPayouts(db);
+  return {
+    processed: result.processed,
+    totalAmount: result.processed * MONTHLY_PAYOUT_AMOUNT_CENTS,
+    errors: result.failed > 0 ? [`${result.failed} payout(s) failed — check logs`] : [],
+  };
 }
 
 /**

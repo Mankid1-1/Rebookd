@@ -84,10 +84,11 @@ function verifyToken(token: string): number | null {
 
   if (isNaN(tenantId) || isNaN(timestamp)) return null;
 
-  // Token expires after 24 hours
-  if (Date.now() - timestamp > 24 * 60 * 60 * 1000) return null;
+  // Token expires after 2 hours (security: limit hijack window)
+  if (Date.now() - timestamp > 2 * 60 * 60 * 1000) return null;
 
-  const secret = process.env.SESSION_SECRET || "dev-secret";
+  const secret = process.env.SESSION_SECRET || (process.env.NODE_ENV === "production" ? "" : "dev-secret");
+  if (!secret) return null; // refuse to verify with empty secret in production
   const expected = crypto.createHmac("sha256", secret).update(`${tenantId}.${timestamp}`).digest("hex");
 
   if (!crypto.timingSafeEqual(Buffer.from(hmacValue), Buffer.from(expected))) return null;
@@ -100,7 +101,8 @@ function verifyToken(token: string): number | null {
  */
 export function generateWsToken(tenantId: number): string {
   const timestamp = Date.now();
-  const secret = process.env.SESSION_SECRET || "dev-secret";
+  const secret = process.env.SESSION_SECRET || (process.env.NODE_ENV === "production" ? "" : "dev-secret");
+  if (!secret) throw new Error("SESSION_SECRET required for WebSocket token generation");
   const hmac = crypto.createHmac("sha256", secret).update(`${tenantId}.${timestamp}`).digest("hex");
   return `${tenantId}.${timestamp}.${hmac}`;
 }
@@ -117,7 +119,14 @@ export function setupWebSocket(server: HttpServer) {
       return;
     }
 
-    const token = url.searchParams.get("token");
+    // Prefer token from Sec-WebSocket-Protocol header (not logged by proxies/access logs).
+    // Fall back to URL query param for backwards compatibility during rollout.
+    const protocolHeader = req.headers["sec-websocket-protocol"];
+    const tokenFromProtocol = Array.isArray(protocolHeader)
+      ? protocolHeader[0]
+      : protocolHeader?.split(",")[0]?.trim();
+    const token = tokenFromProtocol || url.searchParams.get("token");
+
     if (!token) {
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
       socket.destroy();
@@ -143,11 +152,17 @@ export function setupWebSocket(server: HttpServer) {
       .update(key + "258EAFA5-E914-47DA-95CA-5AB5A0085CC1")
       .digest("base64");
 
+    // Echo back the subprotocol so the browser accepts it
+    const protocolLine = tokenFromProtocol
+      ? `Sec-WebSocket-Protocol: ${tokenFromProtocol}\r\n`
+      : "";
+
     socket.write(
       "HTTP/1.1 101 Switching Protocols\r\n" +
       "Upgrade: websocket\r\n" +
       "Connection: Upgrade\r\n" +
       `Sec-WebSocket-Accept: ${acceptKey}\r\n` +
+      protocolLine +
       "\r\n"
     );
 

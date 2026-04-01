@@ -47,12 +47,34 @@ export async function getLeads(
   tenantId: number,
   opts?: { page?: number; limit?: number; search?: string; status?: string },
 ) {
-  // Use optimized search service with memory management
-  return await QueryPerformanceMonitor.trackQuery(
-    () => searchLeads(db, tenantId, opts),
-    'getLeads',
-    1000 // 1 second slow threshold
-  );
+  const limit = opts?.limit ?? 20;
+  const page = opts?.page ?? 1;
+
+  // Build conditions for both queries
+  const conditions = [eq(leads.tenantId, tenantId)];
+  if (opts?.status) conditions.push(eq(leads.status, opts.status as any));
+
+  // Get total count
+  const [countRow] = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(leads)
+    .where(and(...conditions));
+  const total = countRow?.count ?? 0;
+
+  // Get paginated leads
+  const rows = await db
+    .select()
+    .from(leads)
+    .where(and(...conditions))
+    .orderBy(desc(leads.createdAt))
+    .limit(limit)
+    .offset((page - 1) * limit);
+
+  // Decrypt before returning
+  return {
+    leads: rows.map(presentLead),
+    total,
+  };
 }
 
 export async function getLeadById(

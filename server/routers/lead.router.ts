@@ -113,9 +113,25 @@ export const leadsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const lead = await LeadService.getLeadById(ctx.db, ctx.tenantId, input.leadId);
       if (!lead) throw new TRPCError({ code: "NOT_FOUND" });
-      await LeadService.updateLead(ctx.db, ctx.tenantId, input.leadId, { status: "booked", appointmentAt: input.appointmentTime });
+
+      // Increment visit count and calculate loyalty tier
+      const newVisitCount = ((lead as any).visitCount ?? 0) + 1;
+      const loyaltyTier = newVisitCount >= 15 ? 'platinum' : newVisitCount >= 10 ? 'gold' : newVisitCount >= 5 ? 'silver' : newVisitCount >= 3 ? 'bronze' : null;
+
+      await LeadService.updateLead(ctx.db, ctx.tenantId, input.leadId, {
+        status: "booked",
+        appointmentAt: input.appointmentTime,
+        visitCount: newVisitCount,
+        loyaltyTier,
+      } as any);
       await LeadService.addLeadTags(ctx.db, ctx.tenantId, input.leadId, ["booked_client"]);
-      await emitEvent({ type: "appointment.booked", tenantId: ctx.tenantId, data: { leadId: input.leadId, appointmentTime: input.appointmentTime, phone: lead.phone, name: lead.name }, userId: ctx.user.id, timestamp: new Date() });
+      await emitEvent({ type: "appointment.booked", tenantId: ctx.tenantId, data: { leadId: input.leadId, appointmentTime: input.appointmentTime, phone: lead.phone, name: lead.name, visitCount: newVisitCount, loyaltyTier }, userId: ctx.user.id, timestamp: new Date() });
+
+      // Fire loyalty milestone event if they just crossed a tier threshold
+      if ([3, 5, 10, 15].includes(newVisitCount)) {
+        await emitEvent({ type: "lead.loyalty_milestone" as any, tenantId: ctx.tenantId, data: { leadId: input.leadId, phone: lead.phone, name: lead.name, visitCount: newVisitCount, milestone: newVisitCount, loyaltyTier }, userId: ctx.user.id, timestamp: new Date() });
+      }
+
       return { success: true };
     }),
 
@@ -126,7 +142,28 @@ export const leadsRouter = router({
       if (!lead) throw new TRPCError({ code: "NOT_FOUND" });
       await LeadService.updateLeadStatus(ctx.db, ctx.tenantId, input.leadId, "contacted");
       await LeadService.addLeadTags(ctx.db, ctx.tenantId, input.leadId, ["cancelled"]);
-      await emitEvent({ type: "appointment.cancelled", tenantId: ctx.tenantId, data: { leadId: input.leadId, appointmentTime: input.appointmentTime ?? lead.appointmentAt, phone: lead.phone, name: lead.name }, userId: ctx.user.id, timestamp: new Date() });
+
+      const appointmentTime = input.appointmentTime ?? lead.appointmentAt;
+      await emitEvent({ type: "appointment.cancelled", tenantId: ctx.tenantId, data: { leadId: input.leadId, appointmentTime, phone: lead.phone, name: lead.name }, userId: ctx.user.id, timestamp: new Date() });
+
+      // Open the slot for waiting list — triggers cancellation_flurry workflow
+      // which notifies qualified (waiting list) leads about the newly available time
+      if (appointmentTime) {
+        const apptDate = new Date(appointmentTime as any);
+        await emitEvent({
+          type: "waitlist.slot_opened" as any,
+          tenantId: ctx.tenantId,
+          data: {
+            leadId: input.leadId,
+            appointmentTime,
+            date: apptDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }),
+            time: apptDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+          },
+          userId: ctx.user.id,
+          timestamp: new Date(),
+        });
+      }
+
       return { success: true };
     }),
 

@@ -3,7 +3,6 @@ import express from "express";
 import cors from "cors";
 import { createServer } from "http";
 import net from "net";
-import rateLimit from "express-rate-limit";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerInboundWebhooks } from "./inboundWebhook";
@@ -17,10 +16,12 @@ import { logger } from "./logger";
 import { initSentry, captureException } from "./sentry";
 import { ensureCorrelationId, runWithCorrelationId } from "./requestContext";
 import { registerSecurityMiddleware } from "./security";
+import { registerCalendarCallbacks } from "./calendarCallback";
 import { readFileSync } from "fs";
 import { trafficGateMiddleware, setShutdownRef } from "./traffic-gate";
 import { validateEnv } from "./env";
 import { BUILD_VERSION } from "../../shared/version";
+import * as DeploymentService from "../services/deployment.service";
 
 // Graceful shutdown state — shared with traffic gate
 const shutdownState = { value: false };
@@ -32,7 +33,7 @@ const corsOrigins = [
   ...process.env.ALLOWED_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) ?? [],
 ].filter((v, i, a) => a.indexOf(v) === i);
 
-const WORKER_HEARTBEAT_FILE = process.env.WORKER_HEARTBEAT_FILE || "/tmp/worker-heartbeat.json";
+const WORKER_HEARTBEAT_FILE = process.env.WORKER_HEARTBEAT_FILE || `${require("os").tmpdir()}/worker-heartbeat.json`;
 const WORKER_STALE_MS = 2 * 60_000;
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -128,15 +129,37 @@ function registerShutdownHandlers(server: any) {
     });
   });
 
-  // Handle uncaught exceptions
-  process.on('uncaughtException', (error) => {
+  // Handle uncaught exceptions — log to sentinel before shutdown
+  process.on('uncaughtException', async (error) => {
     logger.error('Uncaught Exception', { error: error.message, stack: error.stack });
+    try {
+      const db = await getDb();
+      if (db) {
+        await SystemService.createSystemError(db, {
+          type: "system",
+          message: `[UNCAUGHT] ${error.message}`,
+          detail: error.stack,
+          severity: "critical",
+        });
+      }
+    } catch { /* don't let logging prevent shutdown */ }
     gracefulShutdown(server, 'uncaughtException');
   });
 
-  // Handle unhandled promise rejections
-  process.on('unhandledRejection', (reason, promise) => {
+  // Handle unhandled promise rejections — log to sentinel
+  process.on('unhandledRejection', async (reason, promise) => {
     logger.error('Unhandled Rejection', { reason: String(reason), promise: String(promise) });
+    try {
+      const db = await getDb();
+      if (db) {
+        await SystemService.createSystemError(db, {
+          type: "system",
+          message: `[UNHANDLED_REJECTION] ${String(reason)}`,
+          detail: reason instanceof Error ? reason.stack : String(reason),
+          severity: "critical",
+        });
+      }
+    } catch { /* don't let logging prevent shutdown */ }
     gracefulShutdown(server, 'unhandledRejection');
   });
 }
@@ -155,9 +178,12 @@ async function startServer() {
   setShutdownRef(shutdownState);
   app.use(trafficGateMiddleware);
 
+  const IS_PRODUCTION = process.env.NODE_ENV === "production";
   app.use(
     cors({
-      origin: corsOrigins.length > 0 ? corsOrigins : true,
+      // In production, only allow explicitly configured origins.
+      // Falling back to `true` (reflect all) would neutralise CORS entirely.
+      origin: corsOrigins.length > 0 ? corsOrigins : (IS_PRODUCTION ? false : true),
       credentials: true,
     }),
   );
@@ -181,6 +207,8 @@ async function startServer() {
 
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+  // Calendar OAuth callbacks (Google, Outlook, Calendly — browser redirects)
+  registerCalendarCallbacks(app);
   // Inbound SMS webhooks (Telnyx + Twilio, STOP compliance)
   registerInboundWebhooks(app);
 
@@ -203,7 +231,17 @@ async function startServer() {
     });
   });
 
-  app.get("/health/detailed", async (_req, res) => {
+  app.get("/health/detailed", async (req, res) => {
+    // Restrict to internal callers only — this endpoint leaks Stripe connectivity,
+    // memory pressure, and worker state that should not be public.
+    const internalToken = process.env.INTERNAL_HEALTH_TOKEN || process.env.WEBHOOK_SECRET;
+    const providedToken = req.headers["x-internal-token"];
+    const clientIp = req.ip || "";
+    const isLocalhost = clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "::ffff:127.0.0.1";
+    if (!isLocalhost && (!internalToken || providedToken !== internalToken)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
     const checks: Record<string, { status: string; latencyMs?: number; error?: string }> = {};
 
     // DB check with latency
@@ -225,8 +263,7 @@ async function startServer() {
     // Stripe connectivity
     try {
       const stripeStart = Date.now();
-      const { default: Stripe } = await import("stripe");
-      const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY || "", { apiVersion: "2022-11-15" });
+      const { stripe: stripeClient } = await import("./stripe");
       await stripeClient.balance.retrieve();
       checks.stripe = { status: "healthy", latencyMs: Date.now() - stripeStart };
     } catch (err) {
@@ -257,6 +294,228 @@ async function startServer() {
   app.get("/api/version", (_req, res) => {
     res.set("Cache-Control", "no-cache, no-store, must-revalidate");
     res.json({ version: BUILD_VERSION });
+  });
+
+  // ─── System status (admin-only, rich metrics for dashboard widget) ─────
+  app.get("/api/system/status", async (req, res) => {
+    // Only allow from localhost or with internal token
+    const internalToken = process.env.INTERNAL_HEALTH_TOKEN || process.env.WEBHOOK_SECRET;
+    const providedToken = req.headers["x-internal-token"] || req.query.token;
+    const clientIp = req.ip || "";
+    const isLocal = clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "::ffff:127.0.0.1";
+    // Also allow authenticated admin requests (cookie-based auth checked via tRPC)
+    const hasAdminCookie = req.headers.cookie?.includes("rebooked_session");
+    if (!isLocal && !hasAdminCookie && (!internalToken || providedToken !== internalToken)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const memUsage = process.memoryUsage();
+    const cpuUsage = process.cpuUsage();
+    const dbOk = await pingDb();
+
+    // Worker heartbeat
+    let workerStatus = "unknown";
+    let workerLastBeat: string | null = null;
+    try {
+      const heartbeat = JSON.parse(readFileSync(WORKER_HEARTBEAT_FILE, "utf8"));
+      const ts = Date.parse(heartbeat.ts || heartbeat.lastSuccessAt || "");
+      const stale = !Number.isFinite(ts) || Date.now() - ts > WORKER_STALE_MS;
+      workerStatus = stale ? "stale" : (heartbeat.status === "error" ? "error" : "healthy");
+      workerLastBeat = heartbeat.ts || heartbeat.lastSuccessAt || null;
+    } catch { workerStatus = "unreachable"; }
+
+    res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.json({
+      version: BUILD_VERSION,
+      nodeVersion: process.version,
+      platform: process.platform,
+      pid: process.pid,
+      uptime: Math.floor(process.uptime()),
+      startedAt: new Date(Date.now() - process.uptime() * 1000).toISOString(),
+      environment: process.env.NODE_ENV || "unknown",
+      cluster: {
+        isWorker: !!process.env.NODE_APP_INSTANCE,
+        workerId: process.env.NODE_APP_INSTANCE || "0",
+      },
+      memory: {
+        rss: Math.round(memUsage.rss / 1024 / 1024),
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+        external: Math.round(memUsage.external / 1024 / 1024),
+        heapPressure: Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100),
+      },
+      cpu: {
+        user: Math.round(cpuUsage.user / 1000),
+        system: Math.round(cpuUsage.system / 1000),
+      },
+      database: { status: dbOk ? "connected" : "unreachable" },
+      worker: { status: workerStatus, lastHeartbeat: workerLastBeat },
+      ts: new Date().toISOString(),
+    });
+  });
+
+  // ─── Deploy record endpoint (called by deploy script) ──────────────────
+  app.post("/api/system/deploy-record", async (req, res) => {
+    const internalToken = process.env.INTERNAL_HEALTH_TOKEN || process.env.WEBHOOK_SECRET;
+    const providedToken = req.headers["x-internal-token"];
+    const clientIp = req.ip || "";
+    const isLocal = clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "::ffff:127.0.0.1";
+    if (!isLocal && (!internalToken || providedToken !== internalToken)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    try {
+      const db = await getDb();
+      if (!db) { res.status(503).json({ error: "Database unavailable" }); return; }
+      const result = await DeploymentService.recordDeployment(db, {
+        version: req.body.version,
+        gitHash: req.body.gitHash || null,
+        gitBranch: req.body.gitBranch || null,
+        status: req.body.status || "verified",
+        deployedBy: req.body.deployedBy || null,
+        durationMs: req.body.durationMs || null,
+        completedAt: new Date(),
+      });
+      res.json({ ok: true, id: result?.id });
+    } catch (err) {
+      logger.error("Failed to record deployment", { error: String(err) });
+      res.status(500).json({ error: "Failed to record" });
+    }
+  });
+
+  // ─── Client error reporting (frontend → sentinel) ────────────────────
+  // Server-side rate limiter: max 5 identical errors (by message fingerprint) per 5 minutes.
+  const _clientErrorRateMap = new Map<string, { count: number; windowStart: number }>();
+  const CLIENT_ERROR_RATE_WINDOW = 5 * 60_000; // 5 minutes
+  const CLIENT_ERROR_RATE_LIMIT = 5;
+
+  app.post("/api/system/client-error", async (req, res) => {
+    try {
+      const {
+        message,
+        stack,
+        componentStack,
+        componentPath,
+        errorCategory,
+        pageUrl,
+        performanceData,
+        url,
+        userAgent,
+      } = req.body || {};
+      if (!message) { res.status(400).json({ error: "message required" }); return; }
+
+      // Rate-limit by normalised message prefix (first 120 chars, strip dynamic parts)
+      const fingerprint = String(message).slice(0, 120).replace(/\d{6,}/g, "ID");
+      const now = Date.now();
+      const rateEntry = _clientErrorRateMap.get(fingerprint);
+      if (rateEntry) {
+        if (now - rateEntry.windowStart < CLIENT_ERROR_RATE_WINDOW) {
+          if (rateEntry.count >= CLIENT_ERROR_RATE_LIMIT) {
+            res.json({ ok: true, ratelimited: true }); // silent drop
+            return;
+          }
+          rateEntry.count++;
+        } else {
+          rateEntry.count = 1;
+          rateEntry.windowStart = now;
+        }
+      } else {
+        _clientErrorRateMap.set(fingerprint, { count: 1, windowStart: now });
+        // Prune stale entries periodically
+        if (_clientErrorRateMap.size > 200) {
+          for (const [k, v] of _clientErrorRateMap) {
+            if (now - v.windowStart > CLIENT_ERROR_RATE_WINDOW) _clientErrorRateMap.delete(k);
+          }
+        }
+      }
+
+      const db = await getDb();
+      if (!db) { res.status(503).json({ ok: false }); return; }
+
+      // Track error rate for health check
+      try {
+        const { recordClientError } = await import("./health-check");
+        recordClientError();
+      } catch {}
+
+      // Classify severity by prefix — sentinel uses these to prioritize repairs
+      const msg = String(message);
+      const isStuck = msg.startsWith("[ERROR_PAGE_STUCK]");
+      const isVisual = msg.startsWith("[VISUAL_ANOMALY]");
+      const isDeadClick = msg.startsWith("[DEAD_CLICK]") || msg.startsWith("[RAGE_CLICK]");
+      const isAIChatIssue = msg.startsWith("[AI_CHAT_QUALITY]");
+      const isErrorPage = msg.startsWith("[ERROR_PAGE_SHOWN]");
+      const isPerfAnomaly = msg.startsWith("[PERF_ANOMALY]");
+      const isJourney = msg.startsWith("[JOURNEY_");
+      const severity = isStuck ? "critical"
+        : isErrorPage ? "high"
+        : isDeadClick ? "high"
+        : isPerfAnomaly ? "high"
+        : isVisual ? "medium"
+        : isAIChatIssue ? "medium"
+        : isJourney ? "medium"
+        : "medium";
+
+      // Determine errorCategory: client-sent value takes precedence, else infer from prefix
+      const resolvedCategory: string = errorCategory ||
+        (isErrorPage || isStuck ? "rendering" :
+         isPerfAnomaly ? "performance" :
+         isVisual || isDeadClick ? "graphical" :
+         "runtime");
+
+      // Enrich detail with structured graphical profiling data
+      const detail = JSON.stringify({
+        stack,
+        componentStack,
+        componentPath: Array.isArray(componentPath) ? componentPath.slice(0, 5) : undefined,
+        pageUrl: typeof pageUrl === "string" ? pageUrl.slice(0, 200) : undefined,
+        performanceData: performanceData || undefined,
+        url,
+        userAgent,
+      }).slice(0, 4000);
+
+      await SystemService.createSystemError(db, {
+        type: "client",
+        message: `[CLIENT] ${msg.slice(0, 500)}`,
+        detail,
+        severity,
+        errorCategory: resolvedCategory as any,
+      });
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ ok: false });
+    }
+  });
+
+  // ─── Sentinel metric ingestion (client → sentinel_metrics table) ──────
+  app.post("/api/system/sentinel-metric", async (req, res) => {
+    try {
+      const { category, metrics } = req.body || {};
+      if (!category || !Array.isArray(metrics) || metrics.length === 0) {
+        res.status(400).json({ error: "category and metrics[] required" });
+        return;
+      }
+      const db = await getDb();
+      if (!db) { res.status(503).json({ ok: false }); return; }
+
+      // Extract tenantId from session if available
+      const tenantId = (req as any).session?.tenantId || 0;
+
+      const { sentinelMetrics } = await import("../../drizzle/schema");
+      const rows = metrics.slice(0, 50).map((m: any) => ({
+        tenantId,
+        category: String(category).slice(0, 50),
+        metric: String(m.metric || "").slice(0, 100),
+        value: Number(m.value) || 0,
+        detail: m.detail ? JSON.parse(JSON.stringify(m.detail)) : null,
+      }));
+
+      await db.insert(sentinelMetrics).values(rows);
+      res.json({ ok: true, count: rows.length });
+    } catch {
+      res.status(500).json({ ok: false });
+    }
   });
 
   app.get("/ready", async (_req, res) => {
@@ -292,14 +551,6 @@ async function startServer() {
     });
   });
 
-  const apiLimiter = rateLimit({
-    windowMs: 5 * 60 * 1000, 
-    limit: 600, 
-    standardHeaders: 'draft-7',
-    legacyHeaders: false,
-  });
-  app.use("/api/", apiLimiter);
-
   // tRPC API
   app.use(
     "/api/trpc",
@@ -308,18 +559,30 @@ async function startServer() {
       createContext,
       onError: async ({ error, path, ctx }) => {
         try {
+          // Expected client errors (not logged in, no tenant yet) — log as debug, not error
+          const isExpectedClientError =
+            error.code === "UNAUTHORIZED" ||
+            (error.code === "FORBIDDEN" && error.message === "No tenant found");
+          if (isExpectedClientError) {
+            logger.debug("tRPC client error (expected)", { path, message: error.message, code: error.code });
+            return; // Don't log to system_errors or Sentry
+          }
+
           logger.error("tRPC error", { path, message: error.message, correlationId: (ctx as any)?.correlationId });
           captureException(error, { path, tenantId: (ctx as any)?.tenantId });
           const db = await getDb();
           if (db) {
+            const isServerError = error.code === "INTERNAL_SERVER_ERROR" || error.code === "TIMEOUT";
             await SystemService.createSystemError(db, {
               type: "system",
               message: `tRPC Error in ${path}: ${error.message}`,
               detail: JSON.stringify({
                 stack: error.stack,
                 correlationId: (ctx as { correlationId?: string })?.correlationId,
+                trpcCode: error.code,
               }),
               tenantId: (ctx as any)?.tenantId,
+              severity: isServerError ? "critical" : undefined, // auto-classify non-500s
             }).catch((err) => logger.error("Failed to log system error", { error: String(err) }));
           }
         } catch (logErr) {

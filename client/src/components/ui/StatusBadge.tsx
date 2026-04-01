@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useTheme } from "@/contexts/ThemeContext";
 import { Badge } from "./badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
 import { 
@@ -35,48 +36,47 @@ interface StatusConfig {
 }
 
 // Dynamic status configurations based on user preferences and theme
-const getDynamicStatusConfigs = () => {
-  const isDarkMode = document.documentElement.classList.contains('dark');
+const getDynamicStatusConfigs = (isDarkMode: boolean) => {
   
   return {
     new: {
       label: "New",
-      color: isDarkMode ? "bg-blue-900 text-blue-200" : "bg-blue-100 text-blue-800",
+      color: "bg-info/15 text-info",
       icon: <Users className="h-3 w-3" />,
       description: "New lead that needs attention",
       nextAction: "Send welcome message"
     },
     contacted: {
-      label: "Contacted", 
-      color: isDarkMode ? "bg-yellow-900 text-yellow-200" : "bg-yellow-100 text-yellow-800",
+      label: "Contacted",
+      color: "bg-warning/15 text-warning",
       icon: <MessageSquare className="h-3 w-3" />,
       description: "Lead has been contacted",
       nextAction: "Follow up if needed"
     },
     qualified: {
       label: "Qualified",
-      color: isDarkMode ? "bg-purple-900 text-purple-200" : "bg-purple-100 text-purple-800",
+      color: "bg-accent text-accent-foreground",
       icon: <Calendar className="h-3 w-3" />,
       description: "Lead is qualified for booking",
       nextAction: "Schedule appointment"
     },
     booked: {
       label: "Booked",
-      color: isDarkMode ? "bg-green-900 text-green-200" : "bg-green-100 text-green-800",
+      color: "bg-success/15 text-success",
       icon: <CheckCircle2 className="h-3 w-3" />,
       description: "Appointment has been booked",
       nextAction: "Send confirmation"
     },
     lost: {
       label: "Lost",
-      color: isDarkMode ? "bg-red-900 text-red-200" : "bg-red-100 text-red-800",
+      color: "bg-destructive/15 text-destructive",
       icon: <XCircle className="h-3 w-3" />,
       description: "Lead was lost",
       nextAction: "Analyze reasons for loss"
     },
     unsubscribed: {
       label: "Unsubscribed",
-      color: isDarkMode ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-800",
+      color: "bg-muted text-muted-foreground",
       icon: <Mail className="h-3 w-3" />,
       description: "Lead has unsubscribed",
       nextAction: "Remove from lists"
@@ -94,7 +94,8 @@ export function StatusBadge({
   onClick,
   tabIndex = 0 
 }: StatusBadgeProps) {
-  const statusConfigs = getDynamicStatusConfigs();
+  const { isDark: isDarkMode } = useTheme();
+  const statusConfigs = getDynamicStatusConfigs(isDarkMode);
   const config = statusConfigs[status] || statusConfigs.new;
 
   const sizeClasses = {
@@ -137,7 +138,7 @@ export function StatusBadge({
             <p className="font-medium">{config.label}</p>
             <p className="text-sm text-muted-foreground">{config.description}</p>
             {config.nextAction && (
-              <p className="text-xs text-blue-600 dark:text-blue-400">
+              <p className="text-xs text-info">
                 💡 {config.nextAction}
               </p>
             )}
@@ -165,24 +166,24 @@ export function CommunicationBadge({
   const configs = {
     sms: {
       icon: <Phone className="h-3 w-3" />,
-      color: "bg-blue-100 text-blue-800",
+      color: "bg-info/15 text-info",
       label: "SMS"
     },
     email: {
       icon: <Mail className="h-3 w-3" />,
-      color: "bg-purple-100 text-purple-800", 
+      color: "bg-accent text-accent-foreground",
       label: "Email"
     },
     call: {
       icon: <Phone className="h-3 w-3" />,
-      color: "bg-green-100 text-green-800",
+      color: "bg-success/15 text-success",
       label: "Call"
     }
   };
 
   const config = configs[type as keyof typeof configs] || {
     icon: <Mail className="h-3 w-3" />,
-    color: "bg-gray-100 text-gray-800",
+    color: "bg-muted text-muted-foreground",
     label: "Unknown"
   };
   
@@ -266,16 +267,16 @@ export function ActivityBadge({
   }[size] || "text-xs";
   
   // Determine status styling
-  let statusClasses = active 
-    ? "bg-green-100 text-green-800" 
-    : "text-gray-600";
-    
+  let statusClasses = active
+    ? "bg-success/15 text-success"
+    : "text-muted-foreground";
+
   if (status === "unknown") {
-    statusClasses = "bg-gray-100 text-gray-800";
+    statusClasses = "bg-muted text-muted-foreground";
   } else if (status === "inactive") {
-    statusClasses = "bg-gray-100 text-gray-800";
+    statusClasses = "bg-muted text-muted-foreground";
   } else if (status === "pending") {
-    statusClasses = "bg-yellow-100 text-yellow-800";
+    statusClasses = "bg-warning/15 text-warning";
   }
   
   // Add pulse animation to text if active and showPulse is true
@@ -288,7 +289,7 @@ export function ActivityBadge({
       <Tooltip>
         <TooltipTrigger asChild>
           <div 
-            className={`flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 rounded`}
+            className={`flex items-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring rounded`}
             onClick={onClick}
             tabIndex={0}
             onKeyDown={(e) => {
@@ -300,9 +301,9 @@ export function ActivityBadge({
             {...props}
           >
             <div className={`w-2 h-2 rounded-full ${
-              status === "unknown" || status === "inactive" ? "bg-gray-400" :
-              status === "pending" ? "bg-yellow-400" :
-              active ? (showPulse ? "bg-green-500 animate-pulse" : "bg-green-500") : "bg-gray-400"
+              status === "unknown" || status === "inactive" ? "bg-muted-foreground" :
+              status === "pending" ? "bg-warning" :
+              active ? (showPulse ? "bg-success animate-pulse" : "bg-success") : "bg-muted-foreground"
             }`} />
             <span className={`${statusClasses} ${textSizeClass} ${className}`}>{displayText}</span>
             {lastActivity && (
@@ -333,22 +334,22 @@ export function PriorityBadge({ priority }: { priority: "low" | "medium" | "high
   const configs = {
     low: {
       label: "Low Priority",
-      color: "bg-gray-500",
+      color: "bg-muted-foreground",
       icon: <Clock className="h-3 w-3" />
     },
     medium: {
-      label: "Medium Priority", 
-      color: "bg-yellow-500",
+      label: "Medium Priority",
+      color: "bg-warning",
       icon: <AlertCircle className="h-3 w-3" />
     },
     high: {
       label: "High Priority",
-      color: "bg-orange-500", 
+      color: "bg-warning",
       icon: <Zap className="h-3 w-3" />
     },
     urgent: {
       label: "Urgent",
-      color: "bg-red-500",
+      color: "bg-destructive",
       icon: <AlertCircle className="h-3 w-3 animate-pulse" />
     }
   };

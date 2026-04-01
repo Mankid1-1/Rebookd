@@ -46,12 +46,12 @@ class TrafficMonitor {
 
   constructor() {
     this.thresholds = {
-      highConnections: envInt("TRAFFIC_HIGH_CONNECTIONS", 150),
-      criticalConnections: envInt("TRAFFIC_CRITICAL_CONNECTIONS", 300),
-      highLoopLagMs: envInt("TRAFFIC_HIGH_LOOP_LAG_MS", 100),
-      criticalLoopLagMs: envInt("TRAFFIC_CRITICAL_LOOP_LAG_MS", 500),
-      highHeapPercent: envInt("TRAFFIC_HIGH_HEAP_PERCENT", 80),
-      criticalHeapPercent: envInt("TRAFFIC_CRITICAL_HEAP_PERCENT", 92),
+      highConnections: envInt("TRAFFIC_HIGH_CONNECTIONS", 500),
+      criticalConnections: envInt("TRAFFIC_CRITICAL_CONNECTIONS", 1000),
+      highLoopLagMs: envInt("TRAFFIC_HIGH_LOOP_LAG_MS", 500),
+      criticalLoopLagMs: envInt("TRAFFIC_CRITICAL_LOOP_LAG_MS", 2000),
+      highHeapPercent: envInt("TRAFFIC_HIGH_HEAP_PERCENT", 90),
+      criticalHeapPercent: envInt("TRAFFIC_CRITICAL_HEAP_PERCENT", 95),
     };
     this.startSampling();
   }
@@ -77,6 +77,21 @@ class TrafficMonitor {
           loopLagMs: this.eventLoopLagMs,
           heapPercent: this.heapUsagePercent,
         });
+        // Report CRITICAL traffic to sentinel
+        if (newLevel === TrafficLevel.CRITICAL) {
+          import("./sentinel-bridge").then(({ reportToSentinel }) => {
+            reportToSentinel({
+              type: "system",
+              message: `[TRAFFIC] Traffic level reached CRITICAL`,
+              detail: JSON.stringify({
+                connections: this.activeConnections,
+                loopLagMs: this.eventLoopLagMs,
+                heapPercent: this.heapUsagePercent,
+              }),
+              severity: "high",
+            });
+          }).catch(() => {});
+        }
         this.lastLevel = newLevel;
       }
 

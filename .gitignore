@@ -94,3 +94,7 @@ dist-build/
 
 # Auto-generated
 client/public/__manus__/version.json
+nul
+.claude/settings.local.json
+.claude/skills/
+.env.production

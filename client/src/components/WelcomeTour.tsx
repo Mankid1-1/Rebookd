@@ -28,21 +28,21 @@ const STEPS: TourStep[] = [
     title: "This is your Dashboard",
     description:
       "Track leads, messages, automations, and bookings at a glance. All your key metrics live here.",
-    icon: <BarChart3 className="w-6 h-6 text-blue-400" />,
+    icon: <BarChart3 className="w-6 h-6 text-info" />,
     target: "[data-tour='stats-cards']",
   },
   {
     title: "Manage your Leads",
     description:
       "View and manage all your potential customers. Add leads manually or let them come in automatically.",
-    icon: <Users className="w-6 h-6 text-green-400" />,
+    icon: <Users className="w-6 h-6 text-success" />,
     target: "[data-tour='sidebar-leads']",
   },
   {
     title: "Set up Automations",
     description:
       "Enable SMS automations like appointment reminders, no-show recovery, and win-back campaigns.",
-    icon: <Bot className="w-6 h-6 text-cyan-400" />,
+    icon: <Bot className="w-6 h-6 text-info" />,
     target: "[data-tour='sidebar-automations']",
   },
   {

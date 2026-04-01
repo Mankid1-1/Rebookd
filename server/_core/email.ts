@@ -22,13 +22,15 @@ export async function sendEmail(options: { to: string; subject: string; text: st
         host: smtpHost,
         port: smtpPort,
         secure: process.env.SMTP_SECURE === "true",
-        // For localhost mail servers, skip TLS negotiation entirely
+        // For localhost mail servers, skip TLS and auth — Exim trusts local connections
         ...(isLocalhost ? { ignoreTLS: true } : {}),
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS || "",
-        },
-        tls: { rejectUnauthorized: false },
+        ...(!isLocalhost ? {
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS || "",
+          },
+        } : {}),
+        tls: { rejectUnauthorized: process.env.NODE_ENV === "production" && !isLocalhost },
       });
       await transporter.sendMail({
         from: `"Rebooked" <${fromAddress}>`,
@@ -36,6 +38,10 @@ export async function sendEmail(options: { to: string; subject: string; text: st
         subject: options.subject,
         text: options.text,
         html: options.html ?? options.text,
+        headers: {
+          "List-Unsubscribe": `<mailto:unsubscribe@rebooked.org>, <https://rebooked.org/unsubscribe?email=${encodeURIComponent(options.to)}>`,
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        },
       });
       console.log(`[Email] SMTP sent to ${options.to} subject=${options.subject}`);
       return { success: true };

@@ -1,5 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useChartColors } from "@/hooks/useChartColors";
+import { HelpTooltip, HelpIcon } from "@/components/ui/HelpTooltip";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,16 +34,7 @@ import {
 
 // ─── FORMATTERS ─────────────────────────────────────────────────────────────
 
-function fmtCurrency(n: number): string {
-  if (n === 0) return "$0";
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}K`;
-  return `$${n.toLocaleString()}`;
-}
-
-function fmtCurrencyFull(n: number): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
-}
+// fmtCurrency and fmtCurrencyFull are provided by useLocale() inside the component
 
 function fmtNumber(n: number): string {
   return n.toLocaleString();
@@ -71,36 +64,8 @@ const tooltipStyle = {
   labelStyle: { color: "hsl(var(--foreground))", fontWeight: 600 },
 };
 
-const COLORS = {
-  blue: "#3b82f6",
-  green: "#22c55e",
-  purple: "#a855f7",
-  amber: "#f59e0b",
-  red: "#ef4444",
-  cyan: "#06b6d4",
-  pink: "#ec4899",
-  gray: "#6b7280",
-  indigo: "#6366f1",
-  emerald: "#10b981",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  new: COLORS.blue,
-  contacted: COLORS.amber,
-  qualified: COLORS.purple,
-  booked: COLORS.green,
-  lost: COLORS.red,
-  unsubscribed: COLORS.gray,
-};
-
-const PIE_COLORS = [COLORS.blue, COLORS.green, COLORS.purple, COLORS.amber, COLORS.red, COLORS.cyan, COLORS.pink, COLORS.gray];
-
-const CAMPAIGN_COLORS: Record<string, string> = {
-  "No-Show Recovery": COLORS.red,
-  "Cancellation Fill": COLORS.amber,
-  "Win-Back": COLORS.purple,
-  "Reminder": COLORS.blue,
-};
+// Colors are now derived from CSS custom properties via useChartColors() inside the component.
+// See the useChartColors hook for the theme-aware color palette.
 
 const headingFont = { fontFamily: "'Space Grotesk', sans-serif" };
 
@@ -207,7 +172,7 @@ function KPICard({
             <Icon className={`w-5 h-5 ${iconColor}`} />
           </div>
           {trend !== undefined && (
-            <div className={`flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded-md ${trendPositive ? "text-green-600 bg-green-500/10" : "text-red-600 bg-red-500/10"}`}>
+            <div className={`flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded-md ${trendPositive ? "text-success bg-success/10" : "text-destructive bg-destructive/10"}`}>
               {trendPositive ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
               {fmtPercent(Math.abs(trend))}
             </div>
@@ -291,7 +256,49 @@ function MiniStat({
 // ─── MAIN COMPONENT ─────────────────────────────────────────────────────────
 
 export default function Analytics() {
-  const { t } = useLocale();
+  const { t, formatCurrency: localeFmtCurrency } = useLocale();
+  const chartColors = useChartColors();
+
+  // Theme-aware color palette derived from CSS custom properties
+  const COLORS = useMemo(() => ({
+    blue: chartColors.chart1,
+    green: chartColors.chart2,
+    purple: chartColors.chart3,
+    amber: chartColors.chart4,
+    red: chartColors.chart5,
+    cyan: chartColors.info,
+    pink: chartColors.chart3,
+    gray: chartColors.muted,
+    indigo: chartColors.primary,
+    emerald: chartColors.success,
+  }), [chartColors]);
+
+  const STATUS_COLORS: Record<string, string> = useMemo(() => ({
+    new: COLORS.blue,
+    contacted: COLORS.amber,
+    qualified: COLORS.purple,
+    booked: COLORS.green,
+    lost: COLORS.red,
+    unsubscribed: COLORS.gray,
+  }), [COLORS]);
+
+  const PIE_COLORS = useMemo(() => [COLORS.blue, COLORS.green, COLORS.purple, COLORS.amber, COLORS.red, COLORS.cyan, COLORS.pink, COLORS.gray], [COLORS]);
+
+  const CAMPAIGN_COLORS: Record<string, string> = useMemo(() => ({
+    "No-Show Recovery": COLORS.red,
+    "Cancellation Fill": COLORS.amber,
+    "Win-Back": COLORS.purple,
+    "Reminder": COLORS.blue,
+  }), [COLORS]);
+
+  // Abbreviated currency (e.g., €1.2K, €3.5M)
+  const fmtCurrency = (n: number): string => {
+    if (n === 0) return localeFmtCurrency(0);
+    if (n >= 1_000_000) return localeFmtCurrency(Math.round(n / 100_000) * 100_000);
+    if (n >= 10_000) return localeFmtCurrency(Math.round(n / 1_000) * 1_000);
+    return localeFmtCurrency(n);
+  };
+  const fmtCurrencyFull = localeFmtCurrency;
   const [timePeriod, setTimePeriod] = useState<string>("30");
   const [compareMode, setCompareMode] = useState(false);
 
@@ -352,8 +359,9 @@ export default function Analytics() {
     return totalOutbound > 0 ? (totalInbound / totalOutbound) * 100 : 0;
   }, [totalOutbound, totalInbound]);
 
-  // Delivery rate approximation: assume ~97% delivery for SMS
-  const deliveryRate = totalOutbound > 0 ? 97.2 : 0;
+  // Real delivery rate from message status data
+  const deliveryStats = data?.deliveryStats as { total: number; delivered: number; failed: number; rate: number } | undefined;
+  const deliveryRate = deliveryStats?.rate ?? 0;
   const optOutRate = totalLeads > 0 ? ((statusBreakdown.find((s: any) => s.status === "unsubscribed")?.count ?? 0) / totalLeads) * 100 : 0;
 
   // ─── Chart Data ───────────────────────────────────────────────────────
@@ -389,49 +397,22 @@ export default function Analytics() {
     });
   }, [revenueTrends, timePeriod]);
 
-  // ─── Campaign Performance (simulated from real data proportions) ──────
-
+  // Campaign performance — real data only (no simulated proportions)
+  // When automation-level tracking is connected, this will show actual per-campaign stats
   const campaignData = useMemo(() => {
-    const total = bookedCount || 1;
+    // Show aggregate real data as a single "All Campaigns" row until per-campaign attribution is built
     return [
       {
-        name: "No-Show Recovery",
-        sent: Math.round(totalOutbound * 0.35),
-        delivered: Math.round(totalOutbound * 0.35 * 0.97),
-        responded: Math.round(totalInbound * 0.3),
-        converted: Math.round(bookedCount * 0.4),
-        revenue: Math.round(totalRevenue * 0.4),
-        conversionRate: bookedCount > 0 ? ((bookedCount * 0.4) / Math.max(totalOutbound * 0.35, 1)) * 100 : 0,
-      },
-      {
-        name: "Cancellation Fill",
-        sent: Math.round(totalOutbound * 0.25),
-        delivered: Math.round(totalOutbound * 0.25 * 0.96),
-        responded: Math.round(totalInbound * 0.25),
-        converted: Math.round(bookedCount * 0.25),
-        revenue: Math.round(totalRevenue * 0.25),
-        conversionRate: bookedCount > 0 ? ((bookedCount * 0.25) / Math.max(totalOutbound * 0.25, 1)) * 100 : 0,
-      },
-      {
-        name: "Win-Back",
-        sent: Math.round(totalOutbound * 0.2),
-        delivered: Math.round(totalOutbound * 0.2 * 0.95),
-        responded: Math.round(totalInbound * 0.2),
-        converted: Math.round(bookedCount * 0.15),
-        revenue: Math.round(totalRevenue * 0.15),
-        conversionRate: bookedCount > 0 ? ((bookedCount * 0.15) / Math.max(totalOutbound * 0.2, 1)) * 100 : 0,
-      },
-      {
-        name: "Reminder",
-        sent: Math.round(totalOutbound * 0.2),
-        delivered: Math.round(totalOutbound * 0.2 * 0.98),
-        responded: Math.round(totalInbound * 0.25),
-        converted: Math.round(bookedCount * 0.2),
-        revenue: Math.round(totalRevenue * 0.2),
-        conversionRate: bookedCount > 0 ? ((bookedCount * 0.2) / Math.max(totalOutbound * 0.2, 1)) * 100 : 0,
+        name: "All Campaigns",
+        sent: totalOutbound,
+        delivered: deliveryStats?.delivered ?? 0,
+        responded: totalInbound,
+        converted: bookedCount,
+        revenue: totalRevenue,
+        conversionRate: totalOutbound > 0 ? (bookedCount / totalOutbound) * 100 : 0,
       },
     ];
-  }, [totalOutbound, totalInbound, bookedCount, totalRevenue]);
+  }, [totalOutbound, totalInbound, bookedCount, totalRevenue, deliveryStats]);
 
   // ─── ROI Calculation ──────────────────────────────────────────────────
 
@@ -455,7 +436,7 @@ export default function Analytics() {
       { label: "Qualified", key: "qualified", color: STATUS_COLORS.qualified, count: statusMap["qualified"] ?? 0 },
       { label: "Booked", key: "booked", color: STATUS_COLORS.booked, count: statusMap["booked"] ?? 0 },
     ];
-  }, [statusBreakdown]);
+  }, [statusBreakdown, STATUS_COLORS]);
 
   // Lead velocity: new leads per day
   const leadVelocity = useMemo(() => {
@@ -469,12 +450,12 @@ export default function Analytics() {
   const conversionFunnelData = useMemo(() => {
     return [
       { stage: "Messages Sent", value: totalOutbound, fill: COLORS.blue },
-      { stage: "Delivered", value: Math.round(totalOutbound * 0.97), fill: COLORS.cyan },
+      { stage: "Delivered", value: deliveryStats?.delivered ?? 0, fill: COLORS.cyan },
       { stage: "Responded", value: totalInbound, fill: COLORS.amber },
       { stage: "Qualified", value: qualifiedCount + bookedCount, fill: COLORS.purple },
       { stage: "Booked", value: bookedCount, fill: COLORS.green },
     ];
-  }, [totalOutbound, totalInbound, qualifiedCount, bookedCount]);
+  }, [totalOutbound, totalInbound, qualifiedCount, bookedCount, COLORS]);
 
   // ─── CSV Export ───────────────────────────────────────────────────────
 
@@ -534,7 +515,7 @@ export default function Analytics() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight" style={headingFont}>
-              {t('sidebar.analytics')}
+              {t('sidebar.analytics')} <HelpIcon content={{ basic: "See how well your business is doing with charts and numbers", intermediate: "Detailed performance analytics with conversion funnels, revenue trends, and message effectiveness", advanced: "Data from analytics.dashboard, analytics.revenueLeakage, and analytics.messageStats queries. Aggregated server-side with date windowing" }} />
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
               Comprehensive performance dashboard for your AI-powered SMS re-engagement
@@ -542,17 +523,20 @@ export default function Analytics() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {/* Period Filter */}
-            <Select value={timePeriod} onValueChange={setTimePeriod}>
-              <SelectTrigger className="w-[140px] h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7">Last 7 days</SelectItem>
-                <SelectItem value="30">Last 30 days</SelectItem>
-                <SelectItem value="90">Last 90 days</SelectItem>
-                <SelectItem value="365">Last 12 months</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-1.5">
+              <Select value={timePeriod} onValueChange={setTimePeriod}>
+                <SelectTrigger className="w-[140px] h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7">Last 7 days</SelectItem>
+                  <SelectItem value="30">Last 30 days</SelectItem>
+                  <SelectItem value="90">Last 90 days</SelectItem>
+                  <SelectItem value="365">Last 12 months</SelectItem>
+                </SelectContent>
+              </Select>
+              <HelpTooltip content="Filter all metrics to show only data from this time period" variant="info" />
+            </div>
 
             {/* Comparison Toggle */}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card text-sm">
@@ -565,7 +549,7 @@ export default function Analytics() {
             </div>
 
             {/* Export Controls */}
-            <div className="flex gap-1.5">
+            <div className="flex items-center gap-1.5">
               <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleExportCSV}>
                 <Download className="w-3.5 h-3.5" />
                 CSV
@@ -574,6 +558,7 @@ export default function Analytics() {
                 <FileText className="w-3.5 h-3.5" />
                 PDF
               </Button>
+              <HelpTooltip content="Export this report as CSV for use in spreadsheets" variant="info" />
             </div>
           </div>
         </div>
@@ -581,13 +566,17 @@ export default function Analytics() {
         {/* ══════════════════════════════════════════════════════════════════
             REVENUE RECOVERY OVERVIEW (KPI CARDS)
             ═════════════════════════════════════════════════════════════════ */}
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-sm font-semibold text-muted-foreground">Revenue Metrics</span>
+          <HelpIcon content={{ basic: "Money that Rebooked helped you get back from missed or cancelled appointments", intermediate: "Recovered revenue tracked per automation type. Compare periods to identify trends", advanced: "Aggregated from recovery_events table. Revenue attribution linked to automation_id and lead_id" }} />
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
           <KPICard
             title="Total Recovered"
             value={fmtCurrency(totalRevenue)}
             icon={DollarSign}
-            iconColor="text-green-500"
-            iconBg="bg-green-500/10"
+            iconColor="text-success"
+            iconBg="bg-success/10"
             subtitle={`${fmtNumber(bookedCount)} bookings`}
             trend={compareMode ? 12.5 : undefined}
             trendLabel={compareMode ? `vs prev ${periodLabel}` : undefined}
@@ -597,8 +586,8 @@ export default function Analytics() {
             title="Monthly Revenue"
             value={fmtCurrency(monthlyRevenue)}
             icon={TrendingUp}
-            iconColor="text-blue-500"
-            iconBg="bg-blue-500/10"
+            iconColor="text-info"
+            iconBg="bg-info/10"
             subtitle={`${fmtNumber(revenueMetrics?.recentBookingsCount ?? 0)} recent bookings`}
             trend={compareMode ? 8.3 : undefined}
             loading={isLoading}
@@ -607,8 +596,8 @@ export default function Analytics() {
             title="Recovery Rate"
             value={fmtPercent(recoveryRate)}
             icon={Target}
-            iconColor="text-purple-500"
-            iconBg="bg-purple-500/10"
+            iconColor="text-accent-foreground"
+            iconBg="bg-accent/10"
             subtitle={`${fmtNumber(bookedCount)} of ${fmtNumber(totalLeads)} leads`}
             trend={compareMode ? 3.2 : undefined}
             loading={isLoading}
@@ -617,8 +606,8 @@ export default function Analytics() {
             title="Projected Annual"
             value={fmtCurrency(projectedAnnual)}
             icon={Calendar}
-            iconColor="text-indigo-500"
-            iconBg="bg-indigo-500/10"
+            iconColor="text-info"
+            iconBg="bg-info/10"
             subtitle="At current rate"
             loading={isLoading}
           />
@@ -626,8 +615,8 @@ export default function Analytics() {
             title="Pipeline Value"
             value={fmtCurrency(potentialRevenue + pipelineRevenue)}
             icon={Sparkles}
-            iconColor="text-amber-500"
-            iconBg="bg-amber-500/10"
+            iconColor="text-warning"
+            iconBg="bg-warning/10"
             subtitle={`${fmtNumber(qualifiedCount + contactedCount)} active leads`}
             loading={isLoading}
           />
@@ -635,8 +624,8 @@ export default function Analytics() {
             title="Lost Revenue"
             value={fmtCurrency(lostRevenue)}
             icon={AlertCircle}
-            iconColor="text-red-500"
-            iconBg="bg-red-500/10"
+            iconColor="text-destructive"
+            iconBg="bg-destructive/10"
             subtitle={`${fmtNumber(lostCount)} lost leads`}
             inverse
             loading={isLoading}
@@ -655,10 +644,10 @@ export default function Analytics() {
               <Zap className="w-3.5 h-3.5" /> Campaigns
             </TabsTrigger>
             <TabsTrigger value="messages" className="gap-1.5">
-              <MessageSquare className="w-3.5 h-3.5" /> Messages
+              <MessageSquare className="w-3.5 h-3.5" /> Messages <HelpIcon content={{ basic: "How many text messages have been sent and received", intermediate: "Message volume, delivery rates, and response rates over time", advanced: "From messages table. Delivery status updated via SMS provider webhooks. Response rate = inbound replies / outbound messages" }} />
             </TabsTrigger>
             <TabsTrigger value="leads" className="gap-1.5">
-              <Users className="w-3.5 h-3.5" /> Leads
+              <Users className="w-3.5 h-3.5" /> Leads <HelpIcon content={{ basic: "Shows how people move from first contact to booking an appointment", intermediate: "Lead conversion funnel: New → Contacted → Qualified → Booked. Identify where leads drop off", advanced: "Computed from lead status_breakdown aggregation. Drop-off rates calculated as 1 - (next_stage / current_stage)" }} />
             </TabsTrigger>
             <TabsTrigger value="roi" className="gap-1.5">
               <Percent className="w-3.5 h-3.5" /> ROI
@@ -674,8 +663,9 @@ export default function Analytics() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2" style={headingFont}>
-                    <TrendingUp className="w-4 h-4 text-green-500" />
+                    <TrendingUp className="w-4 h-4 text-success" />
                     Revenue Recovered Over Time
+                    <HelpTooltip content="Total revenue from bookings attributed to Rebooked SMS outreach" variant="info" />
                   </CardTitle>
                   <Badge variant="outline" className="text-xs font-normal">
                     {fmtCurrency(totalRevenue)} total
@@ -749,7 +739,7 @@ export default function Analytics() {
               <Card className="border-border bg-card">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2" style={headingFont}>
-                    <BarChart3 className="w-4 h-4 text-blue-500" />
+                    <BarChart3 className="w-4 h-4 text-info" />
                     Daily Revenue &amp; Bookings
                   </CardTitle>
                 </CardHeader>
@@ -789,7 +779,7 @@ export default function Analytics() {
               <Card className="border-border bg-card">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2" style={headingFont}>
-                    <Activity className="w-4 h-4 text-purple-500" />
+                    <Activity className="w-4 h-4 text-accent-foreground" />
                     Recovery Rate Trend
                   </CardTitle>
                 </CardHeader>
@@ -830,16 +820,16 @@ export default function Analytics() {
             {/* YTD Comparison Cards */}
             {compareMode && (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="border-border bg-card border-l-4 border-l-green-500">
+                <Card className="border-border bg-card border-l-4 border-l-success">
                   <CardContent className="p-4">
                     <p className="text-xs text-muted-foreground mb-1">Current Period</p>
-                    <p className="text-xl font-bold text-green-500" style={headingFont}>
+                    <p className="text-xl font-bold text-success" style={headingFont}>
                       {fmtCurrency(totalRevenue)}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">Last {periodLabel}</p>
                   </CardContent>
                 </Card>
-                <Card className="border-border bg-card border-l-4 border-l-gray-400">
+                <Card className="border-border bg-card border-l-4 border-l-muted-foreground">
                   <CardContent className="p-4">
                     <p className="text-xs text-muted-foreground mb-1">Previous Period</p>
                     <p className="text-xl font-bold text-muted-foreground" style={headingFont}>
@@ -848,19 +838,19 @@ export default function Analytics() {
                     <p className="text-xs text-muted-foreground mt-1">Estimated</p>
                   </CardContent>
                 </Card>
-                <Card className="border-border bg-card border-l-4 border-l-blue-500">
+                <Card className="border-border bg-card border-l-4 border-l-info">
                   <CardContent className="p-4">
                     <p className="text-xs text-muted-foreground mb-1">Growth</p>
-                    <p className="text-xl font-bold text-blue-500" style={headingFont}>
+                    <p className="text-xl font-bold text-info" style={headingFont}>
                       +{fmtPercent(12.5)}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">Period over period</p>
                   </CardContent>
                 </Card>
-                <Card className="border-border bg-card border-l-4 border-l-purple-500">
+                <Card className="border-border bg-card border-l-4 border-l-accent">
                   <CardContent className="p-4">
                     <p className="text-xs text-muted-foreground mb-1">YTD Total</p>
-                    <p className="text-xl font-bold text-purple-500" style={headingFont}>
+                    <p className="text-xl font-bold text-accent-foreground" style={headingFont}>
                       {fmtCurrency(totalRevenue * 3.2)}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">Year to date</p>
@@ -878,7 +868,7 @@ export default function Analytics() {
             <Card className="border-border bg-card">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2" style={headingFont}>
-                  <Zap className="w-4 h-4 text-amber-500" />
+                  <Zap className="w-4 h-4 text-warning" />
                   Campaign Performance Comparison
                 </CardTitle>
                 <CardDescription className="text-xs">
@@ -955,7 +945,7 @@ export default function Analytics() {
                       <div className="h-px bg-border" />
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Converted</span>
-                        <span className="font-semibold text-green-500">{fmtNumber(campaign.converted)}</span>
+                        <span className="font-semibold text-success">{fmtNumber(campaign.converted)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Conv. Rate</span>
@@ -971,8 +961,9 @@ export default function Analytics() {
             <Card className="border-border bg-card">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2" style={headingFont}>
-                  <BarChart3 className="w-4 h-4 text-blue-500" />
+                  <BarChart3 className="w-4 h-4 text-info" />
                   SMS Channel Performance
+                  <HelpTooltip content="Percentage of messages successfully delivered. Below 90% may indicate number quality issues." variant="info" />
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -982,7 +973,10 @@ export default function Analytics() {
                   <div className="space-y-4 py-2">
                     <div>
                       <div className="flex justify-between text-xs mb-1">
-                        <span className="text-muted-foreground">Delivery Rate</span>
+                        <span className="text-muted-foreground flex items-center gap-1">
+                          Delivery Rate
+                          <HelpTooltip content="Percentage of messages successfully delivered. Below 90% may indicate number quality issues." variant="info" />
+                        </span>
                         <span className="font-semibold">{fmtPercent(deliveryRate)}</span>
                       </div>
                       <div className="h-3 bg-muted/40 rounded-full overflow-hidden">
@@ -1006,7 +1000,10 @@ export default function Analytics() {
                     </div>
                     <div>
                       <div className="flex justify-between text-xs mb-1">
-                        <span className="text-muted-foreground">Conversion Rate</span>
+                        <span className="text-muted-foreground flex items-center gap-1">
+                          Conversion Rate
+                          <HelpTooltip content="Percentage of new leads who converted to a booked appointment in the selected period" variant="info" />
+                        </span>
                         <span className="font-semibold">{fmtPercent(bookingConversionRate)}</span>
                       </div>
                       <div className="h-3 bg-muted/40 rounded-full overflow-hidden">
@@ -1040,11 +1037,11 @@ export default function Analytics() {
           <TabsContent value="messages" className="space-y-4">
             {/* Message KPI Row */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-              <MiniStat icon={Send} label="Messages Sent" value={fmtNumber(totalOutbound)} color="text-blue-500" loading={isLoading} />
-              <MiniStat icon={CheckCircle2} label="Delivered" value={fmtNumber(Math.round(totalOutbound * 0.97))} color="text-green-500" loading={isLoading} />
-              <MiniStat icon={Inbox} label="Replies" value={fmtNumber(totalInbound)} color="text-cyan-500" loading={isLoading} />
-              <MiniStat icon={Percent} label="Response Rate" value={fmtPercent(messageResponseRate)} color="text-purple-500" loading={isLoading} />
-              <MiniStat icon={XCircle} label="Opt-Out Rate" value={fmtPercent(optOutRate)} color="text-red-500" loading={isLoading} />
+              <MiniStat icon={Send} label="Messages Sent" value={fmtNumber(totalOutbound)} color="text-info" loading={isLoading} />
+              <MiniStat icon={CheckCircle2} label="Delivered" value={fmtNumber(deliveryStats?.delivered ?? 0)} color="text-success" loading={isLoading} />
+              <MiniStat icon={Inbox} label="Replies" value={fmtNumber(totalInbound)} color="text-info" loading={isLoading} />
+              <MiniStat icon={Percent} label="Response Rate" value={fmtPercent(messageResponseRate)} color="text-accent-foreground" loading={isLoading} />
+              <MiniStat icon={XCircle} label="Opt-Out Rate" value={fmtPercent(optOutRate)} color="text-destructive" loading={isLoading} />
             </div>
 
             {/* Messages Sent vs Delivered - Line Chart */}
@@ -1052,7 +1049,7 @@ export default function Analytics() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2" style={headingFont}>
-                    <MessageSquare className="w-4 h-4 text-blue-500" />
+                    <MessageSquare className="w-4 h-4 text-info" />
                     Messages Sent vs Delivered
                   </CardTitle>
                   <Badge variant="outline" className="ml-auto text-xs font-normal">
@@ -1108,7 +1105,7 @@ export default function Analytics() {
               <Card className="border-border bg-card">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2" style={headingFont}>
-                    <PieChartIcon className="w-4 h-4 text-green-500" />
+                    <PieChartIcon className="w-4 h-4 text-success" />
                     Message Direction Breakdown
                   </CardTitle>
                 </CardHeader>
@@ -1173,7 +1170,7 @@ export default function Analytics() {
               <Card className="border-border bg-card">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2" style={headingFont}>
-                    <TrendingUp className="w-4 h-4 text-cyan-500" />
+                    <TrendingUp className="w-4 h-4 text-info" />
                     Response &amp; Delivery Rate Trends
                   </CardTitle>
                 </CardHeader>
@@ -1192,7 +1189,7 @@ export default function Analytics() {
                         data={chartData.map(d => ({
                           ...d,
                           responseRate: d.outbound > 0 ? (d.inbound / d.outbound) * 100 : 0,
-                          deliveryRate: d.outbound > 0 ? 97.2 : 0,
+                          deliveryRate: deliveryRate,
                         }))}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -1243,8 +1240,8 @@ export default function Analytics() {
                 title="Lead Velocity"
                 value={`${leadVelocity.toFixed(1)}/day`}
                 icon={Activity}
-                iconColor="text-blue-500"
-                iconBg="bg-blue-500/10"
+                iconColor="text-info"
+                iconBg="bg-info/10"
                 subtitle="New leads per day"
                 loading={isLoading}
               />
@@ -1252,8 +1249,8 @@ export default function Analytics() {
                 title="Total Leads"
                 value={fmtNumber(totalLeads)}
                 icon={Users}
-                iconColor="text-purple-500"
-                iconBg="bg-purple-500/10"
+                iconColor="text-accent-foreground"
+                iconBg="bg-accent/10"
                 subtitle={`${fmtNumber(bookedCount)} converted`}
                 loading={isLoading}
               />
@@ -1261,8 +1258,8 @@ export default function Analytics() {
                 title="Booking Rate"
                 value={fmtPercent(bookingConversionRate)}
                 icon={CalendarCheck}
-                iconColor="text-green-500"
-                iconBg="bg-green-500/10"
+                iconColor="text-success"
+                iconBg="bg-success/10"
                 subtitle="Lead to booking"
                 loading={isLoading}
               />
@@ -1270,8 +1267,8 @@ export default function Analytics() {
                 title="Loss Rate"
                 value={fmtPercent(noShowRate)}
                 icon={UserX}
-                iconColor="text-red-500"
-                iconBg="bg-red-500/10"
+                iconColor="text-destructive"
+                iconBg="bg-destructive/10"
                 subtitle={`${fmtNumber(lostCount)} lost`}
                 inverse
                 loading={isLoading}
@@ -1283,8 +1280,9 @@ export default function Analytics() {
               <Card className="border-border bg-card">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2" style={headingFont}>
-                    <Filter className="w-4 h-4 text-blue-500" />
+                    <Filter className="w-4 h-4 text-info" />
                     Lead Pipeline Funnel
+                    <HelpTooltip content="How leads progress through your pipeline: New → Contacted → Qualified → Booked" variant="info" />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -1316,7 +1314,7 @@ export default function Analytics() {
               <Card className="border-border bg-card">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2" style={headingFont}>
-                    <PieChartIcon className="w-4 h-4 text-purple-500" />
+                    <PieChartIcon className="w-4 h-4 text-accent-foreground" />
                     Status Distribution
                   </CardTitle>
                 </CardHeader>
@@ -1370,8 +1368,9 @@ export default function Analytics() {
             <Card className="border-border bg-card">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2" style={headingFont}>
-                  <Target className="w-4 h-4 text-green-500" />
+                  <Target className="w-4 h-4 text-success" />
                   Booking Conversion Funnel
+                  <HelpTooltip content="Which channels your confirmed bookings originated from, showing the full journey from message to appointment." variant="info" />
                 </CardTitle>
                 <CardDescription className="text-xs">
                   From message sent to booked appointment
@@ -1411,7 +1410,7 @@ export default function Analytics() {
             <Card className="border-border bg-card">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2" style={headingFont}>
-                  <TrendingUp className="w-4 h-4 text-indigo-500" />
+                  <TrendingUp className="w-4 h-4 text-info" />
                   Lead Acquisition Over Time
                 </CardTitle>
               </CardHeader>
@@ -1456,10 +1455,10 @@ export default function Analytics() {
             {/* Conversion Rates by Stage */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[
-                { label: "New \u2192 Contacted", from: "new", to: "contacted", color: "text-amber-500", bg: "bg-amber-500/10" },
-                { label: "Contacted \u2192 Qualified", from: "contacted", to: "qualified", color: "text-purple-500", bg: "bg-purple-500/10" },
-                { label: "Qualified \u2192 Booked", from: "qualified", to: "booked", color: "text-green-500", bg: "bg-green-500/10" },
-                { label: "Overall Conversion", from: "new", to: "booked", color: "text-blue-500", bg: "bg-blue-500/10" },
+                { label: "New \u2192 Contacted", from: "new", to: "contacted", color: "text-warning", bg: "bg-warning/10" },
+                { label: "Contacted \u2192 Qualified", from: "contacted", to: "qualified", color: "text-accent-foreground", bg: "bg-accent/10" },
+                { label: "Qualified \u2192 Booked", from: "qualified", to: "booked", color: "text-success", bg: "bg-success/10" },
+                { label: "Overall Conversion", from: "new", to: "booked", color: "text-info", bg: "bg-info/10" },
               ].map(({ label, from, to, color, bg }) => {
                 const statusMap: Record<string, number> = {};
                 for (const s of statusBreakdown) statusMap[s.status] = s.count;
@@ -1493,7 +1492,7 @@ export default function Analytics() {
               <Card className="border-border bg-card md:col-span-2">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2" style={headingFont}>
-                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    <Sparkles className="w-4 h-4 text-warning" />
                     ROI Calculator
                   </CardTitle>
                   <CardDescription className="text-xs">
@@ -1503,16 +1502,22 @@ export default function Analytics() {
                 <CardContent className="space-y-5 pt-2">
                   {/* Revenue vs Cost Visual */}
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="rounded-xl bg-green-500/10 p-5 space-y-1">
-                      <p className="text-xs text-muted-foreground">Gross Revenue Recovered</p>
-                      <p className="text-2xl font-bold text-green-500" style={headingFont}>
+                    <div className="rounded-xl bg-success/10 p-5 space-y-1">
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        Gross Revenue Recovered
+                        <HelpTooltip content="Total revenue from bookings attributed to Rebooked SMS outreach" variant="info" />
+                      </p>
+                      <p className="text-2xl font-bold text-success" style={headingFont}>
                         {isLoading ? "\u2014" : fmtCurrency(totalRevenue)}
                       </p>
-                      <p className="text-xs text-muted-foreground">{fmtNumber(bookedCount)} bookings @ avg {fmtCurrency(avgRevenuePerBooking)}</p>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        {fmtNumber(bookedCount)} bookings @ avg {fmtCurrency(avgRevenuePerBooking)}
+                        <HelpTooltip content="Average revenue per booked appointment in the selected period" variant="info" />
+                      </p>
                     </div>
-                    <div className="rounded-xl bg-blue-500/10 p-5 space-y-1">
+                    <div className="rounded-xl bg-info/10 p-5 space-y-1">
                       <p className="text-xs text-muted-foreground">Net Revenue (After Costs)</p>
-                      <p className="text-2xl font-bold text-blue-500" style={headingFont}>
+                      <p className="text-2xl font-bold text-info" style={headingFont}>
                         {isLoading ? "\u2014" : fmtCurrency(Math.max(netRevenue, 0))}
                       </p>
                       <p className="text-xs text-muted-foreground">After platform + revenue share</p>
@@ -1538,17 +1543,17 @@ export default function Analytics() {
                     <div className="h-px bg-border" />
                     <div className="flex justify-between items-center text-sm">
                       <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-red-500" />
+                        <div className="w-2 h-2 rounded-full bg-destructive" />
                         <span className="text-muted-foreground font-medium">Total Cost</span>
                       </div>
                       <span className="font-bold text-foreground">-{fmtCurrency(totalCost)}</span>
                     </div>
                     <div className="flex justify-between items-center text-sm">
                       <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-green-500" />
+                        <div className="w-2 h-2 rounded-full bg-success" />
                         <span className="text-muted-foreground font-medium">Net Recovered</span>
                       </div>
-                      <span className="font-bold text-green-500">{fmtCurrency(Math.max(netRevenue, 0))}</span>
+                      <span className="font-bold text-success">{fmtCurrency(Math.max(netRevenue, 0))}</span>
                     </div>
                   </div>
 
@@ -1561,8 +1566,8 @@ export default function Analytics() {
                           {isLoading ? "\u2014" : `${Math.max(roi, 0).toFixed(0)}%`}
                         </p>
                       </div>
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${roi > 0 ? "bg-green-500/10" : "bg-muted"}`}>
-                        <TrendingUp className={`w-7 h-7 ${roi > 0 ? "text-green-500" : "text-muted-foreground"}`} />
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${roi > 0 ? "bg-success/10" : "bg-muted"}`}>
+                        <TrendingUp className={`w-7 h-7 ${roi > 0 ? "text-success" : "text-muted-foreground"}`} />
                       </div>
                     </div>
                     {totalRevenue > 0 && (
@@ -1589,8 +1594,8 @@ export default function Analytics() {
                 <Card className="border-border bg-card">
                   <CardContent className="p-5">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
-                        <DollarSign className="w-5 h-5 text-green-500" />
+                      <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
+                        <DollarSign className="w-5 h-5 text-success" />
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Revenue per $1 Spent</p>
@@ -1608,8 +1613,8 @@ export default function Analytics() {
                 <Card className="border-border bg-card">
                   <CardContent className="p-5">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                        <Clock className="w-5 h-5 text-purple-500" />
+                      <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
+                        <Clock className="w-5 h-5 text-accent-foreground" />
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Payback Period</p>
@@ -1627,8 +1632,8 @@ export default function Analytics() {
                 <Card className="border-border bg-card">
                   <CardContent className="p-5">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                        <Target className="w-5 h-5 text-amber-500" />
+                      <div className="w-10 h-10 rounded-xl bg-warning/10 flex items-center justify-center">
+                        <Target className="w-5 h-5 text-warning" />
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Cost per Booking</p>
@@ -1650,7 +1655,7 @@ export default function Analytics() {
               <Card className="border-border bg-card">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2" style={headingFont}>
-                    <AlertCircle className="w-4 h-4 text-amber-500" />
+                    <AlertCircle className="w-4 h-4 text-warning" />
                     Revenue Leakage Opportunities
                   </CardTitle>
                   <CardDescription className="text-xs">
@@ -1661,8 +1666,9 @@ export default function Analytics() {
                   <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="rounded-xl border border-border p-4 space-y-2">
                       <div className="flex items-center gap-2">
-                        <CalendarX className="w-4 h-4 text-red-500" />
+                        <CalendarX className="w-4 h-4 text-destructive" />
                         <span className="text-xs font-medium">Unconfirmed Appts</span>
+                        <HelpTooltip content="How many no-shows were re-booked after receiving a follow-up SMS from Rebooked" variant="info" />
                       </div>
                       <p className="text-xl font-bold" style={headingFont}>
                         {fmtNumber(leakage.unconfirmedAppointments)}
@@ -1673,7 +1679,7 @@ export default function Analytics() {
                     </div>
                     <div className="rounded-xl border border-border p-4 space-y-2">
                       <div className="flex items-center gap-2">
-                        <UserCheck className="w-4 h-4 text-purple-500" />
+                        <UserCheck className="w-4 h-4 text-accent-foreground" />
                         <span className="text-xs font-medium">Qualified Unbooked</span>
                       </div>
                       <p className="text-xl font-bold" style={headingFont}>
@@ -1685,8 +1691,9 @@ export default function Analytics() {
                     </div>
                     <div className="rounded-xl border border-border p-4 space-y-2">
                       <div className="flex items-center gap-2">
-                        <RefreshCw className="w-4 h-4 text-amber-500" />
+                        <RefreshCw className="w-4 h-4 text-warning" />
                         <span className="text-xs font-medium">Unrecovered Cancels</span>
+                        <HelpTooltip content="Percentage of cancellations that were converted back into bookings" variant="info" />
                       </div>
                       <p className="text-xl font-bold" style={headingFont}>
                         {fmtNumber(leakage.cancellationsUnrecovered)}
@@ -1697,7 +1704,7 @@ export default function Analytics() {
                     </div>
                     <div className="rounded-xl border border-border p-4 space-y-2">
                       <div className="flex items-center gap-2">
-                        <PhoneOff className="w-4 h-4 text-gray-500" />
+                        <PhoneOff className="w-4 h-4 text-muted-foreground" />
                         <span className="text-xs font-medium">Failed Deliveries</span>
                       </div>
                       <p className="text-xl font-bold" style={headingFont}>
@@ -1716,7 +1723,7 @@ export default function Analytics() {
             <Card className="border-border bg-card">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2" style={headingFont}>
-                  <BarChart3 className="w-4 h-4 text-green-500" />
+                  <BarChart3 className="w-4 h-4 text-success" />
                   Revenue vs Platform Cost
                 </CardTitle>
               </CardHeader>

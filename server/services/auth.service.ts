@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import {
@@ -10,7 +10,7 @@ import {
 import type { User } from "../../drizzle/schema";
 import type { Db } from "../_core/context";
 
-const EMAIL_VERIFICATION_TTL_MS = 1000 * 60 * 60 * 24;
+const EMAIL_VERIFICATION_TTL_MS = 1000 * 60 * 60 * 2; // 2 hours (security: limit token hijack window)
 const PASSWORD_RESET_TTL_MS = 1000 * 60 * 30;
 
 // Password policy configuration
@@ -177,13 +177,13 @@ export async function createEmailVerificationToken(db: Db, userId: number, email
   const tokenHash = sha256(rawToken);
   await db
     .update(emailVerificationTokens)
-    .set({ consumedAt: new Date() })
+    .set({ consumedAt: sql`NOW()` })
     .where(and(eq(emailVerificationTokens.userId, userId), isNull(emailVerificationTokens.consumedAt)));
   await db.insert(emailVerificationTokens).values({
     userId,
     email,
     tokenHash,
-    expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS),
+    expiresAt: sql`DATE_ADD(NOW(), INTERVAL ${EMAIL_VERIFICATION_TTL_MS / 1000} SECOND)`,
   });
   return rawToken;
 }
@@ -200,7 +200,7 @@ export async function consumeEmailVerificationToken(db: Db, rawToken: string) {
   if (new Date(row.expiresAt).getTime() < Date.now()) return null;
   await db
     .update(emailVerificationTokens)
-    .set({ consumedAt: new Date() })
+    .set({ consumedAt: sql`NOW()` })
     .where(eq(emailVerificationTokens.id, row.id));
   return row;
 }
@@ -210,12 +210,12 @@ export async function createPasswordResetToken(db: Db, userId: number) {
   const tokenHash = sha256(rawToken);
   await db
     .update(passwordResetTokens)
-    .set({ consumedAt: new Date() })
+    .set({ consumedAt: sql`NOW()` })
     .where(and(eq(passwordResetTokens.userId, userId), isNull(passwordResetTokens.consumedAt)));
   await db.insert(passwordResetTokens).values({
     userId,
     tokenHash,
-    expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
+    expiresAt: sql`DATE_ADD(NOW(), INTERVAL ${PASSWORD_RESET_TTL_MS / 1000} SECOND)`,
   });
   return rawToken;
 }
@@ -232,7 +232,7 @@ export async function consumePasswordResetToken(db: Db, rawToken: string) {
   if (new Date(row.expiresAt).getTime() < Date.now()) return null;
   await db
     .update(passwordResetTokens)
-    .set({ consumedAt: new Date() })
+    .set({ consumedAt: sql`NOW()` })
     .where(eq(passwordResetTokens.id, row.id));
   return row;
 }

@@ -160,7 +160,7 @@ export function SmartScheduler({
         factors: {
           businessHours: calculateBusinessHoursScore(new Date(selectedDate.setHours(hour))),
           leadPreference: 70,
-          historicalConversion: 65 + (Math.random() * 20),
+          historicalConversion: 0, // Real data populated by optimization API
           staffAvailability: 80,
           workloadBalance: 60
         },
@@ -318,9 +318,9 @@ export function SmartScheduler({
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 85) return 'text-green-600';
-    if (score >= 70) return 'text-yellow-600';
-    return 'text-red-600';
+    if (score >= 85) return 'text-success';
+    if (score >= 70) return 'text-warning';
+    return 'text-destructive';
   };
 
   const getScoreLabel = (score: number) => {
@@ -351,7 +351,7 @@ export function SmartScheduler({
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5 text-blue-500" />
+              <CalendarIcon className="h-5 w-5 text-info" />
               <CardTitle>Smart Appointment Scheduler</CardTitle>
               <Badge variant="outline" className="text-xs">
                 <Sparkles className="h-3 w-3 mr-1" />
@@ -416,17 +416,17 @@ export function SmartScheduler({
                   <div
                     key={slot.id}
                     className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                      !slot.available 
-                        ? 'bg-gray-50 border-gray-200 opacity-50' 
+                      !slot.available
+                        ? 'bg-muted/50 border-border opacity-50'
                         : selectedSlot?.id === slot.id
-                        ? 'bg-blue-50 border-blue-500'
-                        : 'hover:bg-gray-50'
+                        ? 'bg-info/10 border-info'
+                        : 'hover:bg-muted/50'
                     }`}
                     onClick={() => handleSlotSelect(slot)}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <Clock className="h-4 w-4 text-gray-500" />
+                        <Clock className="h-4 w-4 text-muted-foreground" />
                         <div>
                           <div className="font-medium text-sm">
                             {format(slot.start, 'h:mm a')} - {format(slot.end, 'h:mm a')}
@@ -446,16 +446,16 @@ export function SmartScheduler({
                       
                       <div className="text-right">
                         {slot.available ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <CheckCircle className="h-4 w-4 text-success" />
                         ) : (
-                          <AlertCircle className="h-4 w-4 text-red-500" />
+                          <AlertCircle className="h-4 w-4 text-destructive" />
                         )}
                       </div>
                     </div>
                     
                     {/* Conflicts */}
                     {slot.conflicts.length > 0 && (
-                      <div className="mt-2 text-xs text-red-600">
+                      <div className="mt-2 text-xs text-destructive">
                         {slot.conflicts.join(', ')}
                       </div>
                     )}
@@ -475,8 +475,8 @@ export function SmartScheduler({
                 ))}
                 
                 {availableSlots.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <CalendarIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <div className="text-center py-8 text-muted-foreground">
+                    <CalendarIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
                     <p>No time slots available</p>
                     <p className="text-sm mt-1">Try selecting a different date</p>
                   </div>
@@ -502,7 +502,7 @@ export function SmartScheduler({
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="font-medium text-sm">Prioritize Conversion</div>
-                      <div className="text-xs text-gray-500">Focus on high-conversion time slots</div>
+                      <div className="text-xs text-muted-foreground">Focus on high-conversion time slots</div>
                     </div>
                     <Switch
                       checked={optimizationOptions.prioritizeConversion}
@@ -515,7 +515,7 @@ export function SmartScheduler({
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="font-medium text-sm">Balance Workload</div>
-                      <div className="text-xs text-gray-500">Distribute appointments evenly</div>
+                      <div className="text-xs text-muted-foreground">Distribute appointments evenly</div>
                     </div>
                     <Switch
                       checked={optimizationOptions.balanceWorkload}
@@ -528,7 +528,7 @@ export function SmartScheduler({
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="font-medium text-sm">Respect Preferences</div>
-                      <div className="text-xs text-gray-500">Consider lead time preferences</div>
+                      <div className="text-xs text-muted-foreground">Consider lead time preferences</div>
                     </div>
                     <Switch
                       checked={optimizationOptions.respectPreferences}
@@ -557,7 +557,7 @@ export function SmartScheduler({
                       step={5}
                       className="w-full"
                     />
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
                       <span>0 min</span>
                       <span>60 min</span>
                     </div>
@@ -576,7 +576,7 @@ export function SmartScheduler({
                       step={1}
                       className="w-full"
                     />
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
                       <span>1</span>
                       <span>20</span>
                     </div>
@@ -599,10 +599,10 @@ export function SmartScheduler({
               {/* Conversion Prediction */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <Target className="h-4 w-4 text-green-500" />
+                  <Target className="h-4 w-4 text-success" />
                   <span className="text-sm font-medium">Conversion Probability</span>
                 </div>
-                <div className="text-2xl font-bold text-green-600">
+                <div className="text-2xl font-bold text-success">
                   {selectedSlot.factors.historicalConversion.toFixed(0)}%
                 </div>
                 <Progress value={selectedSlot.factors.historicalConversion} className="h-2 mt-2" />
@@ -611,10 +611,10 @@ export function SmartScheduler({
               {/* Lead Preference Match */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <Users className="h-4 w-4 text-blue-500" />
+                  <Users className="h-4 w-4 text-info" />
                   <span className="text-sm font-medium">Preference Match</span>
                 </div>
-                <div className="text-2xl font-bold text-blue-600">
+                <div className="text-2xl font-bold text-info">
                   {selectedSlot.factors.leadPreference.toFixed(0)}%
                 </div>
                 <Progress value={selectedSlot.factors.leadPreference} className="h-2 mt-2" />
@@ -623,7 +623,7 @@ export function SmartScheduler({
               {/* Overall Score */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <BarChart3 className="h-4 w-4 text-purple-500" />
+                  <BarChart3 className="h-4 w-4 text-accent-foreground" />
                   <span className="text-sm font-medium">Optimization Score</span>
                 </div>
                 <div className={`text-2xl font-bold ${getScoreColor(selectedSlot.score)}`}>
@@ -634,12 +634,12 @@ export function SmartScheduler({
             </div>
             
             {/* AI Insights */}
-            <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="bg-info/10 p-4 rounded-lg">
               <div className="flex items-start gap-2">
-                <Info className="h-4 w-4 text-blue-500 mt-0.5" />
+                <Info className="h-4 w-4 text-info mt-0.5" />
                 <div>
                   <h4 className="font-medium text-sm mb-1">AI Insights</h4>
-                  <p className="text-xs text-blue-800">
+                  <p className="text-xs text-foreground">
                     This time slot has a {getScoreLabel(selectedSlot.score).toLowerCase()} optimization score.
                     {selectedSlot.factors.historicalConversion > 80 && 
                       ' Historically, this time converts well for your services.'}
@@ -660,9 +660,9 @@ export function SmartScheduler({
 
 // Utility functions used in the component
 const getScoreColor = (score: number) => {
-  if (score >= 80) return 'text-green-600';
-  if (score >= 60) return 'text-yellow-600';
-  return 'text-red-600';
+  if (score >= 80) return 'text-success';
+  if (score >= 60) return 'text-warning';
+  return 'text-destructive';
 };
 
 const getScoreLabel = (score: number) => {

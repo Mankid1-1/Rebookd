@@ -174,10 +174,14 @@ export class QueryCircuitBreaker {
   private onFailure() {
     this.failures++;
     this.lastFailureTime = Date.now();
-    
+
     if (this.failures >= this.failureThreshold) {
       this.state = 'open';
       console.log('🚫 Circuit breaker opened due to failures');
+      // Report to sentinel so it can track DB stress patterns
+      import("./sentinel-bridge").then(({ reportCircuitBreakerTrip }) => {
+        reportCircuitBreakerTrip("query", this.failures);
+      }).catch(() => {});
     }
   }
 
@@ -193,7 +197,7 @@ export class QueryCircuitBreaker {
 }
 
 // Global circuit breaker instance
-const globalCircuitBreaker = new QueryCircuitBreaker();
+export const globalCircuitBreaker = new QueryCircuitBreaker();
 
 /**
  * Execute query with circuit breaker protection

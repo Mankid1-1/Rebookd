@@ -5,6 +5,7 @@ import Stripe from "stripe";
 import { getDb } from "../db";
 import { billingInvoices, plans, subscriptions } from "../../drizzle/schema";
 import * as BillingService from "../services/billing.service";
+import { tryClaimInboundWebhookDedup } from "../services/webhook-dedup.service";
 import { ENV } from "./env";
 import type { Db } from "./context";
 
@@ -36,12 +37,18 @@ export function registerStripeWebhook(app: Express) {
       try {
         event = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
       } catch (err) {
-        return res.status(400).send(`Webhook Error: ${err instanceof Error ? err.message : "invalid payload"}`);
+        return res.status(400).send("Webhook signature verification failed");
       }
 
       try {
         const db = await getDb();
         if (!db) return res.status(500).send("Database unavailable");
+
+        // Idempotency: skip events already processed (handles Stripe retries and restart replay)
+        const isNew = await tryClaimInboundWebhookDedup(db, 0, event.id);
+        if (!isNew) {
+          return res.json({ received: true, duplicate: true });
+        }
 
         switch (event.type) {
           case "checkout.session.completed": {

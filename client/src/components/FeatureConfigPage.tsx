@@ -3,14 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Settings, Save, RotateCcw } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
 
 // Dynamic badge colors based on user theme
-const getDynamicBadgeColors = (enabled: boolean) => {
-  const isDarkMode = document.documentElement.classList.contains('dark');
+const getDynamicBadgeColors = (enabled: boolean, isDarkMode: boolean) => {
   if (enabled) {
-    return isDarkMode ? "bg-green-900 text-green-200" : "bg-green-100 text-green-800";
+    return "bg-success/10 text-success";
   } else {
-    return isDarkMode ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-800";
+    return "bg-muted text-muted-foreground";
   }
 };
 
@@ -40,6 +40,7 @@ export function FeatureConfigPage({
   onReset,
   status,
 }: FeatureConfigPageProps) {
+  const { isDark: isDarkMode } = useTheme();
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -55,7 +56,7 @@ export function FeatureConfigPage({
         </div>
         <div className="flex items-center gap-2">
           {status && (
-            <Badge className={getDynamicBadgeColors(status.enabled)}>
+            <Badge className={getDynamicBadgeColors(status.enabled, isDarkMode)}>
               {status.label}
             </Badge>
           )}
@@ -79,12 +80,12 @@ export function FeatureConfigPage({
 
       {/* Unsaved Changes Warning */}
       {isDirty && (
-        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+        <div className="p-4 bg-warning/5 border border-warning/20 rounded-lg">
           <div className="flex items-center gap-2">
-            <Settings className="h-5 w-5 text-yellow-600" />
+            <Settings className="h-5 w-5 text-warning" />
             <div>
-              <p className="text-sm font-medium text-yellow-800">You have unsaved changes</p>
-              <p className="text-xs text-yellow-600">Click "Save Changes" to persist your configuration</p>
+              <p className="text-sm font-medium text-warning">You have unsaved changes</p>
+              <p className="text-xs text-warning/80">Click "Save Changes" to persist your configuration</p>
             </div>
           </div>
         </div>

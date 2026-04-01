@@ -59,21 +59,21 @@ const ProductCard: React.FC<{ product: ConnectProduct }> = ({ product }) => {
             className="w-16 h-16 object-cover rounded-lg"
           />
           <div className="ml-4 flex-1">
-            <h3 className="text-lg font-semibold text-gray-900">{product.name}</h3>
-            <p className="text-gray-600 text-sm">{product.description}</p>
+            <h3 className="text-lg font-semibold text-foreground">{product.name}</h3>
+            <p className="text-muted-foreground text-sm">{product.description}</p>
           </div>
         </div>
         
         <div className="flex items-center justify-between">
-          <div className="text-2xl font-bold text-gray-900">
+          <div className="text-2xl font-bold text-foreground">
             ${product.price / 100}
-            {product.period && <span className="text-lg text-gray-600">/{product.period}</span>}
+            {product.period && <span className="text-lg text-muted-foreground">/{product.period}</span>}
           </div>
           
           <form onSubmit={handleCheckout}>
             <button
               type="submit"
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="bg-primary text-primary-foreground px-6 py-2 rounded-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
             >
               Checkout
             </button>
@@ -157,11 +157,11 @@ const ConnectProducts: React.FC = () => {
   if (needsOnboarding) {
     return (
       <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-6 text-center">
-          <h3 className="text-lg font-semibold text-yellow-300 mb-2">
+        <div className="bg-warning/10 border border-warning/30 rounded-lg p-6 text-center">
+          <h3 className="text-lg font-semibold text-warning mb-2">
             Complete Onboarding Required
           </h3>
-          <p className="text-yellow-300">
+          <p className="text-warning">
             You need to complete your Stripe Connect onboarding before you can manage products.
           </p>
         </div>
@@ -172,8 +172,8 @@ const ConnectProducts: React.FC = () => {
   if (isLoading) {
     return (
       <div className="max-w-4xl mx-auto p-6 text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4 text-gray-600">Loading products...</p>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+        <p className="mt-4 text-muted-foreground">Loading products...</p>
       </div>
     );
   }
@@ -181,10 +181,10 @@ const ConnectProducts: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Your Products</h2>
+        <h2 className="text-2xl font-bold text-foreground">Your Products</h2>
         <button
           onClick={() => setShowCreateProduct(!showCreateProduct)}
-          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+          className="bg-success text-white px-4 py-2 rounded-lg hover:bg-success/90"
         >
           {showCreateProduct ? 'Cancel' : 'Create Product'}
         </button>
@@ -195,27 +195,27 @@ const ConnectProducts: React.FC = () => {
           <h3 className="text-lg font-semibold mb-4">Create New Product</h3>
           <form onSubmit={handleCreateProduct} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-muted-foreground mb-2">
                 Product Name
               </label>
               <input
                 type="text"
                 value={newProduct.productName}
                 onChange={(e) => setNewProduct({...newProduct, productName: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 placeholder="Product Name"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-muted-foreground mb-2">
                 Product Description
               </label>
               <textarea
                 value={newProduct.productDescription}
                 onChange={(e) => setNewProduct({...newProduct, productDescription: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 rows={3}
                 placeholder="Product Description"
                 required
@@ -223,14 +223,14 @@ const ConnectProducts: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-muted-foreground mb-2">
                 Price (cents)
               </label>
               <input
                 type="number"
                 value={newProduct.productPrice}
                 onChange={(e) => setNewProduct({...newProduct, productPrice: parseInt(e.target.value)})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 placeholder="1000"
                 min="50"
                 required
@@ -239,7 +239,7 @@ const ConnectProducts: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700"
+              className="w-full bg-primary text-primary-foreground py-2 px-4 rounded-lg hover:bg-primary/90"
             >
               Create Product
             </button>
@@ -249,8 +249,8 @@ const ConnectProducts: React.FC = () => {
 
       {products.length === 0 ? (
         <div className="text-center py-12">
-          <div className="text-gray-500 text-lg">No products found</div>
-          <p className="text-gray-400 mt-2">
+          <div className="text-muted-foreground text-lg">No products found</div>
+          <p className="text-muted-foreground mt-2">
             Create your first product to start selling through Stripe Connect.
           </p>
         </div>
@@ -268,19 +268,19 @@ const ConnectProducts: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div>
               <span className="font-medium">Charges Enabled:</span>
-              <span className={`ml-2 ${accountStatus.charges_enabled ? 'text-green-600' : 'text-red-600'}`}>
+              <span className={`ml-2 ${accountStatus.charges_enabled ? 'text-success' : 'text-destructive'}`}>
                 {accountStatus.charges_enabled ? 'Yes' : 'No'}
               </span>
             </div>
             <div>
               <span className="font-medium">Payouts Enabled:</span>
-              <span className={`ml-2 ${accountStatus.payouts_enabled ? 'text-green-600' : 'text-red-600'}`}>
+              <span className={`ml-2 ${accountStatus.payouts_enabled ? 'text-success' : 'text-destructive'}`}>
                 {accountStatus.payouts_enabled ? 'Yes' : 'No'}
               </span>
             </div>
             <div>
               <span className="font-medium">Details Submitted:</span>
-              <span className={`ml-2 ${accountStatus.details_submitted ? 'text-green-600' : 'text-yellow-600'}`}>
+              <span className={`ml-2 ${accountStatus.details_submitted ? 'text-success' : 'text-warning'}`}>
                 {accountStatus.details_submitted ? 'Yes' : 'No'}
               </span>
             </div>

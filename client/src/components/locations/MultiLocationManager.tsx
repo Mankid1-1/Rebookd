@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from "react";
+import { useLocale } from "@/contexts/LocaleContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,28 +132,23 @@ export function MultiLocationManager({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active': return 'text-green-600';
-      case 'inactive': return 'text-gray-600';
-      case 'maintenance': return 'text-yellow-600';
-      default: return 'text-gray-600';
+      case 'active': return 'text-success';
+      case 'inactive': return 'text-muted-foreground';
+      case 'maintenance': return 'text-warning';
+      default: return 'text-muted-foreground';
     }
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'active': return <Badge className="bg-green-100 text-green-800">Active</Badge>;
+      case 'active': return <Badge className="bg-success/10 text-success">Active</Badge>;
       case 'inactive': return <Badge variant="secondary">Inactive</Badge>;
-      case 'maintenance': return <Badge className="bg-yellow-100 text-yellow-800">Maintenance</Badge>;
+      case 'maintenance': return <Badge className="bg-warning/10 text-warning">Maintenance</Badge>;
       default: return <Badge variant="secondary">Unknown</Badge>;
     }
   };
 
-  const formatCurrency = (amount: number, currency: string = 'USD') => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-    }).format(amount);
-  };
+  const { formatCurrency } = useLocale();
 
   return (
     <div className="space-y-6">
@@ -264,8 +260,8 @@ export function MultiLocationManager({
                   key={location.id}
                   className={`p-3 border rounded-lg cursor-pointer transition-colors ${
                     selectedLocation?.id === location.id
-                      ? 'bg-blue-50 border-blue-500'
-                      : 'hover:bg-gray-50'
+                      ? 'bg-info/5 border-info'
+                      : 'hover:bg-muted/50'
                   }`}
                   onClick={() => handleLocationSelect(location)}
                 >
@@ -275,13 +271,13 @@ export function MultiLocationManager({
                         <h3 className="font-medium truncate">{location.name}</h3>
                         {getStatusBadge(location.status)}
                       </div>
-                      <div className="flex items-center gap-1 text-sm text-gray-500 mb-2">
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground mb-2">
                         <MapPin className="h-3 w-3" />
                         <span className="truncate">
                           {location.address.city}, {location.address.state}
                         </span>
                       </div>
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Users className="h-3 w-3" />
                           <span>{location.staff.employees} staff</span>
@@ -322,8 +318,8 @@ export function MultiLocationManager({
               ))}
               
               {activeLocations.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <Building className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <div className="text-center py-8 text-muted-foreground">
+                  <Building className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
                   <p>No locations found</p>
                   <p className="text-sm mt-1">
                     {showInactive ? 'Try adjusting filters' : 'Add your first location to get started'}
@@ -352,7 +348,7 @@ export function MultiLocationManager({
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <Building className="h-5 w-5 text-blue-500" />
+                        <Building className="h-5 w-5 text-info" />
                         <div>
                           <CardTitle>{selectedLocation.name}</CardTitle>
                           <div className="flex items-center gap-2 mt-1">
@@ -369,7 +365,7 @@ export function MultiLocationManager({
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
                         <Label className="text-sm font-medium">Address</Label>
-                        <div className="text-sm text-gray-600 mt-1">
+                        <div className="text-sm text-muted-foreground mt-1">
                           <div>{selectedLocation.address.street}</div>
                           <div>
                             {selectedLocation.address.city}, {selectedLocation.address.state} {selectedLocation.address.zip}
@@ -380,7 +376,7 @@ export function MultiLocationManager({
                       
                       <div>
                         <Label className="text-sm font-medium">Contact</Label>
-                        <div className="text-sm text-gray-600 mt-1 space-y-1">
+                        <div className="text-sm text-muted-foreground mt-1 space-y-1">
                           <div className="flex items-center gap-1">
                             <Phone className="h-3 w-3" />
                             {selectedLocation.contact.phone}
@@ -402,28 +398,28 @@ export function MultiLocationManager({
                     {/* Quick Stats */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t">
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-blue-600">
+                        <div className="text-2xl font-bold text-info">
                           {selectedLocation.metrics.totalLeads}
                         </div>
-                        <div className="text-xs text-gray-500">Total Leads</div>
+                        <div className="text-xs text-muted-foreground">Total Leads</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-green-600">
+                        <div className="text-2xl font-bold text-success">
                           {selectedLocation.metrics.conversionRate}%
                         </div>
-                        <div className="text-xs text-gray-500">Conversion</div>
+                        <div className="text-xs text-muted-foreground">Conversion</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-purple-600">
+                        <div className="text-2xl font-bold text-accent-foreground">
                           {selectedLocation.metrics.averageRating}
                         </div>
-                        <div className="text-xs text-gray-500">Rating</div>
+                        <div className="text-xs text-muted-foreground">Rating</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-orange-600">
+                        <div className="text-2xl font-bold text-warning">
                           {selectedLocation.metrics.activeStaff}
                         </div>
-                        <div className="text-xs text-gray-500">Active Staff</div>
+                        <div className="text-xs text-muted-foreground">Active Staff</div>
                       </div>
                     </div>
                   </CardContent>
@@ -448,7 +444,7 @@ export function MultiLocationManager({
                             )}
                           </div>
                           {!hours.closed && (
-                            <span className="text-sm text-gray-600">
+                            <span className="text-sm text-muted-foreground">
                               {hours.open} - {hours.close}
                             </span>
                           )}
@@ -456,7 +452,7 @@ export function MultiLocationManager({
                       ))}
                     </div>
                     <div className="mt-4 pt-4 border-t">
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Globe className="h-4 w-4" />
                         <span>Timezone: {selectedLocation.settings.timezone}</span>
                       </div>
@@ -506,7 +502,7 @@ export function MultiLocationManager({
                       <div className="flex items-center justify-between">
                         <div>
                           <h4 className="font-medium">Location Status</h4>
-                          <p className="text-sm text-gray-600 mt-1">
+                          <p className="text-sm text-muted-foreground mt-1">
                             Control whether this location is accepting new appointments
                           </p>
                         </div>
@@ -557,11 +553,11 @@ export function MultiLocationManager({
                       <div className="flex items-center justify-between">
                         <div>
                           <h4 className="font-medium">Active Staff</h4>
-                          <p className="text-sm text-gray-600 mt-1">
+                          <p className="text-sm text-muted-foreground mt-1">
                             Currently active and available
                           </p>
                         </div>
-                        <span className="text-2xl font-bold text-green-600">
+                        <span className="text-2xl font-bold text-success">
                           {selectedLocation.metrics.activeStaff}
                         </span>
                       </div>
@@ -581,8 +577,8 @@ export function MultiLocationManager({
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="text-center py-8 text-gray-500">
-                        <BarChart3 className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                      <div className="text-center py-8 text-muted-foreground">
+                        <BarChart3 className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
                         <p>Detailed analytics coming soon</p>
                         <p className="text-sm mt-1">
                           Revenue trends, performance metrics, and comparisons
@@ -596,9 +592,9 @@ export function MultiLocationManager({
           ) : (
             <Card>
               <CardContent className="text-center py-12">
-                <Building className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <h3 className="text-lg font-medium text-gray-900">Select a location</h3>
-                <p className="text-gray-500 mt-2">
+                <Building className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                <h3 className="text-lg font-medium text-foreground">Select a location</h3>
+                <p className="text-muted-foreground mt-2">
                   Choose a location from the list to view details and manage settings
                 </p>
               </CardContent>

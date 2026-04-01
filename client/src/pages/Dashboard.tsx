@@ -1,4 +1,7 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import { useTheme } from "@/contexts/ThemeContext";
+import ROIGuaranteeTracker from "@/components/dashboard/ROIGuaranteeTracker";
+import TechLevelGuide, { isGuideSuppressed } from "@/components/TechLevelGuide";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,19 +58,15 @@ import { RevenueDashboard } from "@/components/analytics/RevenueDashboard";
 import { RevenueLeakageDashboard } from "@/components/analytics/RevenueLeakageDashboard";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useSkillLevel } from "@/contexts/SkillLevelContext";
+import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
+import { HelpTooltip, HelpIcon } from "@/components/ui/HelpTooltip";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const SPACE_GROTESK: React.CSSProperties = { fontFamily: "'Space Grotesk', sans-serif" };
 
 const fmt = (n: number) => n.toLocaleString("en-US");
-const fmtCurrency = (n: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(n);
+// fmtCurrency is provided by useLocale() inside the component
 const fmtPct = (n: number) => `${Math.round(n * 10) / 10}%`;
 
 function TrendBadge({
@@ -81,8 +80,8 @@ function TrendBadge({
 }) {
   if (value === 0) return null;
   const isPositive = inverse ? value <= 0 : value >= 0;
-  const color = isPositive ? "text-emerald-500" : "text-red-500";
-  const bg = isPositive ? "bg-emerald-500/10" : "bg-red-500/10";
+  const color = isPositive ? "text-success" : "text-destructive";
+  const bg = isPositive ? "bg-success/10" : "bg-destructive/10";
   const Icon = value >= 0 ? ArrowUpRight : ArrowDownRight;
   return (
     <span
@@ -137,17 +136,20 @@ function HeroSkeleton() {
   );
 }
 
-const getDynamicStatusColors = () => {
-  const isDarkMode =
-    typeof document !== "undefined" &&
-    document.documentElement.classList.contains("dark");
+/** Resolve a CSS variable to its computed color string for Recharts (which needs raw color values). */
+const getCssColor = (varName: string): string => {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  return raw ? `oklch(${raw})` : "#6b7280";
+};
+
+const getDynamicStatusColors = (_isDarkMode: boolean) => {
   return {
-    new: isDarkMode ? "#60a5fa" : "#3b82f6",
-    contacted: isDarkMode ? "#fbbf24" : "#eab308",
-    qualified: isDarkMode ? "#c084fc" : "#a855f7",
-    booked: isDarkMode ? "#34d399" : "#22c55e",
-    lost: isDarkMode ? "#f87171" : "#ef4444",
-    unsubscribed: isDarkMode ? "#9ca3af" : "#6b7280",
+    new: getCssColor("--info"),          // blue
+    contacted: getCssColor("--warning"), // yellow/amber
+    qualified: getCssColor("--chart-4"), // purple
+    booked: getCssColor("--success"),    // green
+    lost: getCssColor("--destructive"),  // red
+    unsubscribed: getCssColor("--muted-foreground"), // gray
   } as Record<string, string>;
 };
 
@@ -167,12 +169,51 @@ const PERIOD_DAYS: Record<TimePeriod, number> = {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
+function CalendarSyncWidget() {
+  const { data: connections } = trpc.calendar.listConnections.useQuery(undefined, { retry: false });
+  const count = connections?.length ?? 0;
+  const lastSync = connections?.reduce((latest: string | null, c: any) => {
+    if (!c.lastSyncAt) return latest;
+    return !latest || c.lastSyncAt > latest ? c.lastSyncAt : latest;
+  }, null as string | null);
+  const [, navigate] = useLocation();
+
+  return (
+    <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-success/10 flex items-center justify-center">
+              <Calendar className="w-4 h-4 text-success" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">
+                {count > 0 ? `${count} Calendar${count > 1 ? "s" : ""} Connected` : "Connect Your Booking Software"}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {lastSync
+                  ? `Last synced ${new Date(lastSync).toLocaleTimeString()}`
+                  : "Auto-import contacts from appointments"}
+              </p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => navigate("/calendar-integration")}>
+            {count > 0 ? "Manage" : "Connect"}
+            <ArrowRight className="h-3 w-3 ml-1" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const utils = trpc.useUtils();
-  const { t, formatCurrency: fmtCurrencyLocale } = useLocale();
-  const { isBasic } = useSkillLevel();
+  const { t, formatCurrency: fmtCurrency } = useLocale();
+  const { isBasic, skillLevel } = useSkillLevel();
+  const { isDark: isDarkMode } = useTheme();
 
   // ── State ───────────────────────────────────────────────────────────────
   const [period, setPeriod] = useState<TimePeriod>("30d");
@@ -180,20 +221,38 @@ export default function Dashboard() {
   const [showAddLead, setShowAddLead] = useState(false);
   const [newLead, setNewLead] = useState({ phone: "", name: "" });
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+
+  // Show guide after first onboarding if not suppressed
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("welcome") === "true") {
+      if (!isGuideSuppressed()) {
+        setShowGuide(true);
+      }
+      window.history.replaceState({}, "", "/dashboard");
+    }
+  }, []);
 
   // ── Queries ─────────────────────────────────────────────────────────────
   const { data, isLoading } = trpc.analytics.dashboard.useQuery(
     { days: PERIOD_DAYS[period] },
-    { retry: false, refetchInterval: 30_000 }
+    { retry: false, refetchInterval: 30_000, staleTime: 30_000 }
   );
   const { data: tenant } = trpc.tenant.get.useQuery(undefined, {
     retry: false,
+    staleTime: 5 * 60_000,
   });
   const { data: leakageReport, isLoading: leakageLoading } =
     trpc.analytics.revenueLeakage.useQuery(
       { days: 90 },
       { retry: false, refetchInterval: 60_000 }
     );
+
+  const { data: automationsList = [] } = trpc.automations.list.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
 
   // ── Mutations ───────────────────────────────────────────────────────────
   const createRecoveryCampaign = trpc.analytics.createRecoveryCampaign.useMutation({
@@ -212,7 +271,7 @@ export default function Dashboard() {
 
   // ── Redirect if no tenant ──────────────────────────────────────────────
   useEffect(() => {
-    if (!isLoading && user && !tenant) setLocation("/onboarding");
+    if (!isLoading && user && !tenant && user.role !== "admin") setLocation("/onboarding");
   }, [isLoading, user, tenant, setLocation]);
 
   // ── Derived metrics ─────────────────────────────────────────────────────
@@ -258,7 +317,7 @@ export default function Dashboard() {
       : 0;
 
   // ── Chart data ──────────────────────────────────────────────────────────
-  const statusColors = getDynamicStatusColors();
+  const statusColors = getDynamicStatusColors(isDarkMode);
 
   const chartData = useMemo(() => {
     const map: Record<string, { date: string; outbound: number; inbound: number }> = {};
@@ -349,8 +408,8 @@ export default function Dashboard() {
         description: `${leakage.unconfirmedAppointments} upcoming appointments need confirmation`,
         count: leakage.unconfirmedAppointments,
         icon: CalendarX,
-        color: "text-amber-400",
-        bg: "bg-amber-500/10",
+        color: "text-warning",
+        bg: "bg-warning/10",
         action: () => setLocation("/no-show-recovery"),
         actionLabel: t('dashboard.sendReminders'),
       });
@@ -361,8 +420,8 @@ export default function Dashboard() {
         description: `${leakage.qualifiedUnbooked} qualified leads haven't booked yet`,
         count: leakage.qualifiedUnbooked,
         icon: UserX,
-        color: "text-purple-400",
-        bg: "bg-purple-500/10",
+        color: "text-accent",
+        bg: "bg-accent/10",
         action: () => setLocation("/booking-conversion"),
         actionLabel: t('dashboard.followUp'),
       });
@@ -373,8 +432,8 @@ export default function Dashboard() {
         description: `${leakage.cancellationsUnrecovered} cancellations could be re-engaged`,
         count: leakage.cancellationsUnrecovered,
         icon: ShieldAlert,
-        color: "text-red-400",
-        bg: "bg-red-500/10",
+        color: "text-destructive",
+        bg: "bg-destructive/10",
         action: () =>
           createRecoveryCampaign.mutate({
             leakageType: "cancellation",
@@ -389,8 +448,8 @@ export default function Dashboard() {
         description: `${leakage.failedDeliveryRecovery} leads with delivery failures this week`,
         count: leakage.failedDeliveryRecovery,
         icon: XCircle,
-        color: "text-orange-400",
-        bg: "bg-orange-500/10",
+        color: "text-warning",
+        bg: "bg-warning/10",
         action: () => setLocation("/leads"),
         actionLabel: t('dashboard.review'),
       });
@@ -402,10 +461,11 @@ export default function Dashboard() {
   const statCards = [
     {
       title: t('dashboard.revenueRecovered'),
+      tooltip: "Total revenue from bookings that came back after receiving an automated SMS from Rebooked",
       value: fmtCurrency(recoveredRevenue),
       icon: DollarSign,
-      color: "text-emerald-400",
-      bg: "bg-emerald-500/10",
+      color: "text-success",
+      bg: "bg-success/10",
       trend: recentRecoveredRevenue > 0 && recoveredRevenue > recentRecoveredRevenue
         ? Math.round((recentRecoveredRevenue / Math.max(1, recoveredRevenue - recentRecoveredRevenue)) * 100)
         : undefined,
@@ -414,30 +474,33 @@ export default function Dashboard() {
     },
     {
       title: t('dashboard.recoveryRate'),
+      tooltip: "Percentage of leads who received an SMS and then booked an appointment. Higher is better.",
       value: fmtPct(recoveryRate),
       icon: Target,
-      color: "text-blue-400",
-      bg: "bg-blue-500/10",
+      color: "text-info",
+      bg: "bg-info/10",
       trend: recoveryTrendDelta !== 0 ? recoveryTrendDelta : undefined,
       sub: recoveryRate > 0 ? t('dashboard.leadsToBookings') : t('dashboard.startConverting'),
       action: () => setActiveTab("revenue"),
     },
     {
       title: t('dashboard.appointmentsBooked'),
+      tooltip: "Total appointments booked by leads in this period, including walk-ins and conversions",
       value: fmt(bookedCount),
       icon: Calendar,
-      color: "text-purple-400",
-      bg: "bg-purple-500/10",
+      color: "text-accent",
+      bg: "bg-accent/10",
       trend: undefined,
       sub: totalLeads > 0 ? `${bookingRate}% ${t('dashboard.conversion')}` : t('dashboard.noLeadsYet'),
       action: () => setLocation("/analytics"),
     },
     {
       title: t('dashboard.noShowRate'),
+      tooltip: "Percentage of booked appointments where the client didn't show up. Industry average is 15-20%.",
       value: fmtPct(noShowRate),
       icon: AlertTriangle,
-      color: noShowRate <= 15 ? "text-emerald-400" : "text-red-400",
-      bg: noShowRate <= 15 ? "bg-emerald-500/10" : "bg-red-500/10",
+      color: noShowRate <= 15 ? "text-success" : "text-destructive",
+      bg: noShowRate <= 15 ? "bg-success/10" : "bg-destructive/10",
       trend: undefined,
       trendInverse: true,
       sub: noShowRate === 0 ? t('dashboard.noData') : noShowRate <= 15 ? t('dashboard.lookingGood') : t('dashboard.needsAttention'),
@@ -445,20 +508,22 @@ export default function Dashboard() {
     },
     {
       title: t('dashboard.messagesSent'),
+      tooltip: "Total outbound SMS messages sent by all your automations and manual messages combined",
       value: fmt(totalMessages),
       icon: MessageSquare,
-      color: "text-cyan-400",
-      bg: "bg-cyan-500/10",
+      color: "text-info",
+      bg: "bg-info/10",
       trend: undefined,
       sub: totalMessages > 0 ? t('dashboard.totalMessages') : t('dashboard.noneSent'),
       action: () => setLocation("/inbox"),
     },
     {
       title: t('dashboard.activeAutomations'),
+      tooltip: "Number of SMS automation sequences currently switched on and sending messages",
       value: fmt(automationCount),
       icon: Bot,
-      color: "text-amber-400",
-      bg: "bg-amber-500/10",
+      color: "text-warning",
+      bg: "bg-warning/10",
       trend: undefined,
       sub: automationCount > 0 ? `${automationCount} ${t('dashboard.running')}` : t('dashboard.noneActive'),
       action: () => setLocation("/automations"),
@@ -470,29 +535,29 @@ export default function Dashboard() {
     {
       label: t('dashboard.addLead'),
       icon: Plus,
-      color: "text-blue-400",
-      bg: "bg-blue-500/10",
+      color: "text-info",
+      bg: "bg-info/10",
       action: () => setShowAddLead(true),
     },
     {
       label: t('dashboard.sendCampaign'),
       icon: Send,
-      color: "text-purple-400",
-      bg: "bg-purple-500/10",
+      color: "text-accent",
+      bg: "bg-accent/10",
       action: () => setLocation("/automations"),
     },
     {
       label: t('dashboard.createAutomation'),
       icon: Zap,
-      color: "text-amber-400",
-      bg: "bg-amber-500/10",
+      color: "text-warning",
+      bg: "bg-warning/10",
       action: () => setLocation("/automations"),
     },
     {
       label: t('dashboard.viewAnalytics'),
       icon: Eye,
-      color: "text-emerald-400",
-      bg: "bg-emerald-500/10",
+      color: "text-success",
+      bg: "bg-success/10",
       action: () => setActiveTab("revenue"),
     },
   ];
@@ -520,6 +585,12 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
+      <TechLevelGuide
+        open={showGuide}
+        onClose={() => setShowGuide(false)}
+        level={skillLevel}
+        onNavigate={(path) => setLocation(path)}
+      />
       <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-[1400px] mx-auto">
         {/* ── Header + Period Selector ───────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -528,13 +599,23 @@ export default function Dashboard() {
               className="text-2xl md:text-3xl font-bold tracking-tight"
               style={SPACE_GROTESK}
             >
-              {tenant?.name || t('dashboard.title')}
+              {tenant?.name || t('dashboard.title')}{" "}
+              <HelpIcon content={{
+                basic: "Your home base — see how your business is performing at a glance",
+                intermediate: "Real-time metrics on leads, messages, revenue recovery, and conversion rates",
+                advanced: "Polls analytics.dashboard every 30s. Revenue data from recovery_events table. Leakage computed from lead status + appointment confirmations"
+              }} />
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
               {t('dashboard.subtitle')}
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <HelpIcon content={{
+              basic: "Change the time range to see older or newer data",
+              intermediate: "Filter all dashboard metrics by 7, 14, 30, 60, or 90 day windows",
+              advanced: "Date range filter applied server-side via analytics.dashboard query with days parameter"
+            }} />
             <div className="flex items-center bg-muted/50 rounded-lg p-0.5 backdrop-blur-sm border border-border/50">
               {(Object.keys(PERIOD_LABEL_KEYS) as TimePeriod[]).map((p) => (
                 <button
@@ -566,7 +647,7 @@ export default function Dashboard() {
           <HeroSkeleton />
         ) : (
           <Card className="border-border/50 overflow-hidden relative group">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-transparent to-emerald-500/5 pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-transparent to-success/5 pointer-events-none" />
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent pointer-events-none" />
             <CardContent className="p-6 md:p-8 relative">
               <div className="flex items-center gap-2 mb-5">
@@ -574,16 +655,22 @@ export default function Dashboard() {
                   <Sparkles className="w-4 h-4 text-primary" />
                 </div>
                 <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
-                  {t('dashboard.revenueRecovery')}
+                  {t('dashboard.revenueRecovery')}{" "}
+                  <HelpIcon content={{
+                    basic: "This is how much money Rebooked has helped you get back from missed appointments",
+                    intermediate: "Total recovered revenue from all automation-driven re-engagements. Recovery rate = booked / total leads",
+                    advanced: "Revenue from recovery_events with realized_revenue > 0. Rate computed as booked count / total lead count. Monthly estimate extrapolates recent 30d recovery"
+                  }} />
                 </h2>
               </div>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wider">
+                  <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wider flex items-center gap-1">
                     {t('dashboard.totalRecovered')}
+                    <HelpTooltip content="Sum of all revenue attributed to SMS recovery - when a lead books after receiving your Rebooked message" variant="info" side="bottom"><span /></HelpTooltip>
                   </p>
                   <p
-                    className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-emerald-300 bg-clip-text text-transparent"
+                    className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-success to-success/70 bg-clip-text text-transparent"
                     style={SPACE_GROTESK}
                   >
                     {fmtCurrency(recoveredRevenue)}
@@ -595,8 +682,9 @@ export default function Dashboard() {
                   )}
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wider">
+                  <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wider flex items-center gap-1">
                     {t('dashboard.recoveryRate')}
+                    <HelpTooltip content="% of leads who converted to a booking after being contacted. Industry benchmark is 25-35%." variant="info" side="bottom"><span /></HelpTooltip>
                   </p>
                   <p
                     className="text-3xl md:text-4xl font-bold tracking-tight"
@@ -611,23 +699,58 @@ export default function Dashboard() {
                     <p className="text-xs text-muted-foreground mt-1">{t('dashboard.leadToBooking')}</p>
                   )}
                 </div>
+                <HoverCard openDelay={200} closeDelay={100}>
+                  <HoverCardTrigger asChild>
+                    <div className="cursor-default">
+                      <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wider flex items-center gap-1">
+                        {t('dashboard.activeCampaigns')}
+                        <HelpIcon content={{
+                          basic: "Automations are messages that send automatically — like appointment reminders",
+                          intermediate: "Number of active automation rules currently running for your business",
+                          advanced: "Count of automations table rows where enabled=true for current tenant"
+                        }} />
+                      </p>
+                      <p
+                        className="text-3xl md:text-4xl font-bold tracking-tight"
+                        style={SPACE_GROTESK}
+                      >
+                        {fmt(activeCampaigns)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {activeCampaigns > 0 ? t('dashboard.runningNow') : t('dashboard.noneActive')}
+                      </p>
+                    </div>
+                  </HoverCardTrigger>
+                  <HoverCardContent side="bottom" align="start" className="w-72">
+                    <p className="text-xs font-semibold mb-2 uppercase tracking-wider text-muted-foreground">
+                      Active Campaigns
+                    </p>
+                    {(() => {
+                      const active = automationsList.filter((a: any) => a.enabled);
+                      if (active.length === 0) {
+                        return (
+                          <p className="text-sm text-muted-foreground">
+                            No automations are active yet. Head to Automations to enable some.
+                          </p>
+                        );
+                      }
+                      return (
+                        <ul className="space-y-1.5 max-h-48 overflow-y-auto">
+                          {active.map((a: any) => (
+                            <li key={a.id ?? a.key} className="flex items-center gap-2 text-sm">
+                              <span className="h-2 w-2 rounded-full bg-success shrink-0" />
+                              <span className="truncate">{a.name}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      );
+                    })()}
+                  </HoverCardContent>
+                </HoverCard>
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wider">
-                    {t('dashboard.activeCampaigns')}
-                  </p>
-                  <p
-                    className="text-3xl md:text-4xl font-bold tracking-tight"
-                    style={SPACE_GROTESK}
-                  >
-                    {fmt(activeCampaigns)}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {activeCampaigns > 0 ? t('dashboard.runningNow') : t('dashboard.noneActive')}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wider">
+                  <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wider flex items-center gap-1">
                     {t('dashboard.monthlyEstimate')}
+                    <HelpTooltip content="Projected monthly recurring recovery based on your current rate and pipeline size" variant="info" side="bottom"><span /></HelpTooltip>
                   </p>
                   <p
                     className="text-3xl md:text-4xl font-bold tracking-tight"
@@ -659,7 +782,11 @@ export default function Dashboard() {
                       className="text-lg font-semibold"
                       style={SPACE_GROTESK}
                     >
-                      {t('dashboard.getStarted')}
+                      {t('dashboard.getStarted')}{" "}
+                      <HelpIcon content={{
+                        basic: "Follow these steps to set up your account — you're almost there!",
+                        intermediate: "Complete these setup tasks to unlock all dashboard features"
+                      }} />
                     </h3>
                     <p className="text-sm text-muted-foreground">
                       {t('dashboard.completeSteps')}
@@ -688,13 +815,13 @@ export default function Dashboard() {
                     key={step.label}
                     className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
                       step.done
-                        ? "bg-emerald-500/5 border-emerald-500/20"
+                        ? "bg-success/5 border-success/20"
                         : "bg-muted/20 border-border/50 hover:border-primary/30"
                     }`}
                   >
                     <div className="flex items-center gap-3">
                       {step.done ? (
-                        <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                        <CheckCircle2 className="w-5 h-5 text-success shrink-0" />
                       ) : (
                         <Circle className="w-5 h-5 text-muted-foreground shrink-0" />
                       )}
@@ -749,8 +876,8 @@ export default function Dashboard() {
                   className="flex flex-col items-start gap-2 rounded-xl border border-border bg-card p-4 text-left hover:border-primary/40 hover:bg-primary/5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                   aria-label="Add your first lead"
                 >
-                  <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                    <Users className="w-4 h-4 text-blue-400" />
+                  <div className="w-9 h-9 rounded-lg bg-info/10 flex items-center justify-center">
+                    <Users className="w-4 h-4 text-info" />
                   </div>
                   <div>
                     <p className="text-sm font-semibold">Add Your First Lead</p>
@@ -766,8 +893,8 @@ export default function Dashboard() {
                   className="flex flex-col items-start gap-2 rounded-xl border border-border bg-card p-4 text-left hover:border-primary/40 hover:bg-primary/5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                   aria-label="Set up reminders"
                 >
-                  <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                    <Zap className="w-4 h-4 text-amber-400" />
+                  <div className="w-9 h-9 rounded-lg bg-warning/10 flex items-center justify-center">
+                    <Zap className="w-4 h-4 text-warning" />
                   </div>
                   <div>
                     <p className="text-sm font-semibold">Set Up Reminders</p>
@@ -783,8 +910,8 @@ export default function Dashboard() {
                   className="flex flex-col items-start gap-2 rounded-xl border border-border bg-card p-4 text-left hover:border-primary/40 hover:bg-primary/5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                   aria-label="View your inbox"
                 >
-                  <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                    <MessageSquare className="w-4 h-4 text-emerald-400" />
+                  <div className="w-9 h-9 rounded-lg bg-success/10 flex items-center justify-center">
+                    <MessageSquare className="w-4 h-4 text-success" />
                   </div>
                   <div>
                     <p className="text-sm font-semibold">View Your Inbox</p>
@@ -811,6 +938,15 @@ export default function Dashboard() {
 
         {/* ── KPI Stat Cards (Intermediate + Advanced) ───────────────────── */}
         {!isBasic && (
+        <>
+        <div className="flex items-center gap-1.5 -mb-3">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Key Metrics</h2>
+          <HelpIcon content={{
+            basic: "These numbers show your business activity — leads, messages, bookings, and money recovered",
+            intermediate: "Key performance indicators updated in real time. Green arrows mean improvement over the previous period",
+            advanced: "Metrics aggregated from leads, messages, recovery_events tables. Trend deltas computed by comparing recent period to overall averages"
+          }} />
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {isLoading
             ? Array.from({ length: 6 }).map((_, i) => (
@@ -842,8 +978,11 @@ export default function Dashboard() {
                     >
                       {stat.value}
                     </p>
-                    <p className="text-[11px] text-muted-foreground mt-1 truncate">
-                      {stat.title}
+                    <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-0.5">
+                      <span className="truncate">{stat.title}</span>
+                      {(stat as any).tooltip && (
+                        <HelpTooltip content={(stat as any).tooltip} variant="info" side="top"><span /></HelpTooltip>
+                      )}
                     </p>
                     <p className="text-[10px] text-muted-foreground/60 mt-0.5 truncate">
                       {stat.sub}
@@ -852,7 +991,11 @@ export default function Dashboard() {
                 </Card>
               ))}
         </div>
+        </>
         )} {/* end !isBasic */}
+
+        {/* ── Calendar & Booking Status ──────────────────────────────────── */}
+        <CalendarSyncWidget />
 
         {/* ── Revenue Leakage Alerts (Intermediate + Advanced) ──────────── */}
         {!isBasic && leakageAlerts.length > 0 && (
@@ -862,7 +1005,7 @@ export default function Dashboard() {
                 key={alert.title}
                 className="border-border/50 bg-card/80 backdrop-blur-sm overflow-hidden relative group hover:border-primary/20 transition-all duration-300"
               >
-                <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
+                <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-destructive/40 to-transparent" />
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between mb-2">
                     <div
@@ -923,11 +1066,15 @@ export default function Dashboard() {
             >
               <AlertTriangle className="w-4 h-4" />
               {t('dashboard.revenueLeakage')}
+              <HelpTooltip content="Revenue leakage alerts show leads and appointments that haven't been recovered yet — potential income still on the table" variant="info" side="bottom"><span /></HelpTooltip>
             </TabsTrigger>
           </TabsList>
 
           {/* ── Overview Tab ──────────────────────────────────────────────── */}
           <TabsContent value="overview" className="space-y-6">
+            {/* ROI Guarantee Tracker */}
+            <ROIGuaranteeTracker />
+
             {/* Revenue Recovery Timeline + Lead Status */}
             <div className="grid lg:grid-cols-3 gap-4">
               {/* Revenue Recovery Timeline Chart */}
@@ -944,7 +1091,7 @@ export default function Dashboard() {
                         {t('dashboard.daily')}
                       </span>
                       <span className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400" />{" "}
+                        <span className="w-2 h-2 rounded-full bg-success" />{" "}
                         {t('dashboard.cumulative')}
                       </span>
                     </div>
@@ -998,12 +1145,12 @@ export default function Dashboard() {
                           >
                             <stop
                               offset="5%"
-                              stopColor="#34d399"
+                              stopColor="oklch(var(--success))"
                               stopOpacity={0.2}
                             />
                             <stop
                               offset="95%"
-                              stopColor="#34d399"
+                              stopColor="oklch(var(--success))"
                               stopOpacity={0}
                             />
                           </linearGradient>
@@ -1028,7 +1175,7 @@ export default function Dashboard() {
                           tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
                           tickLine={false}
                           axisLine={false}
-                          tickFormatter={(v) => `$${v}`}
+                          tickFormatter={(v) => fmtCurrency(v)}
                         />
                         <Tooltip
                           contentStyle={{
@@ -1058,7 +1205,7 @@ export default function Dashboard() {
                         <Area
                           type="monotone"
                           dataKey="cumulative"
-                          stroke="#34d399"
+                          stroke="oklch(var(--success))"
                           fill="url(#cumulativeGrad)"
                           strokeWidth={2}
                           name="cumulative"
@@ -1109,7 +1256,7 @@ export default function Dashboard() {
                               <Cell
                                 key={entry.status}
                                 fill={
-                                  statusColors[entry.status] ?? "#6b7280"
+                                  statusColors[entry.status] ?? getCssColor("--muted-foreground")
                                 }
                               />
                             ))}
@@ -1135,7 +1282,7 @@ export default function Dashboard() {
                                 className="w-2.5 h-2.5 rounded-full"
                                 style={{
                                   background:
-                                    statusColors[item.status] ?? "#6b7280",
+                                    statusColors[item.status] ?? getCssColor("--muted-foreground"),
                                 }}
                               />
                               <span className="capitalize text-muted-foreground">
@@ -1168,7 +1315,7 @@ export default function Dashboard() {
                       {t('dashboard.outbound')}
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400" />{" "}
+                      <span className="w-2 h-2 rounded-full bg-success" />{" "}
                       {t('dashboard.inbound')}
                     </span>
                   </div>
@@ -1220,12 +1367,12 @@ export default function Dashboard() {
                         >
                           <stop
                             offset="5%"
-                            stopColor="#34d399"
+                            stopColor="oklch(var(--success))"
                             stopOpacity={0.3}
                           />
                           <stop
                             offset="95%"
-                            stopColor="#34d399"
+                            stopColor="oklch(var(--success))"
                             stopOpacity={0}
                           />
                         </linearGradient>
@@ -1273,7 +1420,7 @@ export default function Dashboard() {
                       <Area
                         type="monotone"
                         dataKey="inbound"
-                        stroke="#34d399"
+                        stroke="oklch(var(--success))"
                         fill="url(#inboundGrad)"
                         strokeWidth={2}
                         name="Inbound"
@@ -1305,28 +1452,28 @@ export default function Dashboard() {
                           : 0;
                       const stageColors = {
                         new: {
-                          bg: "bg-blue-500/10",
-                          border: "border-blue-500/20",
-                          text: "text-blue-400",
-                          bar: "bg-blue-500/30",
+                          bg: "bg-info/10",
+                          border: "border-info/20",
+                          text: "text-info",
+                          bar: "bg-info/30",
                         },
                         contacted: {
-                          bg: "bg-amber-500/10",
-                          border: "border-amber-500/20",
-                          text: "text-amber-400",
-                          bar: "bg-amber-500/30",
+                          bg: "bg-warning/10",
+                          border: "border-warning/20",
+                          text: "text-warning",
+                          bar: "bg-warning/30",
                         },
                         qualified: {
-                          bg: "bg-purple-500/10",
-                          border: "border-purple-500/20",
-                          text: "text-purple-400",
-                          bar: "bg-purple-500/30",
+                          bg: "bg-accent/10",
+                          border: "border-accent/20",
+                          text: "text-accent",
+                          bar: "bg-accent/30",
                         },
                         booked: {
-                          bg: "bg-emerald-500/10",
-                          border: "border-emerald-500/20",
-                          text: "text-emerald-400",
-                          bar: "bg-emerald-500/30",
+                          bg: "bg-success/10",
+                          border: "border-success/20",
+                          text: "text-success",
+                          bar: "bg-success/30",
                         },
                       };
                       const c = stageColors[stage];
@@ -1448,13 +1595,13 @@ export default function Dashboard() {
                                 className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                                   item.msg?.direction === "outbound"
                                     ? "bg-primary/10"
-                                    : "bg-emerald-500/10"
+                                    : "bg-success/10"
                                 }`}
                               >
                                 {item.msg?.direction === "outbound" ? (
                                   <ArrowUpRight className="w-3.5 h-3.5 text-primary" />
                                 ) : (
-                                  <ArrowDownRight className="w-3.5 h-3.5 text-emerald-500" />
+                                  <ArrowDownRight className="w-3.5 h-3.5 text-success" />
                                 )}
                               </div>
                               <div className="min-w-0 flex-1">
@@ -1536,8 +1683,8 @@ export default function Dashboard() {
             ) : (
               <Card className="border-border/50 bg-card">
                 <CardContent className="p-10 text-center">
-                  <div className="w-16 h-16 rounded-2xl bg-amber-500/10 flex items-center justify-center mx-auto mb-5">
-                    <AlertTriangle className="w-8 h-8 text-amber-500" />
+                  <div className="w-16 h-16 rounded-2xl bg-warning/10 flex items-center justify-center mx-auto mb-5">
+                    <AlertTriangle className="w-8 h-8 text-warning" />
                   </div>
                   <h3
                     className="text-lg font-semibold mb-2"

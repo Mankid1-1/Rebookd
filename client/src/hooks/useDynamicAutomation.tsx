@@ -8,7 +8,22 @@
 import React from 'react';
 import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
 export { useProgressiveDisclosureContext };
-export function trackFeatureUsage(_featureId: string) { /* stub */ }
+
+/**
+ * Track feature usage for analytics and progressive disclosure.
+ * Fires a mutation to record that the user interacted with a feature.
+ */
+export function trackFeatureUsage(featureId: string) {
+  try {
+    // Fire-and-forget POST to analytics endpoint
+    fetch("/api/trpc/analytics.trackFeatureUsage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ json: { featureId, timestamp: new Date().toISOString() } }),
+    }).catch(() => { /* non-critical — silent fail */ });
+  } catch { /* non-critical */ }
+}
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -198,7 +213,7 @@ export function useDynamicAutomationTemplates() {
     
     // All templates available at every skill level
     return adaptedTemplates;
-  }, [userMetrics, automationPerformance, tenantConfig, context.userSkill.level]);
+  }, [userMetrics, automationPerformance, tenantConfig, context.userSkill?.level]);
 }
 
 // Dynamic automation recommendations based on user performance gaps
@@ -267,7 +282,7 @@ export function useDynamicAutomationRecommendations() {
     }
     
     // Expert user with good performance? Recommend advanced automations
-    if (context.userSkill.level === 'expert' && automationSuccessRate > 0.8) {
+    if (context.userSkill?.level === 'expert' && automationSuccessRate > 0.8) {
       recommendations.push({
         type: "optimization_priority" as const,
         title: "Optimize with AI-Powered Automations",
@@ -279,7 +294,7 @@ export function useDynamicAutomationRecommendations() {
     }
     
     return recommendations;
-  }, [userMetrics, automationPerformance, context.userSkill.level]);
+  }, [userMetrics, automationPerformance, context.userSkill?.level]);
 }
 
 // Dynamic automation configuration based on user behavior
@@ -337,16 +352,16 @@ export function useDynamicAutomationConfig() {
     }
     
     // Adapt configuration based on user skill level
-    if (context.userSkill.level === 'expert') {
+    if (context.userSkill?.level === 'expert') {
       baseConfig.retryAttempts = Math.max(baseConfig.retryAttempts, 5);
       baseConfig.priority = "high";
-    } else if (context.userSkill.level === 'beginner') {
+    } else if (context.userSkill?.level === 'beginner') {
       baseConfig.retryAttempts = Math.min(baseConfig.retryAttempts, 2);
       baseConfig.priority = "normal";
     }
     
     return baseConfig;
-  }, [userBehavior, automationPerformance, context.userSkill.level]);
+  }, [userBehavior, automationPerformance, context.userSkill?.level]);
 }
 
 // Dynamic automation success prediction
@@ -386,9 +401,9 @@ export function useDynamicAutomationSuccessPrediction() {
     }
     
     // Adjust based on user skill level
-    if (context.userSkill.level === 'expert') {
+    if (context.userSkill?.level === 'expert') {
       baseProbability *= 1.15;
-    } else if (context.userSkill.level === 'beginner') {
+    } else if (context.userSkill?.level === 'beginner') {
       baseProbability *= 0.9;
     }
     
@@ -400,7 +415,7 @@ export function useDynamicAutomationSuccessPrediction() {
     }
     
     return Math.min(0.95, Math.max(0.05, baseProbability)); // Clamp between 5% and 95%
-  }, [userMetrics, automationPerformance, historicalPerformance, context.userSkill.level]);
+  }, [userMetrics, automationPerformance, historicalPerformance, context.userSkill?.level]);
 }
 
 /**
@@ -429,14 +444,3 @@ export function useDynamicAutomationSuccessPrediction() {
  * );
  */
 
-// Re-export progressive disclosure context for convenience
-export { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
-
-// Feature usage tracking utility
-export function trackFeatureUsage(feature: string, action: string, metadata?: any) {
-  // Track feature usage for analytics and progressive disclosure
-  console.log('Feature usage:', { feature, action, metadata });
-  
-  // In a real implementation, this would send to analytics service
-  // Example: trpc.analytics.trackFeatureUsage.mutate({ feature, action, metadata });
-}

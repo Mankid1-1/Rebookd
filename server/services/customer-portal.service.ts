@@ -7,9 +7,8 @@ import Stripe from 'stripe';
 import { getDb } from '../db';
 import { TRPCError } from '@trpc/server';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2022-11-15',
-});
+// Use centralized Stripe singleton from _core/stripe.ts
+import { stripe } from '../_core/stripe';
 
 export interface CustomerPortalConfig {
   customerId: string;

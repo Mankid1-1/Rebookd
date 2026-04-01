@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useState, useEffect } from "react";
+import { HelpTooltip, HelpIcon } from "@/components/ui/HelpTooltip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,13 +34,19 @@ export default function NoShowRecovery() {
     reminderSchedule: [24, 4, 2] // hours before appointment
   });
 
-  const { data: dashData, isLoading } = trpc.analytics.dashboard.useQuery(undefined, { refetchInterval: 30000 });
+  const { data: dashData, isLoading } = trpc.analytics.dashboard.useQuery(undefined, { refetchInterval: 60_000 });
   const metrics: any = dashData?.metrics;
   const { data: settings } = trpc.tenant.get.useQuery(undefined, { retry: false });
   const { data: savedConfig } = trpc.featureConfig.get.useQuery(
     { feature: "no-show-recovery" },
     { retry: false }
   );
+  const { data: automationsList } = trpc.automations.list.useQuery();
+  const { data: leadsList } = trpc.leads.list.useQuery({ limit: 1, status: "new" } as any);
+  const testAutomation = trpc.automations.test.useMutation({
+    onSuccess: () => toast.success("Test SMS sent! Check the lead's phone for the message."),
+    onError: (err) => toast.error(err.message),
+  });
   const saveConfig = trpc.featureConfig.save.useMutation({
     onSuccess: () => toast.success("Configuration saved"),
     onError: (err) => toast.error(err.message),
@@ -56,11 +63,31 @@ export default function NoShowRecovery() {
   };
 
   const handleTestReminder = () => {
-    toast.info("To test, add a lead with a phone number first. The automation will trigger automatically.");
+    const firstLead = (leadsList as any)?.leads?.[0] ?? (leadsList as any)?.[0];
+    if (!firstLead?.phone) {
+      toast.info("Add a lead with a phone number first to test reminders.");
+      return;
+    }
+    const auto = (automationsList as any[])?.find((a: any) => a.key === 'appointment_reminder_24h' || a.triggerType === 'appointment_reminder');
+    if (!auto) {
+      toast.info("Enable the Appointment Reminder automation on the Automations page first.");
+      return;
+    }
+    testAutomation.mutate({ automationId: auto.id, testPhone: firstLead.phone });
   };
 
   const handleTriggerRecovery = () => {
-    toast.info("To test, add a lead with a phone number first. The automation will trigger automatically.");
+    const firstLead = (leadsList as any)?.leads?.[0] ?? (leadsList as any)?.[0];
+    if (!firstLead?.phone) {
+      toast.info("Add a lead with a phone number first to trigger recovery.");
+      return;
+    }
+    const auto = (automationsList as any[])?.find((a: any) => a.key === 'noshow_recovery' || a.key === 'missed_call_textback');
+    if (!auto) {
+      toast.info("Enable the No-Show Recovery automation on the Automations page first.");
+      return;
+    }
+    testAutomation.mutate({ automationId: auto.id, testPhone: firstLead.phone });
   };
 
   const responseRate = metrics?.messagesSent > 0
@@ -90,9 +117,12 @@ export default function NoShowRecovery() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold">No-Show Recovery</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold">No-Show Recovery</h1>
+              <HelpIcon content={{ basic: "Win back clients who missed their appointment", intermediate: "No-show recovery sends follow-up texts to rebook missed appointments", advanced: "Triggered by calendar event status 'no_show'. Two-step sequence: check-in message, then rebook offer with configurable delays" }} />
+            </div>
             <p className="text-muted-foreground mt-2">
-              Eliminate 50-80% of no-shows with automated reminders and smart recovery
+              Reduce no-shows with automated reminders and smart recovery
             </p>
           </div>
           <div className="flex gap-2">
@@ -116,11 +146,11 @@ export default function NoShowRecovery() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
-                  <Users className="h-6 w-6 text-blue-400" />
+                <div className="p-2 bg-info/10 rounded-lg mr-3">
+                  <Users className="h-6 w-6 text-info" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Leads Tracked</p>
+                  <p className="text-sm font-medium text-muted-foreground"><HelpTooltip content="Total number of leads being monitored for no-show patterns and follow-up sequences" variant="info">Leads Tracked</HelpTooltip></p>
                   <p className="text-2xl font-bold">{metrics?.leadCount || 0}</p>
                 </div>
               </div>
@@ -130,11 +160,11 @@ export default function NoShowRecovery() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-red-500/10 rounded-lg mr-3">
-                  <MessageSquare className="h-6 w-6 text-red-400" />
+                <div className="p-2 bg-destructive/10 rounded-lg mr-3">
+                  <MessageSquare className="h-6 w-6 text-destructive" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Follow-Ups Sent</p>
+                  <p className="text-sm font-medium text-muted-foreground"><HelpTooltip content="Number of recovery SMS messages sent to clients who missed their appointment" variant="info">Follow-Ups Sent</HelpTooltip></p>
                   <p className="text-2xl font-bold">{metrics?.messagesSent || 0}</p>
                 </div>
               </div>
@@ -144,11 +174,11 @@ export default function NoShowRecovery() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-green-500/10 rounded-lg mr-3">
-                  <TrendingUp className="h-6 w-6 text-green-400" />
+                <div className="p-2 bg-success/10 rounded-lg mr-3">
+                  <TrendingUp className="h-6 w-6 text-success" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Recovered</p>
+                  <p className="text-sm font-medium text-muted-foreground"><HelpTooltip content="How many no-shows were re-booked after receiving a follow-up SMS" variant="info">Recovered</HelpTooltip></p>
                   <p className="text-2xl font-bold">{metrics?.bookedCount || 0}</p>
                 </div>
               </div>
@@ -158,11 +188,11 @@ export default function NoShowRecovery() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-500/10 rounded-lg mr-3">
-                  <Phone className="h-6 w-6 text-purple-400" />
+                <div className="p-2 bg-accent/10 rounded-lg mr-3">
+                  <Phone className="h-6 w-6 text-accent" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Response Rate</p>
+                  <p className="text-sm font-medium text-muted-foreground"><HelpTooltip content="Percentage of no-show follow-up messages that received a reply from the client" variant="info">Response Rate</HelpTooltip></p>
                   <p className="text-2xl font-bold">{responseRate}%</p>
                 </div>
               </div>
@@ -188,7 +218,7 @@ export default function NoShowRecovery() {
                 <TabsContent value="reminders" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="multi-touch">Multi-Touch Reminders</Label>
+                      <Label htmlFor="multi-touch"><HelpTooltip content="Sends reminders at multiple intervals before the appointment — reduces no-shows by keeping clients engaged" variant="info">Multi-Touch Reminders</HelpTooltip></Label>
                       <Switch
                         id="multi-touch"
                         checked={config.multiTouchReminders}
@@ -198,7 +228,7 @@ export default function NoShowRecovery() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Reminder Schedule (hours before)</Label>
+                      <Label><HelpTooltip content="How many hours before the appointment each reminder is sent. Multiple touch points dramatically cut no-show rates." variant="info">Reminder Schedule (hours before)</HelpTooltip></Label>
                       <div className="flex gap-2">
                         {config.reminderSchedule.map((hours, index) => (
                           <Input
@@ -217,7 +247,7 @@ export default function NoShowRecovery() {
                         ))}
                       </div>
                     </div>
-                    <div className="p-4 bg-blue-500/10 rounded-lg">
+                    <div className="p-4 bg-info/10 rounded-lg">
                       <h4 className="font-medium mb-2">Reminder Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• 24h, 4h, 2h before appointment</li>
@@ -232,7 +262,7 @@ export default function NoShowRecovery() {
                 <TabsContent value="confirmation" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="confirmation-flow">Confirmation Flow</Label>
+                      <Label htmlFor="confirmation-flow"><HelpTooltip content="Asks clients to confirm their appointment, which dramatically reduces no-shows. Unconfirmed appointments can be auto-cancelled." variant="info">Confirmation Flow</HelpTooltip></Label>
                       <Switch
                         id="confirmation-flow"
                         checked={config.confirmationFlow}
@@ -241,7 +271,7 @@ export default function NoShowRecovery() {
                         }
                       />
                     </div>
-                    <div className="p-4 bg-green-500/10 rounded-lg">
+                    <div className="p-4 bg-success/10 rounded-lg">
                       <h4 className="font-medium mb-2">Confirmation Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• "YES" confirmation responses</li>
@@ -256,7 +286,7 @@ export default function NoShowRecovery() {
                 <TabsContent value="waitlist" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="waitlist-fill">Waitlist Auto-Fill</Label>
+                      <Label htmlFor="waitlist-fill"><HelpTooltip content="When a no-show creates an open slot, automatically notifies waitlisted clients to fill the gap instantly" variant="info">Waitlist Auto-Fill</HelpTooltip></Label>
                       <Switch
                         id="waitlist-fill"
                         checked={config.waitlistFill}
@@ -265,7 +295,7 @@ export default function NoShowRecovery() {
                         }
                       />
                     </div>
-                    <div className="p-4 bg-purple-500/10 rounded-lg">
+                    <div className="p-4 bg-accent/10 rounded-lg">
                       <h4 className="font-medium mb-2">Waitlist Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Instant gap filling</li>
@@ -279,7 +309,7 @@ export default function NoShowRecovery() {
 
                 <TabsContent value="advanced" className="space-y-6 mt-6">
                   <div className="space-y-4">
-                    <div className="p-4 bg-orange-500/10 rounded-lg">
+                    <div className="p-4 bg-warning/10 rounded-lg">
                       <h4 className="font-medium mb-2">Advanced Options</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Custom reminder templates</li>
@@ -313,13 +343,13 @@ export default function NoShowRecovery() {
         {/* Recovery Rate Visualization */}
         <Card>
           <CardHeader>
-            <CardTitle>Recovery Performance</CardTitle>
+            <CardTitle className="flex items-center gap-2">Recovery Performance <HelpIcon content={{ basic: "How many no-shows have been recovered", intermediate: "Recovery rate and revenue recovered from no-show re-engagement campaigns", advanced: "Metrics derived from recovery_events table. Response rate = messagesReceived / messagesSent. Recovery rate = bookedCount / leadCount" }} /></CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>Current Response Rate</Label>
+                  <Label><HelpTooltip content={{ basic: "How often people reply to your follow-ups", intermediate: "Percentage of no-show follow-up messages that received a reply from the client", advanced: "messagesReceived / messagesSent as a percentage" }} variant="info">Current Response Rate</HelpTooltip></Label>
                   <div className="flex items-center space-x-2">
                     <Progress value={responseRate} className="flex-1" />
                     <span className="text-sm font-medium">{responseRate}%</span>
@@ -330,17 +360,17 @@ export default function NoShowRecovery() {
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center p-3 bg-blue-500/10 rounded-lg">
-                  <p className="text-2xl font-bold text-blue-400">{metrics?.leadCount || 0}</p>
-                  <p className="text-sm text-muted-foreground">Leads Tracked</p>
+                <div className="text-center p-3 bg-info/10 rounded-lg">
+                  <p className="text-2xl font-bold text-info">{metrics?.leadCount || 0}</p>
+                  <p className="text-sm text-muted-foreground"><HelpTooltip content="Total number of leads being monitored for no-show patterns and follow-up sequences" variant="info">Leads Tracked</HelpTooltip></p>
                 </div>
-                <div className="text-center p-3 bg-red-500/10 rounded-lg">
-                  <p className="text-2xl font-bold text-red-400">{metrics?.messagesSent || 0}</p>
-                  <p className="text-sm text-muted-foreground">Follow-Ups Sent</p>
+                <div className="text-center p-3 bg-destructive/10 rounded-lg">
+                  <p className="text-2xl font-bold text-destructive">{metrics?.messagesSent || 0}</p>
+                  <p className="text-sm text-muted-foreground"><HelpTooltip content="Number of recovery SMS messages sent to clients who missed their appointment" variant="info">Follow-Ups Sent</HelpTooltip></p>
                 </div>
-                <div className="text-center p-3 bg-green-500/10 rounded-lg">
-                  <p className="text-2xl font-bold text-green-400">{metrics?.bookedCount || 0}</p>
-                  <p className="text-sm text-muted-foreground">Recovered</p>
+                <div className="text-center p-3 bg-success/10 rounded-lg">
+                  <p className="text-2xl font-bold text-success">{metrics?.bookedCount || 0}</p>
+                  <p className="text-sm text-muted-foreground"><HelpTooltip content="How many no-shows were re-booked after receiving a follow-up SMS" variant="info">Recovered</HelpTooltip></p>
                 </div>
               </div>
             </div>

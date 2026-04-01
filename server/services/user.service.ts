@@ -1,4 +1,5 @@
 import { eq, desc, sql } from "drizzle-orm";
+import { randomUUID } from "crypto";
 import { users } from "../../drizzle/schema";
 import type { Db } from "../_core/context";
 
@@ -27,7 +28,7 @@ export async function getAllUsers(db: Db, page = 1, limit = 50) {
 }
 
 export async function updateUserActive(db: Db, userId: number, active: boolean) {
-  await db.update(users).set({ active, updatedAt: new Date() }).where(eq(users.id, userId));
+  await db.update(users).set({ active }).where(eq(users.id, userId));
 }
 
 export async function createUser(
@@ -48,7 +49,7 @@ export async function createUser(
 }
 
 export async function setUserPasswordHash(db: Db, userId: number, passwordHash: string) {
-  await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, userId));
+  await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
 }
 
 /** Insert or update by openId — used by OAuth session sync */
@@ -71,22 +72,20 @@ export async function upsertUser(
         ...(data.email !== undefined ? { email: data.email } : {}),
         ...(data.loginMethod !== undefined ? { loginMethod: data.loginMethod } : {}),
         ...(data.lastSignedIn ? { lastSignedIn: data.lastSignedIn } : {}),
-        updatedAt: new Date(),
       })
       .where(eq(users.id, existing.id));
   } else {
     await db.insert(users).values({
-      openId: data.openId ?? crypto.randomUUID(),
+      openId: data.openId ?? randomUUID(),
       name: data.name ?? null,
       email: data.email ?? null,
       loginMethod: data.loginMethod ?? "email",
-      lastSignedIn: data.lastSignedIn ?? new Date(),
     });
   }
 }
 
 export async function updateLastSignedIn(db: Db, userId: number) {
-  await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, userId));
+  await db.update(users).set({ lastSignedIn: sql`NOW()` }).where(eq(users.id, userId));
 }
 
 export async function getPrimaryUserEmailByTenant(db: Db, tenantId: number) {
@@ -97,6 +96,6 @@ export async function getPrimaryUserEmailByTenant(db: Db, tenantId: number) {
 export async function verifyUserEmail(db: Db, userId: number) {
   await db
     .update(users)
-    .set({ emailVerifiedAt: new Date(), updatedAt: new Date() })
+    .set({ emailVerifiedAt: sql`NOW()` })
     .where(eq(users.id, userId));
 }

@@ -448,26 +448,10 @@ export interface SearchParams {
 // EVENT AND WEBHOOK INTERFACES
 // ============================================================================
 
-export type EventType =
-  | "lead.created"
-  | "message.received"
-  | "message.sent"
-  | "appointment.booked"
-  | "appointment.no_show"
-  | "appointment.cancelled"
-  | "automation.triggered"
-  | "user.created"
-  | "subscription.created"
-  | "subscription.updated";
-
-export interface EventPayload {
-  id?: string;
-  type: EventType;
-  tenantId: number;
-  userId?: number;
-  data: Record<string, any>;
-  timestamp: Date;
-}
+// Import from canonical source and re-export to avoid duplicate definitions
+import type { EventType as _EventType, EventPayload as _EventPayload } from "../events";
+export type EventType = _EventType;
+export type EventPayload = _EventPayload;
 
 export interface WebhookEvent {
   type: string;
@@ -510,6 +494,145 @@ export interface SchedulingOptions {
   allowOverbooking: boolean;
   bufferTime: number;
   maxDailyAppointments: number;
+}
+
+// ============================================================================
+// AUTOMATION ENGINE TYPES (Strict Unions for 21 Workflows)
+// ============================================================================
+
+/** All 21 automation workflow keys — the single source of truth */
+export type AutomationWorkflowType =
+  | "missed_call_textback"
+  | "missed_call_followup"
+  | "missed_call_final_offer"
+  | "noshow_recovery"
+  | "win_back_90d"
+  | "welcome_new_lead"
+  | "appointment_confirmation"
+  | "appointment_reminder_24h"
+  | "appointment_reminder_2h"
+  | "cancellation_same_day"
+  | "cancellation_rescue_48h"
+  | "cancellation_rescue_7d"
+  | "cancellation_flurry"
+  | "inbound_auto_reply"
+  | "qualified_followup_1d"
+  | "qualified_followup_3d"
+  | "birthday_promo"
+  | "loyalty_milestone"
+  | "review_request"
+  | "vip_winback_45d"
+  | "rescheduling_offer";
+
+/** Extended automation category enum matching schema */
+export type AutomationCategory =
+  | "follow_up"
+  | "reactivation"
+  | "appointment"
+  | "welcome"
+  | "custom"
+  | "no_show"
+  | "cancellation"
+  | "loyalty"
+  | "review"
+  | "rescheduling"
+  | "waiting_list"
+  | "lead_capture";
+
+/** Extended trigger type enum matching schema */
+export type TriggerType =
+  | "new_lead"
+  | "inbound_message"
+  | "status_change"
+  | "time_delay"
+  | "appointment_reminder"
+  | "missed_call"
+  | "cancellation_flurry"
+  | "win_back"
+  | "birthday"
+  | "loyalty_milestone"
+  | "review_request"
+  | "waitlist_slot_opened"
+  | "rescheduling";
+
+/** Recovery state machine — only for revenue-recovery workflows */
+export type RecoveryState = "detected" | "contacted" | "recovered" | "billed";
+
+/** Valid state transitions for the recovery state machine */
+export const VALID_RECOVERY_TRANSITIONS: Record<RecoveryState, RecoveryState[]> = {
+  detected: ["contacted"],
+  contacted: ["recovered"],
+  recovered: ["billed"],
+  billed: [],
+};
+
+/** Step types within a workflow definition */
+export type WorkflowStepType = "sms" | "delay" | "webhook" | "condition_check" | "state_transition";
+
+/** A single step in a workflow */
+export interface WorkflowStep {
+  type: WorkflowStepType;
+  messageKey?: string;
+  messageBody?: string;
+  tone?: "friendly" | "professional" | "casual" | "urgent" | "empathetic";
+  delaySeconds?: number;
+  webhookUrl?: string;
+  targetState?: RecoveryState;
+}
+
+/** Complete workflow definition in the registry */
+export interface WorkflowDefinition {
+  key: AutomationWorkflowType;
+  name: string;
+  description: string;
+  category: AutomationCategory;
+  triggerEvent: EventType;
+  triggerType: TriggerType;
+  priority: number;
+  isRecoveryFlow: boolean;
+  leakageType?: string;
+  steps: WorkflowStep[];
+  cooldownMinutes: number;
+  maxAttemptsPerLead: number;
+}
+
+/** Automation log entry for audit trail */
+export interface AutomationLogEntry {
+  id: number;
+  tenantId: number;
+  automationId: number;
+  automationKey: string;
+  leadId: number | null;
+  eventType: string;
+  stepIndex: number;
+  stepType: string;
+  status: "started" | "completed" | "failed" | "skipped" | "tcpa_blocked";
+  recoveryState: RecoveryState | null;
+  recoveryEventId: number | null;
+  durationMs: number | null;
+  errorMessage: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: Date;
+}
+
+/** Input for the centralized executeAutomation function */
+export interface ExecuteAutomationInput {
+  tenantId: number;
+  leadId: number;
+  workflowKey: AutomationWorkflowType;
+  eventType: EventType;
+  eventData: Record<string, unknown>;
+  estimatedRevenue?: number;
+}
+
+/** Result from executeAutomation */
+export interface ExecuteAutomationResult {
+  success: boolean;
+  automationLogId?: number;
+  recoveryEventId?: number;
+  trackingToken?: string;
+  jobId?: number;
+  blockedReason?: string;
 }
 
 // ============================================================================

@@ -11,12 +11,12 @@ import { LeadConversation } from "@/components/leads/LeadConversation";
 import { LeadMessageComposer } from "@/components/leads/LeadMessageComposer";
 
 const STATUS_STYLES: Record<string, string> = {
-  new: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  contacted: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
-  qualified: "bg-purple-500/20 text-purple-300 border-purple-500/30",
-  booked: "bg-green-500/20 text-green-300 border-green-500/30",
-  lost: "bg-red-500/20 text-red-300 border-red-500/30",
-  unsubscribed: "bg-gray-500/20 text-gray-300 border-gray-500/30",
+  new: "bg-info/20 text-info border-info/30",
+  contacted: "bg-warning/20 text-warning border-warning/30",
+  qualified: "bg-accent/20 text-accent-foreground border-accent/30",
+  booked: "bg-success/20 text-success border-success/30",
+  lost: "bg-destructive/20 text-destructive border-destructive/30",
+  unsubscribed: "bg-muted text-muted-foreground border-muted-foreground/30",
 };
 
 const STATUS_LABELS: Record<string, string> = {

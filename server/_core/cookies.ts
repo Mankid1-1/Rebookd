@@ -21,8 +21,8 @@ export function getSessionCookieOptions(
     ...(domain ? { domain } : {}),
     httpOnly: true,
     path: "/",
-    // sameSite "none" requires secure:true — on HTTP localhost use "lax" instead
-    sameSite: secure ? "none" : "lax",
+    // Use "strict" to prevent cross-site request forgery
+    sameSite: "strict",
     secure,
   };
 }

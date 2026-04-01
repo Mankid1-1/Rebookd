@@ -1,7 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 
-const SKIP_PATHS = ["/webhooks/", "/api/webhooks/", "/trpc/"];
+// Only skip CSRF for webhook endpoints (which use their own signature verification).
+// tRPC mutations (POST) now require CSRF tokens; tRPC queries (GET) are safe.
+const SKIP_PATHS = ["/webhooks/", "/api/webhooks/"];
 const STATE_METHODS = new Set(["POST", "PUT", "DELETE", "PATCH"]);
 
 function parseCookie(header: string | undefined, name: string): string | undefined {

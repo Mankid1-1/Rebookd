@@ -1,4 +1,6 @@
 import * as React from "react";
+import { useChartColors } from "@/hooks/useChartColors";
+import { useLocale } from "@/contexts/LocaleContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -89,46 +91,35 @@ interface RevenueLeakageDashboardProps {
   onRecoveryAction?: (actionType: string, leadIds: number[]) => void;
 }
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-};
-
 const formatPercent = (value: number) => {
   return `${value.toFixed(1)}%`;
 };
 
-// Dynamic colors based on user's performance and theme
-const getDynamicColors = () => {
-  const isDarkMode = document.documentElement.classList.contains('dark');
-  return {
-    leakage: {
-      no_show: isDarkMode ? "#ef4444" : "#dc2626",
-      cancellation: isDarkMode ? "#f59e0b" : "#d97706",
-      last_minute: isDarkMode ? "#dc2626" : "#b91c1c",
-      double_booking: isDarkMode ? "#8b5cf6" : "#7c3aed",
-      underbooking: isDarkMode ? "#3b82f6" : "#2563eb",
-      followup_missed: isDarkMode ? "#06b6d4" : "#0891b2",
-    },
-    severity: {
-      low: isDarkMode ? "#22c55e" : "#16a34a",
-      medium: isDarkMode ? "#f59e0b" : "#d97706",
-      high: isDarkMode ? "#ef4444" : "#dc2626",
-      critical: isDarkMode ? "#dc2626" : "#b91c1c",
-    }
-  };
-};
+// Colors are now derived from CSS custom properties via useChartColors() inside the component.
 
-export function RevenueLeakageDashboard({ 
-  leakageReport, 
-  isLoading = false, 
-  onRecoveryAction 
+export function RevenueLeakageDashboard({
+  leakageReport,
+  isLoading = false,
+  onRecoveryAction
 }: RevenueLeakageDashboardProps) {
-  const colors = getDynamicColors();
+  const { formatCurrency } = useLocale();
+  const cc = useChartColors();
+  const colors = {
+    leakage: {
+      no_show: cc.chart5,
+      cancellation: cc.chart4,
+      last_minute: cc.danger,
+      double_booking: cc.chart3,
+      underbooking: cc.chart1,
+      followup_missed: cc.info,
+    } as Record<string, string>,
+    severity: {
+      low: cc.success,
+      medium: cc.warning,
+      high: cc.chart5,
+      critical: cc.danger,
+    } as Record<string, string>,
+  };
   const LEAKAGE_COLORS = colors.leakage;
   const SEVERITY_COLORS = colors.severity;
   const [selectedLeakageType, setSelectedLeakageType] = React.useState<string | null>(null);
@@ -173,7 +164,7 @@ export function RevenueLeakageDashboard({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-orange-500" />
+            <AlertTriangle className="w-5 h-5 text-warning" />
             Revenue Leakage Detection
           </h2>
           <p className="text-muted-foreground text-sm mt-1">
@@ -203,15 +194,15 @@ export function RevenueLeakageDashboard({
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">Total Leakage</p>
-                <p className="text-3xl font-bold text-red-600">
+                <p className="text-3xl font-bold text-destructive">
                   {isLoading ? "—" : formatCurrency(leakageReport.totalLeakage)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {leakageReport.topLeakageSources.length} sources detected
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center">
-                <TrendingDown className="w-6 h-6 text-red-500" />
+              <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center">
+                <TrendingDown className="w-6 h-6 text-destructive" />
               </div>
             </div>
           </CardContent>
@@ -222,15 +213,15 @@ export function RevenueLeakageDashboard({
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-2">Recoverable Revenue</p>
-                <p className="text-3xl font-bold text-green-600">
+                <p className="text-3xl font-bold text-success">
                   {isLoading ? "—" : formatCurrency(leakageReport.recoverableRevenue)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {formatPercent(recoveryRate)} recovery rate
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center">
-                <Target className="w-6 h-6 text-green-500" />
+              <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
+                <Target className="w-6 h-6 text-success" />
               </div>
             </div>
           </CardContent>
@@ -248,8 +239,8 @@ export function RevenueLeakageDashboard({
                   Recovery opportunities
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                <Users className="w-6 h-6 text-blue-500" />
+              <div className="w-12 h-12 rounded-xl bg-info/10 flex items-center justify-center">
+                <Users className="w-6 h-6 text-info" />
               </div>
             </div>
           </CardContent>
@@ -267,7 +258,7 @@ export function RevenueLeakageDashboard({
                   {leakageReport.topLeakageSources[0]?.affectedLeads || 0} leads affected
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center">
                 {getSeverityIcon(leakageReport.topLeakageSources[0]?.severity || "medium")}
               </div>
             </div>
@@ -302,7 +293,7 @@ export function RevenueLeakageDashboard({
                     dataKey="value"
                   >
                     {Object.entries(leakageReport.leakageByType).map(([type]) => (
-                      <Cell key={type} fill={LEAKAGE_COLORS[type] || "#6b7280"} />
+                      <Cell key={type} fill={LEAKAGE_COLORS[type] || cc.muted} />
                     ))}
                   </Pie>
                   <Tooltip
@@ -323,7 +314,7 @@ export function RevenueLeakageDashboard({
                     <div className="flex items-center gap-2">
                       <div 
                         className="w-3 h-3 rounded-full" 
-                        style={{ backgroundColor: LEAKAGE_COLORS[type] || "#6b7280" }} 
+                        style={{ backgroundColor: LEAKAGE_COLORS[type] || cc.muted }} 
                       />
                       <span className="capitalize">{getLeakageTypeLabel(type)}</span>
                     </div>
@@ -347,12 +338,12 @@ export function RevenueLeakageDashboard({
                 <AreaChart data={leakageReport.leakageByMonth}>
                   <defs>
                     <linearGradient id="leakageGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                      <stop offset="5%" stopColor={cc.danger} stopOpacity={0.3} />
+                      <stop offset="95%" stopColor={cc.danger} stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="recoveredGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                      <stop offset="5%" stopColor={cc.success} stopOpacity={0.3} />
+                      <stop offset="95%" stopColor={cc.success} stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.1} />
@@ -367,7 +358,7 @@ export function RevenueLeakageDashboard({
                   <Area
                     type="monotone"
                     dataKey="leakage"
-                    stroke="#ef4444"
+                    stroke={cc.danger}
                     fill="url(#leakageGrad)"
                     strokeWidth={2}
                     name="Leakage"
@@ -375,7 +366,7 @@ export function RevenueLeakageDashboard({
                   <Area
                     type="monotone"
                     dataKey="recovered"
-                    stroke="#22c55e"
+                    stroke={cc.success}
                     fill="url(#recoveredGrad)"
                     strokeWidth={2}
                     name="Recovered"
@@ -419,7 +410,7 @@ export function RevenueLeakageDashboard({
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-bold text-red-600">{formatCurrency(source.estimatedRevenue)}</p>
+                  <p className="text-lg font-bold text-destructive">{formatCurrency(source.estimatedRevenue)}</p>
                   <Button 
                     size="sm" 
                     variant="outline" 
@@ -472,7 +463,7 @@ export function RevenueLeakageDashboard({
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-green-600">{formatCurrency(opportunity.estimatedRevenue)}</p>
+                  <p className="font-semibold text-success">{formatCurrency(opportunity.estimatedRevenue)}</p>
                   <Button 
                     size="sm" 
                     variant="outline"

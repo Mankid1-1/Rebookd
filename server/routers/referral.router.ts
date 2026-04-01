@@ -1,68 +1,95 @@
-import { desc, eq, and, sql } from "drizzle-orm";
+import { desc, eq, and, ne, sql } from "drizzle-orm";
 import { referrals, referralPayouts } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
 import { randomUUID } from "crypto";
 
+function buildReferralLink(code: string): string {
+  const appUrl = process.env.APP_URL || "http://localhost:3000";
+  return `${appUrl}/signup?ref=${code}`;
+}
+
+async function getOrCreateCode(db: any, userId: number): Promise<string> {
+  const existing = await db
+    .select({ referralCode: referrals.referralCode })
+    .from(referrals)
+    .where(eq(referrals.referrerId, userId))
+    .limit(1);
+
+  if (existing.length > 0) return existing[0].referralCode;
+
+  const code = `RB-${randomUUID().slice(0, 8).toUpperCase()}`;
+  const expiresAt = new Date();
+  expiresAt.setFullYear(expiresAt.getFullYear() + 10);
+
+  await db.insert(referrals).values({
+    referrerId: userId,
+    referredUserId: userId,
+    referralCode: code,
+    status: "pending",
+    rewardAmount: 5000,
+    rewardCurrency: "USD",
+    expiresAt,
+  });
+
+  return code;
+}
+
+async function computeStats(db: any, userId: number) {
+  const allReferrals = await db
+    .select()
+    .from(referrals)
+    .where(and(eq(referrals.referrerId, userId), ne(referrals.referredUserId, userId)))
+    .limit(500);
+
+  const completedPayouts = await db
+    .select()
+    .from(referralPayouts)
+    .where(and(eq(referralPayouts.userId, userId), eq(referralPayouts.status, "completed")))
+    .limit(500);
+
+  const pendingPayoutRows = await db
+    .select()
+    .from(referralPayouts)
+    .where(and(eq(referralPayouts.userId, userId), eq(referralPayouts.status, "pending")))
+    .limit(100);
+
+  const totalEarned = completedPayouts.reduce((s: number, p: any) => s + p.amount, 0);
+  const pendingAmount = pendingPayoutRows.reduce((s: number, p: any) => s + p.amount, 0);
+  const completed = allReferrals.filter((r: any) => r.status === "completed");
+
+  return {
+    totalEarned: totalEarned / 100,
+    pendingPayouts: pendingAmount / 100,
+    pendingPayout: pendingAmount / 100,         // alias for client compat
+    lifetimeEarnings: totalEarned / 100,
+    activeReferrals: completed.length,
+    completedReferrals: completed.length,        // alias for client compat
+    totalReferrals: allReferrals.length,
+    nextPayoutDate: pendingPayoutRows.length > 0 ? pendingPayoutRows[0].createdAt?.toISOString() : null,
+  };
+}
+
 export const referralRouter = router({
+  // ─── Primary endpoints (canonical names) ─────────────────────────────────
+
   getMyCode: protectedProcedure.query(async ({ ctx }) => {
-    const userId = ctx.user!.id;
-    const existing = await ctx.db
-      .select({ referralCode: referrals.referralCode })
-      .from(referrals)
-      .where(eq(referrals.referrerId, userId))
-      .limit(1);
+    const code = await getOrCreateCode(ctx.db, ctx.user!.id);
+    return { code, link: buildReferralLink(code) };
+  }),
 
-    if (existing.length > 0) {
-      return { code: existing[0].referralCode };
-    }
-
-    // Generate a new referral code
-    const code = `RB-${randomUUID().slice(0, 8).toUpperCase()}`;
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 365);
-
-    await ctx.db.insert(referrals).values({
-      referrerId: userId,
-      referredUserId: 0, // placeholder until someone signs up
-      referralCode: code,
-      status: "pending",
-      rewardAmount: 50,
-      rewardCurrency: "USD",
-      expiresAt,
-    });
-
-    return { code };
+  // Alias: client pages use trpc.referral.getCode
+  getCode: protectedProcedure.query(async ({ ctx }) => {
+    const code = await getOrCreateCode(ctx.db, ctx.user!.id);
+    return { code, link: buildReferralLink(code) };
   }),
 
   getStats: protectedProcedure.query(async ({ ctx }) => {
-    const userId = ctx.user!.id;
+    return computeStats(ctx.db, ctx.user!.id);
+  }),
 
-    const allReferrals = await ctx.db
-      .select()
-      .from(referrals)
-      .where(and(eq(referrals.referrerId, userId), sql`${referrals.referredUserId} != 0`));
-
-    const completedPayouts = await ctx.db
-      .select()
-      .from(referralPayouts)
-      .where(and(eq(referralPayouts.userId, userId), eq(referralPayouts.status, "completed")));
-
-    const pendingPayouts = await ctx.db
-      .select()
-      .from(referralPayouts)
-      .where(and(eq(referralPayouts.userId, userId), eq(referralPayouts.status, "pending")));
-
-    const totalEarned = completedPayouts.reduce((sum, p) => sum + p.amount, 0);
-    const pendingAmount = pendingPayouts.reduce((sum, p) => sum + p.amount, 0);
-
-    return {
-      totalEarned: totalEarned / 100,
-      pendingPayouts: pendingAmount / 100,
-      lifetimeEarnings: totalEarned / 100,
-      activeReferrals: allReferrals.filter(r => r.status === "completed").length,
-      totalReferrals: allReferrals.length,
-      nextPayoutDate: pendingPayouts.length > 0 ? pendingPayouts[0].createdAt?.toISOString() : null,
-    };
+  // Alias: client pages use trpc.referral.stats
+  stats: protectedProcedure.query(async ({ ctx }) => {
+    return computeStats(ctx.db, ctx.user!.id);
   }),
 
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -71,14 +98,21 @@ export const referralRouter = router({
     const myReferrals = await ctx.db
       .select()
       .from(referrals)
-      .where(and(eq(referrals.referrerId, userId), sql`${referrals.referredUserId} != 0`))
-      .orderBy(desc(referrals.createdAt));
+      .where(and(eq(referrals.referrerId, userId), ne(referrals.referredUserId, userId)))
+      .orderBy(desc(referrals.createdAt))
+      .limit(200);
 
     return myReferrals.map(r => ({
       id: String(r.id),
       code: r.referralCode,
+      referralCode: r.referralCode,
+      // Both field names for client compat
       referredAt: r.createdAt.toISOString(),
-      status: r.status === "completed" ? "active" as const : r.status === "expired" ? "expired" as const : "churned" as const,
+      createdAt: r.createdAt.toISOString(),
+      completedAt: r.completedAt?.toISOString() ?? null,
+      payoutScheduledAt: r.payoutScheduledAt?.toISOString() ?? null,
+      status: r.status,
+      rewardAmount: r.rewardAmount,
       monthsActive: r.completedAt
         ? Math.min(6, Math.floor((Date.now() - r.completedAt.getTime()) / (30 * 24 * 60 * 60 * 1000)) + 1)
         : 0,
@@ -92,38 +126,16 @@ export const referralRouter = router({
   // Aliases used by Referrals.tsx (different naming convention)
   getReferralStats: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.user!.id;
-
-    const existing = await ctx.db
-      .select({ referralCode: referrals.referralCode })
-      .from(referrals)
-      .where(eq(referrals.referrerId, userId))
-      .limit(1);
-
-    const allReferrals = await ctx.db
-      .select()
-      .from(referrals)
-      .where(and(eq(referrals.referrerId, userId), sql`${referrals.referredUserId} != 0`));
-
-    const completedPayouts = await ctx.db
-      .select()
-      .from(referralPayouts)
-      .where(and(eq(referralPayouts.userId, userId), eq(referralPayouts.status, "completed")));
-
-    const pendingPayouts = await ctx.db
-      .select()
-      .from(referralPayouts)
-      .where(and(eq(referralPayouts.userId, userId), eq(referralPayouts.status, "pending")));
-
-    const totalEarned = completedPayouts.reduce((sum, p) => sum + p.amount, 0);
-    const pendingAmount = pendingPayouts.reduce((sum, p) => sum + p.amount, 0);
+    const stats = await computeStats(ctx.db, userId);
+    const code = await getOrCreateCode(ctx.db, userId);
 
     return {
       stats: {
-        referralCode: existing[0]?.referralCode ?? null,
-        totalReferrals: allReferrals.length,
-        completedReferrals: allReferrals.filter(r => r.status === "completed").length,
-        totalEarned: totalEarned / 100,
-        availableForPayout: pendingAmount / 100,
+        referralCode: code,
+        totalReferrals: stats.totalReferrals,
+        completedReferrals: stats.completedReferrals,
+        totalEarned: stats.totalEarned,
+        availableForPayout: stats.pendingPayout,
       },
     };
   }),
@@ -134,8 +146,9 @@ export const referralRouter = router({
     const myReferrals = await ctx.db
       .select()
       .from(referrals)
-      .where(and(eq(referrals.referrerId, userId), sql`${referrals.referredUserId} != 0`))
-      .orderBy(desc(referrals.createdAt));
+      .where(and(eq(referrals.referrerId, userId), ne(referrals.referredUserId, userId)))
+      .orderBy(desc(referrals.createdAt))
+      .limit(200);
 
     return {
       referrals: myReferrals.map(r => ({
@@ -149,33 +162,8 @@ export const referralRouter = router({
   }),
 
   generateReferralCode: protectedProcedure.mutation(async ({ ctx }) => {
-    const userId = ctx.user!.id;
-
-    const existing = await ctx.db
-      .select({ referralCode: referrals.referralCode })
-      .from(referrals)
-      .where(eq(referrals.referrerId, userId))
-      .limit(1);
-
-    if (existing.length > 0) {
-      return { code: existing[0].referralCode };
-    }
-
-    const code = `RB-${randomUUID().slice(0, 8).toUpperCase()}`;
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 365);
-
-    await ctx.db.insert(referrals).values({
-      referrerId: userId,
-      referredUserId: 0,
-      referralCode: code,
-      status: "pending",
-      rewardAmount: 5000, // $50.00 in cents
-      rewardCurrency: "USD",
-      expiresAt,
-    });
-
-    return { code };
+    const code = await getOrCreateCode(ctx.db, ctx.user!.id);
+    return { code, link: buildReferralLink(code) };
   }),
 
   leaderboard: protectedProcedure.query(async ({ ctx }) => {
@@ -186,17 +174,19 @@ export const referralRouter = router({
         totalEarned: sql<number>`sum(${referrals.rewardAmount})`,
       })
       .from(referrals)
-      .where(and(eq(referrals.status, "completed"), sql`${referrals.referredUserId} != 0`))
+      .where(and(eq(referrals.status, "completed"), ne(referrals.referredUserId, referrals.referrerId)))
       .groupBy(referrals.referrerId)
       .orderBy(sql`count(*) desc`)
       .limit(10);
 
-    return results.map((r, i) => ({
-      rank: i + 1,
-      referrerId: r.referrerId,
-      isYou: r.referrerId === ctx.user!.id,
-      referralCount: Number(r.count),
-      totalEarned: Number(r.totalEarned ?? 0),
-    }));
+    return results.map((r, i) => {
+      const isYou = r.referrerId === ctx.user!.id;
+      return {
+        rank: i + 1,
+        isYou,
+        referralCount: Number(r.count),
+        totalEarned: isYou ? Number(r.totalEarned ?? 0) : null,
+      };
+    });
   }),
 });

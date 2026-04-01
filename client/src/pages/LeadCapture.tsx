@@ -19,6 +19,7 @@ import {
   CheckCircle,
   Users
 } from "lucide-react";
+import { HelpTooltip } from "@/components/ui/HelpTooltip";
 import { toast } from "sonner";
 
 export default function LeadCapture() {
@@ -31,7 +32,7 @@ export default function LeadCapture() {
     bookingLinkExpiry: 24
   });
 
-  const { data: dashData, isLoading } = trpc.analytics.dashboard.useQuery(undefined, { refetchInterval: 30000 });
+  const { data: dashData, isLoading } = trpc.analytics.dashboard.useQuery(undefined, { refetchInterval: 60_000 });
   const metrics: any = dashData?.metrics;
   const { data: settings } = trpc.tenant.get.useQuery(undefined, { retry: false });
   const { data: savedConfig } = trpc.featureConfig.get.useQuery(
@@ -99,11 +100,13 @@ export default function LeadCapture() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
-                  <Zap className="h-6 w-6 text-blue-400" />
+                <div className="p-2 bg-primary/10 rounded-lg mr-3">
+                  <Zap className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">New Leads Today</p>
+                  <HelpTooltip content="Leads added to your account today — from missed calls, form submissions, or manual entry." variant="info">
+                    <p className="text-sm font-medium text-muted-foreground">New Leads Today</p>
+                  </HelpTooltip>
                   <p className="text-2xl font-bold">{metrics?.todayLeads || 0}</p>
                 </div>
               </div>
@@ -113,8 +116,8 @@ export default function LeadCapture() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-green-500/10 rounded-lg mr-3">
-                  <Users className="h-6 w-6 text-green-400" />
+                <div className="p-2 bg-success/10 rounded-lg mr-3">
+                  <Users className="h-6 w-6 text-success" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Leads</p>
@@ -127,11 +130,13 @@ export default function LeadCapture() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-500/10 rounded-lg mr-3">
-                  <MessageSquare className="h-6 w-6 text-purple-400" />
+                <div className="p-2 bg-accent/10 rounded-lg mr-3">
+                  <MessageSquare className="h-6 w-6 text-accent" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Responses Sent</p>
+                  <HelpTooltip content="Total automated SMS responses sent to leads since your account was created." variant="info">
+                    <p className="text-sm font-medium text-muted-foreground">Responses Sent</p>
+                  </HelpTooltip>
                   <p className="text-2xl font-bold">{metrics?.messagesSent || 0}</p>
                 </div>
               </div>
@@ -141,11 +146,13 @@ export default function LeadCapture() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-orange-500/10 rounded-lg mr-3">
-                  <TrendingUp className="h-6 w-6 text-orange-400" />
+                <div className="p-2 bg-warning/10 rounded-lg mr-3">
+                  <TrendingUp className="h-6 w-6 text-warning" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Conversion Rate</p>
+                  <HelpTooltip content="Percentage of captured leads who went on to book an appointment." variant="info">
+                    <p className="text-sm font-medium text-muted-foreground">Conversion Rate</p>
+                  </HelpTooltip>
                   <p className="text-2xl font-bold">{metrics?.conversionRate || 0}%</p>
                 </div>
               </div>
@@ -170,7 +177,9 @@ export default function LeadCapture() {
               <TabsContent value="response" className="space-y-6 mt-6">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="instant-response">Instant Response</Label>
+                    <HelpTooltip content="Sends an automated SMS to every new lead within seconds of them being added, before they call someone else." variant="info">
+                      <Label htmlFor="instant-response">Instant Response</Label>
+                    </HelpTooltip>
                     <Switch
                       id="instant-response"
                       checked={config.instantResponseEnabled}
@@ -180,7 +189,9 @@ export default function LeadCapture() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="response-time">Response Time Limit (seconds)</Label>
+                    <HelpTooltip content="Maximum seconds to wait before sending the instant response SMS to a new lead." variant="info">
+                      <Label htmlFor="response-time">Response Time Limit (seconds)</Label>
+                    </HelpTooltip>
                     <Input
                       id="response-time"
                       type="number"
@@ -193,7 +204,9 @@ export default function LeadCapture() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="booking-expiry">Booking Link Expiry (hours)</Label>
+                    <HelpTooltip content="How long the booking link sent to a lead stays active before it expires." variant="info">
+                      <Label htmlFor="booking-expiry">Booking Link Expiry (hours)</Label>
+                    </HelpTooltip>
                     <Input
                       id="booking-expiry"
                       type="number"
@@ -211,7 +224,9 @@ export default function LeadCapture() {
               <TabsContent value="ai" className="space-y-6 mt-6">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="ai-chat">AI Chat Enabled</Label>
+                    <HelpTooltip content="Lets an AI assistant handle lead conversations, answer questions, and guide clients to book." variant="info">
+                      <Label htmlFor="ai-chat">AI Chat Enabled</Label>
+                    </HelpTooltip>
                     <Switch
                       id="ai-chat"
                       checked={config.aiChatEnabled}
@@ -244,7 +259,7 @@ export default function LeadCapture() {
                       }
                     />
                   </div>
-                  <div className="p-4 bg-blue-500/10 rounded-lg">
+                  <div className="p-4 bg-primary/10 rounded-lg">
                     <h4 className="font-medium mb-2">After Hours Features</h4>
                     <ul className="space-y-2 text-sm">
                       <li>• 24/7 lead capture</li>
@@ -258,7 +273,7 @@ export default function LeadCapture() {
 
               <TabsContent value="advanced" className="space-y-6 mt-6">
                 <div className="space-y-4">
-                  <div className="p-4 bg-orange-500/10 rounded-lg">
+                  <div className="p-4 bg-warning/10 rounded-lg">
                     <h4 className="font-medium mb-2">Advanced Options</h4>
                     <ul className="space-y-2 text-sm">
                       <li>• Custom response templates</li>

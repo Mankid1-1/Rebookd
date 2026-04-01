@@ -1,47 +1,127 @@
-import { useState, useEffect } from "react";
-import { Shield, X } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Shield, X, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const COOKIE_KEY = "rebooked_cookie_consent";
-const COOKIE_VERSION = "1"; // bump to re-show after policy changes
+const COOKIE_VERSION = "2"; // bumped to re-trigger consent for granular categories
 
-type ConsentLevel = "all" | "essential" | null;
+export interface CookiePreferences {
+  version: string;
+  essential: boolean; // always true, cannot be toggled off
+  analytics: boolean;
+  functional: boolean;
+  timestamp: string;
+}
 
-function getConsent(): ConsentLevel {
+function getConsent(): CookiePreferences | null {
   try {
     const stored = localStorage.getItem(COOKIE_KEY);
     if (!stored) return null;
-    const parsed = JSON.parse(stored);
+    const parsed = JSON.parse(stored) as CookiePreferences;
     if (parsed.version !== COOKIE_VERSION) return null;
-    return parsed.level as ConsentLevel;
+    return parsed;
   } catch {
     return null;
   }
 }
 
-function setConsent(level: "all" | "essential") {
-  localStorage.setItem(
-    COOKIE_KEY,
-    JSON.stringify({ level, version: COOKIE_VERSION, timestamp: Date.now() })
+function setConsent(prefs: Omit<CookiePreferences, "version" | "timestamp" | "essential">) {
+  const full: CookiePreferences = {
+    version: COOKIE_VERSION,
+    essential: true,
+    analytics: prefs.analytics,
+    functional: prefs.functional,
+    timestamp: new Date().toISOString(),
+  };
+  localStorage.setItem(COOKIE_KEY, JSON.stringify(full));
+  return full;
+}
+
+/** Hook to read current cookie preferences from anywhere in the app */
+export function useCookiePreferences(): CookiePreferences | null {
+  const [prefs, setPrefs] = useState<CookiePreferences | null>(() => getConsent());
+
+  useEffect(() => {
+    const handler = () => setPrefs(getConsent());
+    window.addEventListener("cookie-consent-updated", handler);
+    return () => window.removeEventListener("cookie-consent-updated", handler);
+  }, []);
+
+  return prefs;
+}
+
+/** Small button to re-open cookie preferences. Place in footer or layout. */
+export function CookiePreferencesButton() {
+  const handleClick = () => {
+    window.dispatchEvent(new CustomEvent("cookie-consent-manage"));
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      aria-label="Manage cookie preferences"
+    >
+      <Settings className="w-3 h-3" />
+      Cookie Preferences
+    </button>
   );
 }
 
 export function CookieConsent() {
   const [visible, setVisible] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [showManagePreferences, setShowManagePreferences] = useState(false);
+  const [analyticsEnabled, setAnalyticsEnabled] = useState(true);
+  const [functionalEnabled, setFunctionalEnabled] = useState(true);
+
+  const openBanner = useCallback(() => {
+    // Pre-fill toggles from existing consent if present
+    const existing = getConsent();
+    if (existing) {
+      setAnalyticsEnabled(existing.analytics);
+      setFunctionalEnabled(existing.functional);
+      setShowManagePreferences(true);
+    } else {
+      setShowManagePreferences(false);
+    }
+    setVisible(true);
+  }, []);
 
   useEffect(() => {
     // Small delay so it doesn't flash on page load
     const timer = setTimeout(() => {
-      if (!getConsent()) setVisible(true);
+      if (!getConsent()) {
+        setVisible(true);
+      }
     }, 1000);
     return () => clearTimeout(timer);
   }, []);
 
+  // Listen for "manage preferences" events from CookiePreferencesButton
+  useEffect(() => {
+    const handler = () => openBanner();
+    window.addEventListener("cookie-consent-manage", handler);
+    return () => window.removeEventListener("cookie-consent-manage", handler);
+  }, [openBanner]);
+
   if (!visible) return null;
 
-  const accept = (level: "all" | "essential") => {
-    setConsent(level);
+  const acceptAll = () => {
+    setConsent({ analytics: true, functional: true });
+    window.dispatchEvent(new Event("cookie-consent-updated"));
+    setVisible(false);
+  };
+
+  const acceptEssentialOnly = () => {
+    setConsent({ analytics: false, functional: false });
+    window.dispatchEvent(new Event("cookie-consent-updated"));
+    setVisible(false);
+  };
+
+  const savePreferences = () => {
+    setConsent({ analytics: analyticsEnabled, functional: functionalEnabled });
+    window.dispatchEvent(new Event("cookie-consent-updated"));
     setVisible(false);
   };
 
@@ -56,9 +136,14 @@ export function CookieConsent() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2 mb-2">
-                <h3 className="font-semibold text-sm text-foreground">Cookie & Privacy Notice</h3>
+                <h3 className="font-semibold text-sm text-foreground">
+                  {showManagePreferences ? "Manage Cookie Preferences" : "Cookie & Privacy Notice"}
+                </h3>
                 <button
-                  onClick={() => accept("essential")}
+                  onClick={() => {
+                    if (!getConsent()) acceptEssentialOnly();
+                    else setVisible(false);
+                  }}
                   className="text-muted-foreground hover:text-foreground transition-colors p-1 -m-1"
                   aria-label="Dismiss"
                 >
@@ -75,38 +160,123 @@ export function CookieConsent() {
                 <a href="/terms" className="text-primary hover:underline">Terms of Service</a>.
               </p>
 
-              {/* Expandable details */}
-              {showDetails && (
+              {/* Category toggles */}
+              {(showManagePreferences || showDetails) && (
                 <div className="mb-4 space-y-3 text-xs text-muted-foreground border-t border-border/50 pt-3">
-                  <div>
-                    <p className="font-medium text-foreground mb-1">Essential Cookies (Always Active)</p>
-                    <p>Required for login, session management, and security. Cannot be disabled.</p>
+                  {/* Essential - always on */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="font-medium text-foreground mb-0.5">Essential Cookies</p>
+                      <p>Required for login, session management, and security. Cannot be disabled.</p>
+                    </div>
+                    <div className="ml-4 shrink-0">
+                      <div
+                        className="w-9 h-5 rounded-full bg-primary flex items-center cursor-not-allowed opacity-70"
+                        title="Always active"
+                        aria-label="Essential cookies are always active"
+                      >
+                        <div className="w-4 h-4 rounded-full bg-white shadow-sm ml-auto mr-0.5 transition-all" />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-foreground mb-1">Analytics</p>
-                    <p>Aggregated usage data to improve our platform. No personal data is collected or shared with third parties.</p>
+
+                  {/* Analytics - optional */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="font-medium text-foreground mb-0.5">Analytics</p>
+                      <p>Aggregated usage data to improve our platform. No personal data is collected or shared with third parties.</p>
+                    </div>
+                    <div className="ml-4 shrink-0">
+                      <button
+                        role="switch"
+                        aria-checked={analyticsEnabled}
+                        aria-label="Toggle analytics cookies"
+                        onClick={() => setAnalyticsEnabled(!analyticsEnabled)}
+                        className={`w-9 h-5 rounded-full flex items-center transition-colors ${
+                          analyticsEnabled ? "bg-primary" : "bg-muted-foreground/30"
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 rounded-full bg-white shadow-sm transition-all ${
+                            analyticsEnabled ? "ml-auto mr-0.5" : "ml-0.5"
+                          }`}
+                        />
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-foreground mb-1">Third-Party Services</p>
-                    <p>Stripe (payments), Telnyx (SMS delivery), and Cloudflare (CDN/security) may set their own cookies as described in their respective privacy policies.</p>
+
+                  {/* Functional - optional */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="font-medium text-foreground mb-0.5">Functional</p>
+                      <p>Remembers your preferences such as language, timezone, and display settings for a personalised experience.</p>
+                    </div>
+                    <div className="ml-4 shrink-0">
+                      <button
+                        role="switch"
+                        aria-checked={functionalEnabled}
+                        aria-label="Toggle functional cookies"
+                        onClick={() => setFunctionalEnabled(!functionalEnabled)}
+                        className={`w-9 h-5 rounded-full flex items-center transition-colors ${
+                          functionalEnabled ? "bg-primary" : "bg-muted-foreground/30"
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 rounded-full bg-white shadow-sm transition-all ${
+                            functionalEnabled ? "ml-auto mr-0.5" : "ml-0.5"
+                          }`}
+                        />
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-foreground mb-1">Your Rights (GDPR / CCPA)</p>
-                    <p>You may request access, correction, or deletion of your data at any time by contacting{" "}
-                      <a href="mailto:rebooked@rebooked.org" className="text-primary hover:underline">rebooked@rebooked.org</a>.
-                      See our <a href="/privacy" className="text-primary hover:underline">Privacy Policy</a> for full details.
-                    </p>
-                  </div>
+
+                  {/* Additional info shown in expanded details */}
+                  {showDetails && (
+                    <>
+                      <div>
+                        <p className="font-medium text-foreground mb-1">Third-Party Services</p>
+                        <p>Stripe (payments), Telnyx (SMS delivery), and Cloudflare (CDN/security) may set their own cookies as described in their respective privacy policies.</p>
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground mb-1">Your Rights (GDPR / CCPA)</p>
+                        <p>You may request access, correction, or deletion of your data at any time by contacting{" "}
+                          <a href="mailto:rebooked@rebooked.org" className="text-primary hover:underline">rebooked@rebooked.org</a>.
+                          See our <a href="/privacy" className="text-primary hover:underline">Privacy Policy</a> for full details.
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
               <div className="flex flex-wrap items-center gap-3">
-                <Button size="sm" onClick={() => accept("all")} className="h-8 px-4 text-xs font-medium">
-                  Accept All
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => accept("essential")} className="h-8 px-4 text-xs font-medium">
-                  Essential Only
-                </Button>
+                {showManagePreferences ? (
+                  <>
+                    <Button size="sm" onClick={savePreferences} className="h-8 px-4 text-xs font-medium">
+                      Save Preferences
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={acceptAll} className="h-8 px-4 text-xs font-medium">
+                      Accept All
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button size="sm" onClick={acceptAll} className="h-8 px-4 text-xs font-medium">
+                      Accept All
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={acceptEssentialOnly} className="h-8 px-4 text-xs font-medium">
+                      Essential Only
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setShowManagePreferences(true)}
+                      className="h-8 px-4 text-xs font-medium"
+                    >
+                      Manage Preferences
+                    </Button>
+                  </>
+                )}
                 <button
                   onClick={() => setShowDetails(!showDetails)}
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"

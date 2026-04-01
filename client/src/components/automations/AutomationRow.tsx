@@ -4,25 +4,26 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { trpc } from "@/lib/trpc";
 import { Settings2, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import type { AutomationTemplate, AutomationCategory } from "./types";
 
 const CATEGORY_CONFIG: Record<AutomationCategory, { label: string; bg: string }> = {
-  appointment: { label: "Appointment", bg: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
-  no_show: { label: "No-Show", bg: "bg-red-500/15 text-red-300 border-red-500/30" },
-  cancellation: { label: "Cancellation", bg: "bg-orange-500/15 text-orange-300 border-orange-500/30" },
-  follow_up: { label: "Follow-Up", bg: "bg-blue-500/15 text-blue-300 border-blue-500/30" },
-  reactivation: { label: "Re-Engagement", bg: "bg-purple-500/15 text-purple-300 border-purple-500/30" },
-  welcome: { label: "Welcome", bg: "bg-yellow-500/15 text-yellow-300 border-yellow-500/30" },
-  loyalty: { label: "Loyalty", bg: "bg-pink-500/15 text-pink-300 border-pink-500/30" },
+  appointment: { label: "Appointment", bg: "bg-success/15 text-success border-success/30" },
+  no_show: { label: "No-Show", bg: "bg-destructive/15 text-destructive border-destructive/30" },
+  cancellation: { label: "Cancellation", bg: "bg-warning/15 text-warning border-warning/30" },
+  follow_up: { label: "Follow-Up", bg: "bg-info/15 text-info border-info/30" },
+  reactivation: { label: "Re-Engagement", bg: "bg-accent/15 text-accent-foreground border-accent/30" },
+  welcome: { label: "Welcome", bg: "bg-warning/15 text-warning border-warning/30" },
+  loyalty: { label: "Loyalty", bg: "bg-primary/15 text-primary border-primary/30" },
 };
 
 const PLAN_BADGE: Record<string, string> = {
-  starter: "bg-slate-500/20 text-slate-300 border-slate-500/30",
-  growth: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  scale: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+  starter: "bg-muted/20 text-muted-foreground border-muted-foreground/30",
+  growth: "bg-info/20 text-info border-info/30",
+  scale: "bg-accent/20 text-accent-foreground border-accent/30",
 };
 
 interface AutomationRowProps {
@@ -67,7 +68,14 @@ export const AutomationRow = memo(function AutomationRow({
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-medium text-sm">{template.name}</span>
               {template.recommended && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-yellow-500/10 text-yellow-400 border-yellow-500/30">Recommended</Badge>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-warning/10 text-warning border-warning/30">Recommended</Badge>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Expected revenue recovery impact based on industry benchmarks</p></TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
               <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${cat.bg}`}>{cat.label}</Badge>
               <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${PLAN_BADGE[template.planRequired]}`}>{template.planRequired}</Badge>
@@ -94,7 +102,14 @@ export const AutomationRow = memo(function AutomationRow({
             </Button>
             <div className="flex items-center gap-2 pl-2 border-l border-border">
               <span className="text-xs text-muted-foreground">{isToggling ? "..." : isEnabled ? "On" : "Off"}</span>
-              <Switch checked={isEnabled} onCheckedChange={onToggle} disabled={isToggling} aria-label={`Toggle ${template.name}`} />
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Switch checked={isEnabled} onCheckedChange={onToggle} disabled={isToggling} aria-label={`Toggle ${template.name}`} />
+                  </TooltipTrigger>
+                  <TooltipContent><p>Toggle this automation on or off. When on, messages are sent automatically.</p></TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
         </div>

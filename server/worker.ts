@@ -11,9 +11,9 @@
  */
 
 import "dotenv/config";
-import { and, desc, eq, gt, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, gt, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
 import { getDb } from "./db";
-import { automations, leads, messages, phoneNumbers, subscriptions, tenants, type Automation, type Lead } from "../drizzle/schema";
+import { automations, calendarEvents, leads, messages, phoneNumbers, subscriptions, tenants, type Automation, type Lead } from "../drizzle/schema";
 import { sendSMS, resolveTemplate } from "./_core/sms";
 import { logger } from "./_core/logger";
 import { captureException } from "./_core/sentry";
@@ -27,14 +27,24 @@ import { writeFileSync } from "fs";
 import { randomUUID } from "crypto";
 import { decrypt } from "./_core/crypto";
 import { runWithCorrelationId } from "./_core/requestContext";
-import { processQueuedAutomationJobs } from "./services/automation-runner.service";
+import { processQueuedAutomationJobs, runAutomationsForEvent } from "./services/automation-runner.service";
+import { emitEvent } from "./services/event-bus.service";
+import { reprocessDeadLetterQueue } from "./services/n8n-bridge.service";
 import * as TenantService from "./services/tenant.service";
 import { EmailService } from "./services/email.service";
 import { gracefulShutdown } from "./_core/graceful-shutdown";
+import { triggerPayoutProcessing } from "./jobs/process-referral-payouts";
+import { syncAllDueConnections } from "./services/calendar/calendar-sync.service";
 
 const POLL_INTERVAL_MS = 60_000;
+
+// ─── Referral auto-payout tracking ────────────────────────────────────────────
+let lastReferralPayoutRun: Date | null = null;
+const REFERRAL_PAYOUT_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+let lastDlqReprocessRun: Date | null = null;
+const DLQ_REPROCESS_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_RETRY_ATTEMPTS = 3;
-const HEARTBEAT_FILE = process.env.WORKER_HEARTBEAT_FILE || "/tmp/worker-heartbeat.json";
+const HEARTBEAT_FILE = process.env.WORKER_HEARTBEAT_FILE || `${require("os").tmpdir()}/worker-heartbeat.json`;
 
 // ─── Time helpers ─────────────────────────────────────────────────────────────
 
@@ -708,9 +718,293 @@ async function processTrialReminders(db: Db) {
 
 // ─── Main cycle ───────────────────────────────────────────────────────────────
 
+function writeWorkerHeartbeat(status = "ok", error?: string) {
+  try {
+    writeFileSync(HEARTBEAT_FILE, JSON.stringify({
+      ts: new Date().toISOString(),
+      status,
+      error,
+      lastSuccessAt: status === "ok" ? new Date().toISOString() : undefined,
+      pollIntervalMs: POLL_INTERVAL_MS,
+    }));
+  } catch { /* non-fatal */ }
+}
+
+/**
+ * Detect no-shows using synced calendar events.
+ *
+ * Strategy:
+ *  1. Query calendarEvents with status "confirmed", startTime 1–24 hours in the past,
+ *     and a linked leadId — these are appointments that should have happened.
+ *  2. Cross-reference with the leads table: only fire if the lead is still "booked"
+ *     (hasn't been manually marked complete or lost).
+ *  3. Tag the lead "no_show_detected" to prevent re-firing.
+ *  4. Emit appointment.no_show with the exact lead who missed their appointment.
+ *
+ * Falls back to leads.appointmentAt for tenants without calendar integrations.
+ */
+async function detectNoShows(db: Db) {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  try {
+    // ── Primary: Detect via synced calendar events ────────────────────
+    const calendarNoShows = await db
+      .select({
+        eventId: calendarEvents.id,
+        leadId: calendarEvents.leadId,
+        tenantId: calendarEvents.tenantId,
+        startTime: calendarEvents.startTime,
+        attendeePhone: calendarEvents.attendeePhone,
+        attendeeName: calendarEvents.attendeeName,
+        leadPhone: leads.phone,
+        leadName: leads.name,
+        leadStatus: leads.status,
+        leadTags: leads.tags,
+      })
+      .from(calendarEvents)
+      .innerJoin(leads, and(
+        eq(calendarEvents.leadId, leads.id),
+        eq(calendarEvents.tenantId, leads.tenantId),
+      ))
+      .where(and(
+        eq(calendarEvents.status, 'confirmed'),
+        isNotNull(calendarEvents.leadId),
+        lt(calendarEvents.startTime, oneHourAgo),
+        gt(calendarEvents.startTime, twentyFourHoursAgo),
+        eq(leads.status, 'booked'),
+        sql`JSON_SEARCH(COALESCE(${leads.tags}, JSON_ARRAY()), 'one', 'no_show_detected') IS NULL`,
+      ))
+      .limit(50);
+
+    // ── Fallback: Leads with appointmentAt but no calendar event ──────
+    const calendarLeadIds = new Set(calendarNoShows.map(r => r.leadId));
+    const manualNoShows = await db.select()
+      .from(leads)
+      .where(and(
+        isNotNull(leads.appointmentAt),
+        lt(leads.appointmentAt, oneHourAgo),
+        gt(leads.appointmentAt, twentyFourHoursAgo),
+        eq(leads.status, 'booked'),
+        sql`JSON_SEARCH(COALESCE(${leads.tags}, JSON_ARRAY()), 'one', 'no_show_detected') IS NULL`,
+      ))
+      .limit(50);
+
+    // Merge both sources, deduplicate by leadId
+    const toProcess: Array<{ leadId: number; tenantId: number; phone: string; name: string }> = [];
+
+    for (const row of calendarNoShows) {
+      if (!row.leadId) continue;
+      let phone = row.leadPhone || row.attendeePhone || '';
+      try { phone = decrypt(phone); } catch { /* already plaintext */ }
+      toProcess.push({
+        leadId: row.leadId,
+        tenantId: row.tenantId,
+        phone,
+        name: row.leadName || row.attendeeName || 'Client',
+      });
+    }
+
+    for (const lead of manualNoShows) {
+      if (calendarLeadIds.has(lead.id)) continue; // already handled
+      let phone = lead.phone;
+      try { phone = decrypt(phone); } catch { /* already plaintext */ }
+      toProcess.push({
+        leadId: lead.id,
+        tenantId: lead.tenantId,
+        phone,
+        name: lead.name || 'Client',
+      });
+    }
+
+    if (toProcess.length === 0) return;
+    logger.info(`Worker: Detected ${toProcess.length} potential no-shows (${calendarNoShows.length} from calendar, ${toProcess.length - calendarNoShows.length} from manual)`);
+
+    for (const entry of toProcess) {
+      try {
+        await LeadService.addLeadTags(db, entry.tenantId, entry.leadId, ['no_show_detected']);
+
+        await runAutomationsForEvent({
+          type: 'appointment.no_show' as any,
+          tenantId: entry.tenantId,
+          data: { leadId: entry.leadId, phone: entry.phone, name: entry.name },
+          timestamp: new Date(),
+        });
+
+        logger.info(`Worker: No-show event fired for lead ${entry.leadId} (tenant ${entry.tenantId})`);
+      } catch (err) {
+        logger.error(`Worker: Failed to process no-show for lead ${entry.leadId}`, { error: String(err) });
+      }
+    }
+  } catch (err) {
+    logger.error("Worker: detectNoShows query failed", { error: String(err) });
+  }
+}
+
+/**
+ * Detect leads due for win-back campaigns (90+ days since last contact,
+ * or 45+ days for VIP leads with 5+ visits).
+ * Emits lead.win_back_due events → triggers win_back_90d / vip_winback_45d workflows.
+ */
+async function detectWinBackDue(db: Db) {
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const fortyFiveDaysAgo = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+
+  try {
+    // Standard 90-day win-back: leads not contacted in 90+ days
+    const lapsedLeads = await db.select()
+      .from(leads)
+      .where(and(
+        isNotNull(leads.lastMessageAt),
+        lt(leads.lastMessageAt, ninetyDaysAgo),
+        sql`${leads.status} NOT IN ('booked', 'unsubscribed')`,
+        sql`JSON_SEARCH(COALESCE(${leads.tags}, JSON_ARRAY()), 'one', 'win_back_90d_sent') IS NULL`,
+      ))
+      .limit(25);
+
+    // VIP 45-day win-back: high-value leads (5+ visits) not contacted in 45+ days
+    const vipLapsed = await db.select()
+      .from(leads)
+      .where(and(
+        isNotNull(leads.lastMessageAt),
+        lt(leads.lastMessageAt, fortyFiveDaysAgo),
+        gte(leads.lastMessageAt, ninetyDaysAgo), // exclude already-90d leads
+        sql`${leads.status} NOT IN ('booked', 'unsubscribed')`,
+        gte(leads.visitCount, 5),
+        sql`JSON_SEARCH(COALESCE(${leads.tags}, JSON_ARRAY()), 'one', 'vip_winback_45d_sent') IS NULL`,
+      ))
+      .limit(25);
+
+    for (const lead of lapsedLeads) {
+      try {
+        await LeadService.addLeadTags(db, lead.tenantId, lead.id, ['win_back_90d_sent']);
+        let phone = lead.phone;
+        try { phone = decrypt(phone); } catch { }
+        await emitEvent({
+          type: 'lead.win_back_due' as any, tenantId: lead.tenantId,
+          data: { leadId: lead.id, phone, name: lead.name || 'Client', winBackType: '90d' },
+          timestamp: new Date(),
+        });
+      } catch (err) { logger.error(`Worker: win-back 90d failed for lead ${lead.id}`, { error: String(err) }); }
+    }
+
+    for (const lead of vipLapsed) {
+      try {
+        await LeadService.addLeadTags(db, lead.tenantId, lead.id, ['vip_winback_45d_sent']);
+        let phone = lead.phone;
+        try { phone = decrypt(phone); } catch { }
+        await emitEvent({
+          type: 'lead.win_back_due' as any, tenantId: lead.tenantId,
+          data: { leadId: lead.id, phone, name: lead.name || 'Client', winBackType: '45d_vip' },
+          timestamp: new Date(),
+        });
+      } catch (err) { logger.error(`Worker: VIP win-back failed for lead ${lead.id}`, { error: String(err) }); }
+    }
+
+    if (lapsedLeads.length + vipLapsed.length > 0) {
+      logger.info(`Worker: Win-back detection found ${lapsedLeads.length} standard + ${vipLapsed.length} VIP leads`);
+    }
+  } catch (err) {
+    logger.error("Worker: detectWinBackDue failed", { error: String(err) });
+  }
+}
+
+/**
+ * Detect leads whose birthday is today.
+ * Emits lead.birthday events → triggers birthday_promo workflow.
+ * Tags lead with birthday_YYYY_sent to prevent re-firing within the same year.
+ */
+async function detectBirthdays(db: Db) {
+  try {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const yearTag = `birthday_${now.getFullYear()}_sent`;
+
+    // Find leads whose birthday month+day matches today
+    const birthdayLeads = await db.select()
+      .from(leads)
+      .where(and(
+        isNotNull(leads.birthday),
+        sql`SUBSTRING(${leads.birthday}, 6, 5) = ${`${month}-${day}`}`,
+        sql`${leads.status} <> 'unsubscribed'`,
+        sql`JSON_SEARCH(COALESCE(${leads.tags}, JSON_ARRAY()), 'one', ${yearTag}) IS NULL`,
+      ))
+      .limit(50);
+
+    for (const lead of birthdayLeads) {
+      try {
+        await LeadService.addLeadTags(db, lead.tenantId, lead.id, [yearTag]);
+        let phone = lead.phone;
+        try { phone = decrypt(phone); } catch { }
+        await emitEvent({
+          type: 'lead.birthday' as any, tenantId: lead.tenantId,
+          data: { leadId: lead.id, phone, name: lead.name || 'Client' },
+          timestamp: new Date(),
+        });
+      } catch (err) { logger.error(`Worker: birthday event failed for lead ${lead.id}`, { error: String(err) }); }
+    }
+
+    if (birthdayLeads.length > 0) {
+      logger.info(`Worker: Birthday detection found ${birthdayLeads.length} leads`);
+    }
+  } catch (err) {
+    logger.error("Worker: detectBirthdays failed", { error: String(err) });
+  }
+}
+
+/**
+ * Detect leads whose appointments completed successfully (1-24h ago, still "booked",
+ * NOT tagged as no-show) — these are review request opportunities.
+ * Emits review.requested events → triggers review_request workflow.
+ */
+async function detectReviewOpportunities(db: Db) {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  try {
+    // Find leads whose appointment completed (time passed) but who showed up
+    // (status is "booked" and NOT tagged as no_show_detected)
+    const completedLeads = await db.select()
+      .from(leads)
+      .where(and(
+        isNotNull(leads.appointmentAt),
+        lt(leads.appointmentAt, oneHourAgo),
+        gt(leads.appointmentAt, twentyFourHoursAgo),
+        eq(leads.status, 'booked'),
+        sql`JSON_SEARCH(COALESCE(${leads.tags}, JSON_ARRAY()), 'one', 'no_show_detected') IS NULL`,
+        sql`JSON_SEARCH(COALESCE(${leads.tags}, JSON_ARRAY()), 'one', 'review_requested') IS NULL`,
+      ))
+      .limit(50);
+
+    for (const lead of completedLeads) {
+      try {
+        await LeadService.addLeadTags(db, lead.tenantId, lead.id, ['review_requested']);
+        let phone = lead.phone;
+        try { phone = decrypt(phone); } catch { }
+        await emitEvent({
+          type: 'review.requested' as any, tenantId: lead.tenantId,
+          data: { leadId: lead.id, phone, name: lead.name || 'Client' },
+          timestamp: new Date(),
+        });
+      } catch (err) { logger.error(`Worker: review request failed for lead ${lead.id}`, { error: String(err) }); }
+    }
+
+    if (completedLeads.length > 0) {
+      logger.info(`Worker: Review opportunity detection found ${completedLeads.length} leads`);
+    }
+  } catch (err) {
+    logger.error("Worker: detectReviewOpportunities failed", { error: String(err) });
+  }
+}
+
 async function runCycleInner() {
   const db = await getDb();
-  if (!db) { logger.warn("Worker: DB unavailable, skipping cycle"); return; }
+  if (!db) { logger.warn("Worker: DB unavailable, skipping cycle"); writeWorkerHeartbeat("db_unavailable"); return; }
+
+  // Write heartbeat at start of cycle — ensures it's always written
+  // even if early returns (no automations, no leads) exit before the end
+  writeWorkerHeartbeat("ok");
 
   // Wrap each sub-task so one failure doesn't kill the entire cycle
   try { await processTrialReminders(db); } catch (err) {
@@ -719,7 +1013,27 @@ async function runCycleInner() {
   try { await processQueuedAutomationJobs(db); } catch (err) {
     logger.error("Worker: processQueuedAutomationJobs failed", { error: String(err) });
   }
-  
+
+  // Detect no-shows (appointments that passed without completion) and fire recovery events
+  try { await detectNoShows(db); } catch (err) {
+    logger.error("Worker: detectNoShows failed", { error: String(err) });
+  }
+
+  // Detect review opportunities (successful appointments, 1+ hour ago)
+  try { await detectReviewOpportunities(db); } catch (err) {
+    logger.error("Worker: detectReviewOpportunities failed", { error: String(err) });
+  }
+
+  // Detect leads due for win-back campaigns (90/45 day lapse)
+  try { await detectWinBackDue(db); } catch (err) {
+    logger.error("Worker: detectWinBackDue failed", { error: String(err) });
+  }
+
+  // Detect birthdays and fire birthday promo automations
+  try { await detectBirthdays(db); } catch (err) {
+    logger.error("Worker: detectBirthdays failed", { error: String(err) });
+  }
+
   // Process incoming emails from POP3
   try {
     const emailResult = await EmailService.processIncomingEmails(db);
@@ -730,6 +1044,64 @@ async function runCycleInner() {
     }
   } catch (error) {
     logger.warn("Worker: Email processing failed", { error: String(error) });
+  }
+
+  // Sync calendars that are due
+  try {
+    await syncAllDueConnections(db);
+  } catch (err) {
+    logger.error("Worker: calendar sync failed", { error: String(err) });
+  }
+
+  // Reprocess n8n dead letter queue (every 5 minutes)
+  {
+    const now = new Date();
+    const shouldRunDlq = !lastDlqReprocessRun ||
+      (now.getTime() - lastDlqReprocessRun.getTime()) >= DLQ_REPROCESS_INTERVAL_MS;
+
+    if (shouldRunDlq) {
+      try {
+        const processed = await reprocessDeadLetterQueue(db, 10);
+        lastDlqReprocessRun = now;
+        if (processed > 0) {
+          logger.info("Worker: DLQ reprocessed", { processed });
+        }
+      } catch (err) {
+        logger.error("Worker: DLQ reprocessing failed", { error: String(err) });
+      }
+    }
+  }
+
+  // Cleanup expired tokenization vault entries
+  try {
+    const { cleanupExpiredTokens } = await import("./services/tokenization-vault.service");
+    cleanupExpiredTokens();
+  } catch {
+    // Non-fatal — vault cleanup is best-effort
+  }
+
+  // Optional daily referral auto-payout (gated behind env flag)
+  if (process.env.REFERRAL_AUTO_PAYOUT_ENABLED === 'true') {
+    const now = new Date();
+    const shouldRun = !lastReferralPayoutRun ||
+      (now.getTime() - lastReferralPayoutRun.getTime()) >= REFERRAL_PAYOUT_INTERVAL_MS;
+
+    if (shouldRun) {
+      try {
+        logger.info("Worker: Running daily referral auto-payout check");
+        const result = await triggerPayoutProcessing();
+        lastReferralPayoutRun = now;
+        logger.info("Worker: Referral auto-payout complete", {
+          processed: result.processed,
+          total: result.total,
+        });
+      } catch (err) {
+        // Still update last run time to avoid retrying every minute on persistent errors
+        lastReferralPayoutRun = new Date();
+        logger.error("Worker: Referral auto-payout failed", { error: String(err) });
+        captureException(err);
+      }
+    }
   }
 
   // Fetch all enabled automations in ONE query
@@ -800,7 +1172,7 @@ async function runCycleInner() {
         await processWaitlistFill(db, auto, fromNumber, cfg(auto, "candidateWindowDays", 30));
       } else if (key === "cancellation_same_day") {
         await processCancellationRescue(db, auto, fromNumber, cfg(auto, "delayHours", 1));
-      } else if (key === "cancellation_rebooking_48h") {
+      } else if (key === "cancellation_rebooking_48h" || key === "cancellation_rescue_48h") {
         await processCancellationRescue(db, auto, fromNumber, cfg(auto, "delayHours", 48));
       } else if (key === "cancellation_rebooking_7d") {
         await processCancellationRescue(db, auto, fromNumber, cfg(auto, "delayDays", 7) * 24);
@@ -825,17 +1197,8 @@ async function runCycleInner() {
     }
   }
 
-  // Write heartbeat file so Docker/orchestrator can detect a healthy cycle
-  try {
-    writeFileSync(HEARTBEAT_FILE, JSON.stringify({
-      ts: new Date().toISOString(),
-      status: "ok",
-      lastSuccessAt: new Date().toISOString(),
-      pollIntervalMs: POLL_INTERVAL_MS,
-    }));
-  } catch {
-    /* non-fatal */
-  }
+  // Update heartbeat after full cycle completes
+  writeWorkerHeartbeat("ok");
 }
 
 async function runCycle() {
@@ -875,16 +1238,7 @@ async function main() {
       await runCycle();
     } catch (err) {
       logger.error("Worker cycle error", { error: String(err) });
-      try {
-        writeFileSync(HEARTBEAT_FILE, JSON.stringify({
-          ts: new Date().toISOString(),
-          status: "error",
-          error: String(err),
-          pollIntervalMs: POLL_INTERVAL_MS,
-        }));
-      } catch {
-        /* non-fatal */
-      }
+      writeWorkerHeartbeat("error", String(err));
       captureException(err);
     }
   }, POLL_INTERVAL_MS);
@@ -892,15 +1246,6 @@ async function main() {
 
 main().catch(err => {
   logger.error("Worker fatal", { error: String(err) });
-  try {
-    writeFileSync(HEARTBEAT_FILE, JSON.stringify({
-      ts: new Date().toISOString(),
-      status: "error",
-      error: String(err),
-      pollIntervalMs: POLL_INTERVAL_MS,
-    }));
-  } catch {
-    /* non-fatal */
-  }
+  writeWorkerHeartbeat("fatal", String(err));
   process.exit(1);
 });

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { HelpTooltip, HelpIcon } from "@/components/ui/HelpTooltip";
 import {
   Star,
   MessageSquare,
@@ -31,7 +32,7 @@ function RatingBar({ stars, count, total }: { stars: number; count: number; tota
       <span className="text-sm font-medium w-12">{stars} star</span>
       <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
         <div
-          className="h-full bg-yellow-400 rounded-full transition-all"
+          className="h-full bg-warning rounded-full transition-all"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -59,7 +60,7 @@ export default function ReviewManagement() {
   const [yelpLink, setYelpLink] = useState("");
 
   const { data: metrics, isLoading } = trpc.analytics.reviewManagementMetrics.useQuery(undefined, {
-    refetchInterval: 30000,
+    refetchInterval: 60_000,
   });
   const { data: settings } = trpc.tenant.settings.useQuery(undefined, { retry: false });
   const updateConfig = trpc.tenant.updateReviewManagementConfig.useMutation({
@@ -89,7 +90,10 @@ export default function ReviewManagement() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold">Review Management</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold">Review Management</h1>
+              <HelpIcon content={{ basic: "Get more online reviews from happy customers", intermediate: "Automated review requests sent after successful appointments", advanced: "Review request automation triggered by appointment status change to 'completed'. Configurable delay and review platform links" }} />
+            </div>
             <p className="text-muted-foreground mt-2">
               Automate review requests after appointments to build your online reputation
             </p>
@@ -107,11 +111,11 @@ export default function ReviewManagement() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                  <MessageSquare className="h-6 w-6 text-blue-600" />
+                <div className="p-2 bg-primary/10 rounded-lg mr-3">
+                  <MessageSquare className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Reviews Requested</p>
+                  <p className="text-sm font-medium text-muted-foreground"><HelpTooltip content="Total review request SMS messages sent to clients after appointments" variant="info">Reviews Requested</HelpTooltip></p>
                   <p className="text-2xl font-bold">{metrics?.reviewsRequested || 0}</p>
                 </div>
               </div>
@@ -121,11 +125,11 @@ export default function ReviewManagement() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg mr-3">
-                  <ThumbsUp className="h-6 w-6 text-green-600" />
+                <div className="p-2 bg-success/10 rounded-lg mr-3">
+                  <ThumbsUp className="h-6 w-6 text-success" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Reviews Received</p>
+                  <p className="text-sm font-medium text-muted-foreground"><HelpTooltip content="Number of actual reviews left by clients on Google, Yelp, or other platforms" variant="info">Reviews Received</HelpTooltip></p>
                   <p className="text-2xl font-bold">{metrics?.reviewsReceived || 0}</p>
                 </div>
               </div>
@@ -135,11 +139,11 @@ export default function ReviewManagement() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-yellow-100 rounded-lg mr-3">
-                  <Star className="h-6 w-6 text-yellow-600" />
+                <div className="p-2 bg-warning/10 rounded-lg mr-3">
+                  <Star className="h-6 w-6 text-warning" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Average Rating</p>
+                  <p className="text-sm font-medium text-muted-foreground"><HelpTooltip content="Average star rating across all reviews received through Rebooked requests" variant="info">Average Rating</HelpTooltip></p>
                   <p className="text-2xl font-bold">{metrics?.averageRating?.toFixed(1) || "0.0"}</p>
                 </div>
               </div>
@@ -149,11 +153,11 @@ export default function ReviewManagement() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-100 rounded-lg mr-3">
-                  <TrendingUp className="h-6 w-6 text-purple-600" />
+                <div className="p-2 bg-accent/10 rounded-lg mr-3">
+                  <TrendingUp className="h-6 w-6 text-accent" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Response Rate</p>
+                  <p className="text-sm font-medium text-muted-foreground"><HelpTooltip content="Percentage of review requests that resulted in an actual review being posted" variant="info">Response Rate</HelpTooltip></p>
                   <p className="text-2xl font-bold">{metrics?.responseRate || 0}%</p>
                 </div>
               </div>
@@ -195,7 +199,7 @@ export default function ReviewManagement() {
                             {Array.from({ length: 5 }).map((_, s) => (
                               <Star
                                 key={s}
-                                className={`h-4 w-4 ${s < item.rating ? "text-yellow-400 fill-yellow-400" : "text-muted"}`}
+                                className={`h-4 w-4 ${s < item.rating ? "text-warning fill-warning" : "text-muted"}`}
                               />
                             ))}
                           </div>
@@ -245,12 +249,13 @@ export default function ReviewManagement() {
                   <CardTitle className="flex items-center gap-2">
                     <Zap className="h-5 w-5" />
                     Automatic Review Requests
+                    <HelpIcon content={{ basic: "Choose when to ask for reviews and where to send people", intermediate: "Configure timing, platform (Google, Yelp, etc.), and minimum satisfaction threshold", advanced: "Settings stored in tenant.reviewManagementConfig. Delay, threshold, platform links, and follow-up cadence are all configurable per tenant" }} />
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label className="text-sm font-medium">Auto-Request Reviews</Label>
+                      <Label className="text-sm font-medium"><HelpTooltip content="Automatically sends a review request SMS to clients after each completed appointment" variant="info">Auto-Request Reviews</HelpTooltip></Label>
                       <p className="text-xs text-muted-foreground mt-1">
                         Automatically send review requests after completed appointments
                       </p>
@@ -262,7 +267,7 @@ export default function ReviewManagement() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">Delay After Appointment (hours)</Label>
+                    <Label className="text-sm font-medium"><HelpTooltip content="How long to wait after an appointment ends before sending the review request. 2-4 hours is ideal." variant="info">Delay After Appointment (hours)</HelpTooltip></Label>
                     <Input
                       type="number"
                       min={0}
@@ -276,7 +281,7 @@ export default function ReviewManagement() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">Minimum Rating Threshold</Label>
+                    <Label className="text-sm font-medium"><HelpTooltip content="Only redirect clients to your public review page if they rate you at or above this score. Low ratings get a private feedback form instead." variant="info">Minimum Rating Threshold</HelpTooltip></Label>
                     <Input
                       type="number"
                       min={1}
@@ -290,7 +295,7 @@ export default function ReviewManagement() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">Max Requests Per Client (monthly)</Label>
+                    <Label className="text-sm font-medium"><HelpTooltip content="Prevents sending too many review requests to the same client. Keeps your relationship healthy." variant="info">Max Requests Per Client (monthly)</HelpTooltip></Label>
                     <Input
                       type="number"
                       min={1}
@@ -316,7 +321,7 @@ export default function ReviewManagement() {
                 <CardContent className="space-y-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label className="text-sm font-medium">Negative Review Redirect</Label>
+                      <Label className="text-sm font-medium"><HelpTooltip content="Instead of sending low-rated clients to public review sites, directs them to a private feedback form so you can address issues first" variant="info">Negative Review Redirect</HelpTooltip></Label>
                       <p className="text-xs text-muted-foreground mt-1">
                         Redirect low ratings to private feedback instead of public review
                       </p>
@@ -329,7 +334,7 @@ export default function ReviewManagement() {
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label className="text-sm font-medium">Follow-up Reminders</Label>
+                      <Label className="text-sm font-medium"><HelpTooltip content="Sends a second gentle reminder to clients who didn't respond to the first review request" variant="info">Follow-up Reminders</HelpTooltip></Label>
                       <p className="text-xs text-muted-foreground mt-1">
                         Send a follow-up if no review is received
                       </p>
@@ -342,7 +347,7 @@ export default function ReviewManagement() {
 
                   {config.followUpEnabled && (
                     <div className="space-y-2">
-                      <Label className="text-sm font-medium">Follow-up Delay (days)</Label>
+                      <Label className="text-sm font-medium"><HelpTooltip content="Days to wait before sending the follow-up reminder. 3-5 days is recommended." variant="info">Follow-up Delay (days)</HelpTooltip></Label>
                       <Input
                         type="number"
                         min={1}
@@ -360,19 +365,19 @@ export default function ReviewManagement() {
                     <h4 className="text-sm font-medium mb-2">How it works</h4>
                     <ul className="text-xs text-muted-foreground space-y-1">
                       <li className="flex items-start gap-2">
-                        <span className="text-green-500 mt-0.5">1.</span>
+                        <span className="text-success mt-0.5">1.</span>
                         Client completes appointment
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-green-500 mt-0.5">2.</span>
+                        <span className="text-success mt-0.5">2.</span>
                         SMS sent asking to rate experience (1-5 stars)
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-green-500 mt-0.5">3.</span>
+                        <span className="text-success mt-0.5">3.</span>
                         High ratings directed to public review platform
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-yellow-500 mt-0.5">4.</span>
+                        <span className="text-warning mt-0.5">4.</span>
                         Low ratings redirected to private feedback form
                       </li>
                     </ul>
@@ -399,7 +404,7 @@ export default function ReviewManagement() {
                 <CardContent className="space-y-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label className="text-sm font-medium">Enable Google Reviews</Label>
+                      <Label className="text-sm font-medium"><HelpTooltip content="Send clients directly to your Google Business review page when they rate you highly" variant="info">Enable Google Reviews</HelpTooltip></Label>
                       <p className="text-xs text-muted-foreground mt-1">
                         Direct satisfied clients to leave a Google review
                       </p>
@@ -412,7 +417,7 @@ export default function ReviewManagement() {
 
                   {config.googleReviewEnabled && (
                     <div className="space-y-2">
-                      <Label className="text-sm font-medium">Google Review Link</Label>
+                      <Label className="text-sm font-medium"><HelpTooltip content="Your Google Business review URL. Find it in your Google Business Profile dashboard." variant="info">Google Review Link</HelpTooltip></Label>
                       <Input
                         placeholder="https://g.page/r/your-business/review"
                         value={googleLink}
@@ -440,7 +445,7 @@ export default function ReviewManagement() {
                 <CardContent className="space-y-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label className="text-sm font-medium">Enable Yelp Reviews</Label>
+                      <Label className="text-sm font-medium"><HelpTooltip content="Send clients directly to your Yelp page when they rate you highly" variant="info">Enable Yelp Reviews</HelpTooltip></Label>
                       <p className="text-xs text-muted-foreground mt-1">
                         Direct satisfied clients to leave a Yelp review
                       </p>
@@ -453,7 +458,7 @@ export default function ReviewManagement() {
 
                   {config.yelpEnabled && (
                     <div className="space-y-2">
-                      <Label className="text-sm font-medium">Yelp Business Link</Label>
+                      <Label className="text-sm font-medium"><HelpTooltip content="Your Yelp business page URL. Find it in your Yelp for Business account." variant="info">Yelp Business Link</HelpTooltip></Label>
                       <Input
                         placeholder="https://www.yelp.com/biz/your-business"
                         value={yelpLink}
@@ -480,7 +485,7 @@ export default function ReviewManagement() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="rounded-lg border p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <Clock className="h-4 w-4 text-blue-500" />
+                      <Clock className="h-4 w-4 text-primary" />
                       <h4 className="text-sm font-medium">Timing Matters</h4>
                     </div>
                     <p className="text-xs text-muted-foreground">
@@ -489,7 +494,7 @@ export default function ReviewManagement() {
                   </div>
                   <div className="rounded-lg border p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <ThumbsUp className="h-4 w-4 text-green-500" />
+                      <ThumbsUp className="h-4 w-4 text-success" />
                       <h4 className="text-sm font-medium">Filter Feedback</h4>
                     </div>
                     <p className="text-xs text-muted-foreground">
@@ -498,7 +503,7 @@ export default function ReviewManagement() {
                   </div>
                   <div className="rounded-lg border p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <TrendingUp className="h-4 w-4 text-purple-500" />
+                      <TrendingUp className="h-4 w-4 text-accent" />
                       <h4 className="text-sm font-medium">Stay Consistent</h4>
                     </div>
                     <p className="text-xs text-muted-foreground">

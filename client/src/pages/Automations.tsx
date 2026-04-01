@@ -1,4 +1,7 @@
-import DashboardLayout from "@/components/DashboardLayout";
+import DashboardLayout from "@/components/layout/DashboardLayout";
+import { useTheme } from "@/contexts/ThemeContext";
+import { HelpIcon } from "@/components/ui/HelpTooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,7 +15,7 @@ import { trpc } from "@/lib/trpc";
 import {
   Bot, Zap, Settings2, ChevronDown, ChevronUp, Clock, MessageSquare,
   CalendarCheck, UserX, XCircle, RotateCcw, Bell, Star, AlertTriangle,
-  ThumbsUp, Gift, RefreshCw, Info
+  ThumbsUp, Gift, RefreshCw, Info, PhoneMissed
 } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -24,11 +27,10 @@ import {
   useProgressiveDisclosureContext,
   trackFeatureUsage
 } from "@/hooks/useDynamicAutomation";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 
 // Dynamic automation catalogue based on user skill and business type
-const getDynamicAutomationCatalogue = (userSkill?: any, businessType?: string) => {
-  const isDarkMode = document.documentElement.classList.contains('dark');
+const getDynamicAutomationCatalogue = (userSkill?: any, businessType?: string, isDarkMode?: boolean) => {
   
   const baseTemplates = [
     {
@@ -42,7 +44,7 @@ const getDynamicAutomationCatalogue = (userSkill?: any, businessType?: string) =
       setupComplexity: "low" as const,
     },
     {
-      key: "no_show_follow_up", 
+      key: "noshow_recovery",
       name: "No-Show Follow-Up",
       description: "Automatically follow up with no-shows",
       category: "no_show" as const,
@@ -56,7 +58,7 @@ const getDynamicAutomationCatalogue = (userSkill?: any, businessType?: string) =
   // All automation templates available at every skill level
   baseTemplates.push(
     {
-      key: "cancellation_rebooking",
+      key: "cancellation_rescue_48h",
       name: "Cancellation Rebooking",
       description: "Offer rebooking when appointments are cancelled",
       category: "cancellation" as const,
@@ -66,7 +68,7 @@ const getDynamicAutomationCatalogue = (userSkill?: any, businessType?: string) =
       setupComplexity: "medium" as const,
     },
     {
-      key: "post_appointment_feedback",
+      key: "review_request",
       name: "Post-Appointment Feedback",
       description: "Request feedback after appointments",
       category: "follow_up" as const,
@@ -130,18 +132,17 @@ const getDynamicCategories = (catalogue: any[]) => {
 };
 
 // Dynamic category config based on theme
-const getDynamicCategoryConfig = () => {
-  const isDarkMode = document.documentElement.classList.contains('dark');
+const getDynamicCategoryConfig = (isDarkMode: boolean) => {
   
   return {
-    appointment: isDarkMode ? "bg-blue-500/20 text-blue-300 border-blue-500/30" : "bg-blue-500/15 text-blue-400 border-blue-500/30",
-    no_show: isDarkMode ? "bg-red-500/20 text-red-300 border-red-500/30" : "bg-red-500/15 text-red-400 border-red-500/30", 
-    cancellation: isDarkMode ? "bg-orange-500/20 text-orange-300 border-orange-500/30" : "bg-orange-500/15 text-orange-400 border-orange-500/30",
-    follow_up: isDarkMode ? "bg-green-500/20 text-green-300 border-green-500/30" : "bg-green-500/15 text-green-400 border-green-500/30",
-    reactivation: isDarkMode ? "bg-purple-500/20 text-purple-300 border-purple-500/30" : "bg-purple-500/15 text-purple-400 border-purple-500/30",
-    welcome: isDarkMode ? "bg-yellow-500/20 text-yellow-300 border-yellow-500/30" : "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
-    loyalty: isDarkMode ? "bg-pink-500/20 text-pink-300 border-pink-500/30" : "bg-pink-500/15 text-pink-400 border-pink-500/30",
-    scale: isDarkMode ? "bg-purple-500/20 text-purple-300 border-purple-500/30" : "bg-purple-500/15 text-purple-400 border-purple-500/30",
+    appointment: "bg-primary/15 text-primary border-primary/30",
+    no_show: "bg-destructive/15 text-destructive border-destructive/30",
+    cancellation: "bg-warning/15 text-warning border-warning/30",
+    follow_up: "bg-success/15 text-success border-success/30",
+    reactivation: "bg-accent/15 text-accent border-accent/30",
+    welcome: "bg-warning/15 text-warning border-warning/30",
+    loyalty: "bg-chart-2/15 text-chart-2 border-chart-2/30",
+    scale: "bg-accent/15 text-accent border-accent/30",
   };
 };
 
@@ -155,9 +156,10 @@ type AutomationKey =
   | "post_appointment_feedback" | "post_appointment_upsell" | "next_visit_prompt"
   | "win_back_30d" | "win_back_90d" | "vip_winback_45d" | "vip_winback_90d"
   | "new_lead_welcome" | "lead_follow_up_3d" | "lead_follow_up_7d" | "qualified_followup_1d" | "qualified_followup_3d" | "inbound_response_sla" | "delivery_failure_retry" | "waitlist_fill"
+  | "missed_call_textback" | "missed_call_followup" | "missed_call_final_offer"
   | "birthday_promo" | "loyalty_milestone";
 
-type AutomationCategory = "appointment" | "no_show" | "cancellation" | "follow_up" | "reactivation" | "welcome" | "loyalty";
+type AutomationCategory = "appointment" | "no_show" | "cancellation" | "follow_up" | "reactivation" | "welcome" | "loyalty" | "lead_capture";
 
 interface ConfigField {
   key: string;
@@ -239,7 +241,7 @@ const CATALOGUE: AutomationTemplate[] = [
     recommended: true,
   },
   {
-    key: "no_show_follow_up",
+    key: "noshow_recovery",
     name: "No-Show Check-In",
     category: "no_show",
     icon: UserX,
@@ -279,7 +281,7 @@ const CATALOGUE: AutomationTemplate[] = [
     recommended: true,
   },
   {
-    key: "cancellation_rebooking",
+    key: "cancellation_rescue_48h",
     name: "Post-Cancellation Rebook",
     category: "cancellation",
     icon: RotateCcw,
@@ -288,19 +290,6 @@ const CATALOGUE: AutomationTemplate[] = [
     configFields: [
       { key: "delayHours", label: "Send after cancellation", type: "number", unit: "hours", placeholder: "48", defaultValue: 48 },
       { key: "message", label: "Message", type: "textarea", defaultValue: "Hi {{name}}, we noticed you had to cancel recently. We'd love to have you back — reply YES to see availability." },
-    ],
-    planRequired: "growth",
-  },
-  {
-    key: "cancellation_rebooking_48h",
-    name: "Cancellation Rescue (48h)",
-    category: "cancellation",
-    icon: RotateCcw,
-    description: "Second rebooking attempt 48 hours after a cancellation.",
-    defaultMessage: "We still have a few spots open this week if you'd like to rebook. Reply YES and we'll send options.",
-    configFields: [
-      { key: "delayHours", label: "Send after cancellation", type: "number", unit: "hours", placeholder: "48", defaultValue: 48 },
-      { key: "message", label: "Message", type: "textarea", defaultValue: "We still have a few spots open this week if you'd like to rebook. Reply YES and we'll send options." },
     ],
     planRequired: "growth",
   },
@@ -318,7 +307,7 @@ const CATALOGUE: AutomationTemplate[] = [
     planRequired: "growth",
   },
   {
-    key: "waitlist_fill",
+    key: "cancellation_flurry",
     name: "Waitlist Fill",
     category: "cancellation",
     icon: Zap,
@@ -332,7 +321,7 @@ const CATALOGUE: AutomationTemplate[] = [
     recommended: true,
   },
   {
-    key: "post_appointment_feedback",
+    key: "review_request",
     name: "Post-Visit Feedback",
     category: "follow_up",
     icon: ThumbsUp,
@@ -430,7 +419,7 @@ const CATALOGUE: AutomationTemplate[] = [
     recommended: true,
   },
   {
-    key: "new_lead_welcome",
+    key: "welcome_new_lead",
     name: "New Lead Welcome",
     category: "welcome",
     icon: MessageSquare,
@@ -495,7 +484,7 @@ const CATALOGUE: AutomationTemplate[] = [
     planRequired: "starter",
   },
   {
-    key: "inbound_response_sla",
+    key: "inbound_auto_reply",
     name: "Inbound Auto-Reply",
     category: "follow_up",
     icon: Bell,
@@ -548,18 +537,60 @@ const CATALOGUE: AutomationTemplate[] = [
     ],
     planRequired: "scale",
   },
+  // ─── Missed Call Booking Offers ─────────────────────────────────────────────
+  {
+    key: "missed_call_textback",
+    name: "Missed Call Text-Back",
+    category: "lead_capture",
+    icon: PhoneMissed,
+    description: "Instantly texts anyone whose call you miss — before they call your competitor. Includes a direct booking link.",
+    defaultMessage: "Hi {{name}}, sorry I missed your call! I'd love to help you get booked in — here's my calendar so you can grab a time that works: {{bookingLink}}\nReply STOP to unsubscribe",
+    configFields: [
+      { key: "message", label: "Message", type: "textarea", defaultValue: "Hi {{name}}, sorry I missed your call! I'd love to help you get booked in — here's my calendar so you can grab a time that works: {{bookingLink}}\nReply STOP to unsubscribe" },
+    ],
+    planRequired: "starter",
+    recommended: true,
+  },
+  {
+    key: "missed_call_followup",
+    name: "Missed Call Follow-Up",
+    category: "lead_capture",
+    icon: PhoneMissed,
+    description: "Follows up 4 hours after a missed call if they haven't booked yet — a gentle nudge with urgency.",
+    defaultMessage: "Hi {{name}}, I wanted to make sure you saw my earlier text! I have a few spots opening up soon and I'd hate for you to miss out. Book here: {{bookingLink}}\nReply STOP to unsubscribe",
+    configFields: [
+      { key: "delayHours", label: "Send after missed call", type: "number", unit: "hours", placeholder: "4", defaultValue: 4 },
+      { key: "message", label: "Message", type: "textarea", defaultValue: "Hi {{name}}, I wanted to make sure you saw my earlier text! I have a few spots opening up soon and I'd hate for you to miss out. Book here: {{bookingLink}}\nReply STOP to unsubscribe" },
+    ],
+    planRequired: "starter",
+    recommended: true,
+  },
+  {
+    key: "missed_call_final_offer",
+    name: "Missed Call Final Offer",
+    category: "lead_capture",
+    icon: PhoneMissed,
+    description: "A final booking nudge 24 hours after a missed call — one last chance before the lead goes cold.",
+    defaultMessage: "Hi {{name}}, I still have your info from when you called yesterday. I'd really love to help — my calendar is wide open this week: {{bookingLink}}\nNo pressure at all, just didn't want you to slip through the cracks!\nReply STOP to unsubscribe",
+    configFields: [
+      { key: "delayHours", label: "Send after missed call", type: "number", unit: "hours", placeholder: "24", defaultValue: 24 },
+      { key: "message", label: "Message", type: "textarea", defaultValue: "Hi {{name}}, I still have your info from when you called yesterday. I'd really love to help — my calendar is wide open this week: {{bookingLink}}\nNo pressure at all, just didn't want you to slip through the cracks!\nReply STOP to unsubscribe" },
+    ],
+    planRequired: "starter",
+  },
 ];
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const CATEGORY_CONFIG: Record<AutomationCategory, { label: string; bg: string }> = {
-  appointment: { label: "Appointment", bg: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
-  no_show: { label: "No-Show", bg: "bg-red-500/15 text-red-300 border-red-500/30" },
-  cancellation: { label: "Cancellation", bg: "bg-orange-500/15 text-orange-300 border-orange-500/30" },
-  follow_up: { label: "Follow-Up", bg: "bg-blue-500/15 text-blue-300 border-blue-500/30" },
-  reactivation: { label: "Re-Engagement", bg: "bg-purple-500/15 text-purple-300 border-purple-500/30" },
-  welcome: { label: "Welcome", bg: "bg-yellow-500/15 text-yellow-300 border-yellow-500/30" },
-  loyalty: { label: "Loyalty", bg: "bg-pink-500/15 text-pink-300 border-pink-500/30" },
+  appointment: { label: "Appointment", bg: "bg-primary/15 text-primary border-primary/30" },
+  no_show: { label: "No-Show", bg: "bg-destructive/15 text-destructive border-destructive/30" },
+  cancellation: { label: "Cancellation", bg: "bg-warning/15 text-warning border-warning/30" },
+  follow_up: { label: "Follow-Up", bg: "bg-info/15 text-info border-info/30" },
+  reactivation: { label: "Re-Engagement", bg: "bg-accent/15 text-accent border-accent/30" },
+  welcome: { label: "Welcome", bg: "bg-warning/15 text-warning border-warning/30" },
+  loyalty: { label: "Loyalty", bg: "bg-chart-2/15 text-chart-2 border-chart-2/30" },
+  lead_capture: { label: "Missed Calls", bg: "bg-primary/15 text-primary border-primary/30" },
 };
 
 // ─── One-Click Safe Keys ──────────────────────────────────────────────────────
@@ -576,6 +607,7 @@ const ONE_CLICK_SAFE_KEYS = new Set<AutomationKey>([
   "inbound_response_sla", "delivery_failure_retry",
   "next_visit_prompt",
   "win_back_30d", "vip_winback_45d", "vip_winback_90d",
+  "missed_call_textback", "missed_call_followup", "missed_call_final_offer",
 ]);
 
 function getDefaultConfig(template: AutomationTemplate): Record<string, string | number> {
@@ -590,9 +622,9 @@ function getTimingFields(template: AutomationTemplate): ConfigField[] {
 }
 
 const PLAN_BADGE: Record<string, string> = {
-  starter: "bg-slate-500/20 text-slate-300 border-slate-500/30",
-  growth: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  scale: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+  starter: "bg-muted text-muted-foreground border-muted-foreground/30",
+  growth: "bg-primary/20 text-primary border-primary/30",
+  scale: "bg-accent/20 text-accent border-accent/30",
 };
 
 const CATEGORIES: Array<{ key: AutomationCategory | "all"; label: string }> = [
@@ -604,6 +636,7 @@ const CATEGORIES: Array<{ key: AutomationCategory | "all"; label: string }> = [
   { key: "reactivation", label: "Re-Engagement" },
   { key: "welcome", label: "Welcome" },
   { key: "loyalty", label: "Loyalty" },
+  { key: "lead_capture", label: "Missed Calls" },
 ];
 
 // ─── Configure Dialog ─────────────────────────────────────────────────────────
@@ -646,9 +679,12 @@ function ConfigureDialog({
         <div className="space-y-4 py-2">
           {template.configFields.map((field) => (
             <div key={field.key} className="space-y-1.5">
-              <Label className="text-xs font-medium">
+              <Label className="text-xs font-medium flex items-center gap-1">
                 {field.label}
                 {field.unit && <span className="text-muted-foreground ml-1">({field.unit})</span>}
+                {field.type === "number" && (
+                  <HelpIcon content={{ basic: "How long Rebooked waits before sending the message", intermediate: "Delay after trigger event. Options: immediate, minutes, hours, or next morning", advanced: "Delay stored as minutes in automation config. Evaluated against quiet hours and TCPA compliance window" }} />
+                )}
               </Label>
               {field.type === "textarea" ? (
                 <div>
@@ -752,15 +788,21 @@ function AutomationRow({
     // Already configured — always show settings gear
     if (!isNotYetConfigured) {
       return (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-          onClick={onConfigure}
-          title="Configure this automation"
-        >
-          <Settings2 className="w-3.5 h-3.5" />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                onClick={onConfigure}
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent><p>Configure this automation — edit timing, message, and settings</p></TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       );
     }
 
@@ -817,10 +859,10 @@ function AutomationRow({
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-medium text-sm">{template.name}</span>
               {template.recommended && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-yellow-500/10 text-yellow-400 border-yellow-500/30">★ Recommended</Badge>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-warning/10 text-warning border-warning/30">★ Recommended</Badge>
               )}
               {isSafeForOneClick && isNotYetConfigured && skillLevel === "beginner" && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-500/10 text-green-400 border-green-500/30">One-click</Badge>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-success/10 text-success border-success/30">One-click</Badge>
               )}
               <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${cat.bg}`}>{cat.label}</Badge>
               <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${PLAN_BADGE[template.planRequired]}`}>{template.planRequired}</Badge>
@@ -840,6 +882,7 @@ function AutomationRow({
             <div className="flex items-center gap-2 pl-2 border-l border-border">
               <span className="text-xs text-muted-foreground">{isToggling ? "..." : isEnabled ? "On" : "Off"}</span>
               <Switch checked={isEnabled} onCheckedChange={onToggle} disabled={isToggling} />
+              <HelpIcon content={{ basic: "Flip this switch to turn an automation on or off", intermediate: "Enabled automations run automatically. Disabled ones are paused but keep their configuration", advanced: "Sets enabled=true/false in automations table. Runner skips disabled rules during evaluation cycle" }} side="left" />
             </div>
           </div>
         </div>
@@ -853,7 +896,10 @@ function AutomationRow({
                 <div className="flex flex-wrap gap-3">
                   {timingFields.map((field) => (
                     <div key={field.key} className="flex items-center gap-2">
-                      <Label className="text-xs text-muted-foreground whitespace-nowrap">{field.label}</Label>
+                      <Label className="text-xs text-muted-foreground whitespace-nowrap flex items-center gap-1">
+                        {field.label}
+                        <HelpIcon content={{ basic: "How long Rebooked waits before sending the message", intermediate: "Delay after trigger event. Options: immediate, minutes, hours, or next morning", advanced: "Delay stored as minutes in automation config. Evaluated against quiet hours and TCPA compliance window" }} />
+                      </Label>
                       <Input
                         type="number"
                         className="text-xs w-20 h-7"
@@ -866,7 +912,7 @@ function AutomationRow({
                 </div>
               )}
               <div className="bg-muted/30 rounded p-2">
-                <p className="text-[10px] text-muted-foreground font-medium mb-1">Message preview</p>
+                <p className="text-[10px] text-muted-foreground font-medium mb-1 flex items-center gap-1">Message preview <HelpIcon content={{ basic: "This is what the text message will say. Variables like {name} get replaced with real info", intermediate: "Template with merge fields: {name}, {business}, {date}, {time}. AI rewrite available", advanced: "Templates stored separately, linked by template_id. Merge fields resolved at send time from lead + tenant data" }} /></p>
                 <p className="text-xs text-foreground/70 leading-relaxed">{template.defaultMessage.replace(/\{\{name\}\}/g, "Jane").replace(/\{\{business\}\}/g, "Your Business").replace(/\{\{time\}\}/g, "2:00 PM").replace(/\{\{date\}\}/g, "Mon Mar 24").replace(/\{\{phone\}\}/g, "+1 555 0000000")}</p>
               </div>
               <div className="flex gap-2">
@@ -884,7 +930,7 @@ function AutomationRow({
         {expanded && (
           <div className="px-4 pb-4 border-t border-border/50 pt-3">
             <div className="bg-muted/30 rounded-lg p-3">
-              <p className="text-xs font-medium text-muted-foreground mb-1.5">Default message preview</p>
+              <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">Default message preview <HelpIcon content={{ basic: "This is what the text message will say. Variables like {name} get replaced with real info", intermediate: "Template with merge fields: {name}, {business}, {date}, {time}. AI rewrite available", advanced: "Templates stored separately, linked by template_id. Merge fields resolved at send time from lead + tenant data" }} /></p>
               <p className="text-xs text-foreground/80 leading-relaxed">{template.defaultMessage}</p>
             </div>
             {saved?.config && Object.keys(saved.config).filter(k => k !== "message").length > 0 && (
@@ -907,16 +953,23 @@ function AutomationRow({
                   placeholder="Phone (e.g. +15551112222)"
                   className="text-xs"
                 />
-                <Button
-                  size="sm"
-                  disabled={!testPhone || !saved?.id || testMutation.isPending}
-                  onClick={() => {
-                    if (!saved?.id || !testPhone) return;
-                    testMutation.mutate({ automationId: saved.id, testPhone: testPhone.trim() });
-                  }}
-                >
-                  {testMutation.isPending ? "Sending..." : "Send Test"}
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        disabled={!testPhone || !saved?.id || testMutation.isPending}
+                        onClick={() => {
+                          if (!saved?.id || !testPhone) return;
+                          testMutation.mutate({ automationId: saved.id, testPhone: testPhone.trim() });
+                        }}
+                      >
+                        {testMutation.isPending ? "Sending..." : "Send Test"}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Send a real SMS to the number above so you can preview how the message looks</p></TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </div>
           </div>
@@ -931,18 +984,19 @@ function AutomationRow({
 export default function Automations() {
   const { context, trackFeatureUsage } = useProgressiveDisclosureContext();
   const { user } = useAuth();
+  const { isDark: isDarkMode } = useTheme();
   const { data: tenant } = trpc.tenant.get.useQuery();
-  
+
   // Dynamic hooks for user-adaptive automation system
   const dynamicTemplates = useDynamicAutomationTemplates();
   const dynamicRecommendations = useDynamicAutomationRecommendations();
   const getAutomationConfig = useDynamicAutomationConfig();
   const predictSuccess = useDynamicAutomationSuccessPrediction();
-  
+
   // Get dynamic data
-  const catalogue = getDynamicAutomationCatalogue(context.userSkill, tenant?.industry);
+  const catalogue = getDynamicAutomationCatalogue(context.userSkill, tenant?.industry, isDarkMode);
   const categories = getDynamicCategories(catalogue);
-  const categoryConfig = getDynamicCategoryConfig();
+  const categoryConfig = getDynamicCategoryConfig(isDarkMode);
   
   const utils = trpc.useUtils();
   const [activeCategory, setActiveCategory] = useState<AutomationCategory | "all">("all");
@@ -1049,7 +1103,10 @@ export default function Automations() {
       <div className="p-6 space-y-5 max-w-4xl mx-auto">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Automations</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">Automations</h1>
+              <HelpIcon content={{ basic: "These are automatic messages that Rebooked sends for you — no action needed!", intermediate: "Pre-built and custom automation rules. Toggle on/off, customize timing and message content", advanced: "Automation rules evaluated by automation-runner service on cron schedule. Each rule has trigger type, conditions, delay, and template reference" }} />
+            </div>
             <p className="text-muted-foreground text-sm mt-1">
               {enabledCount} active · {configuredCount} configured · {CATALOGUE.length} total
             </p>
@@ -1057,10 +1114,13 @@ export default function Automations() {
           <div className="flex items-center gap-2">
             {/* Beginner: "Enable All Recommended" batch button */}
             {skillLevel === "beginner" && recommendedOneClick.length > 0 && (
-              <Button size="sm" onClick={handleEnableAllRecommended} disabled={batchEnabling}>
-                <Zap className="w-3.5 h-3.5 mr-1.5" />
-                {batchEnabling ? "Enabling..." : `Enable ${recommendedOneClick.length} recommended`}
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button size="sm" onClick={handleEnableAllRecommended} disabled={batchEnabling}>
+                  <Zap className="w-3.5 h-3.5 mr-1.5" />
+                  {batchEnabling ? "Enabling..." : `Enable ${recommendedOneClick.length} recommended`}
+                </Button>
+                <HelpIcon content="Activates all pre-configured automations suggested for your business type with one click" />
+              </div>
             )}
             <Button size="sm" variant={skillLevel === "beginner" ? "outline" : "default"} onClick={() => setShowTemplatePicker(true)}>Create automation</Button>
             <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
@@ -1116,7 +1176,11 @@ export default function Automations() {
           </div>
         )}
 
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+            Categories
+            <HelpIcon content={{ basic: "Different types of automatic messages for different situations", intermediate: "Categories: appointment reminders, no-show recovery, cancellation rescue, welcome, follow-up, and re-engagement", advanced: "Trigger types map to event sources: calendar events, lead status changes, time-based cron, and manual campaigns" }} />
+          </span>
           {CATEGORIES.map(({ key, label }) => {
             const count = key === "all" ? CATALOGUE.length : CATALOGUE.filter((t) => t.category === key).length;
             return (

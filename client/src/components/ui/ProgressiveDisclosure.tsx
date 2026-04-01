@@ -722,9 +722,9 @@ export function ProgressiveDisclosure({
 
   if (isFeatureHidden && !isExpanded) {
     return fallback || (
-      <div className="p-4 border border-dashed border-gray-300 rounded-lg text-center">
-        <EyeOff className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-        <p className="text-sm text-gray-500 mb-2">Advanced feature</p>
+      <div className="p-4 border border-dashed border-border rounded-lg text-center">
+        <EyeOff className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground mb-2">Advanced feature</p>
         <Button variant="outline" size="sm" onClick={handleToggle}>
           <Eye className="h-4 w-4 mr-2" />
           Reveal Feature
@@ -767,7 +767,7 @@ export function AdaptiveUIController() {
     return (
       <Card className="w-full max-w-md">
         <CardContent className="p-4">
-          <div className="text-center text-gray-500">
+          <div className="text-center text-muted-foreground">
             Loading user profile...
           </div>
         </CardContent>
@@ -781,7 +781,7 @@ export function AdaptiveUIController() {
     <Card className="w-full max-w-md">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Brain className="h-5 w-5 text-blue-500" />
+          <Brain className="h-5 w-5 text-info" />
           Adaptive UI Controller
         </CardTitle>
       </CardHeader>
@@ -808,9 +808,9 @@ export function AdaptiveUIController() {
         <div>
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-medium">UI Complexity</span>
-            <span className="text-xs text-gray-500">{complexityLevel.displayName}</span>
+            <span className="text-xs text-muted-foreground">{complexityLevel.displayName}</span>
           </div>
-          <p className="text-xs text-gray-600 mb-3">{complexityLevel.description}</p>
+          <p className="text-xs text-muted-foreground mb-3">{complexityLevel.description}</p>
           
           <div className="grid grid-cols-2 gap-2">
             {(Object.keys(COMPLEXITY_LEVELS) as UIComplexity[]).map(level => (
@@ -853,10 +853,10 @@ export function AdaptiveUIController() {
 
         {/* Analysis Status */}
         <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-500">Auto-adaptation</span>
+          <span className="text-xs text-muted-foreground">Auto-adaptation</span>
           <div className="flex items-center gap-2">
             {isAnalyzing && (
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+              <div className="w-2 h-2 bg-info rounded-full animate-pulse" />
             )}
             <Button variant="outline" size="sm" onClick={analyzeUserBehavior} disabled={isAnalyzing}>
               <RotateCcw className={`h-3 w-3 mr-1 ${isAnalyzing ? 'animate-spin' : ''}`} />
@@ -884,14 +884,14 @@ export function AdaptiveHintsDisplay() {
           <Card key={hint.id} className="p-3 shadow-lg">
             <div className="flex items-start gap-2">
               <div className="flex-shrink-0">
-                {hint.type === 'achievement' && <Award className="h-4 w-4 text-yellow-500" />}
-                {hint.type === 'tip' && <Lightbulb className="h-4 w-4 text-blue-500" />}
-                {hint.type === 'suggestion' && <Target className="h-4 w-4 text-green-500" />}
-                {hint.type === 'warning' && <AlertCircle className="h-4 w-4 text-orange-500" />}
+                {hint.type === 'achievement' && <Award className="h-4 w-4 text-warning" />}
+                {hint.type === 'tip' && <Lightbulb className="h-4 w-4 text-info" />}
+                {hint.type === 'suggestion' && <Target className="h-4 w-4 text-success" />}
+                {hint.type === 'warning' && <AlertCircle className="h-4 w-4 text-warning" />}
               </div>
               <div className="flex-1 min-w-0">
                 <h4 className="text-sm font-medium">{hint.title}</h4>
-                <p className="text-xs text-gray-600 mt-1">{hint.content}</p>
+                <p className="text-xs text-muted-foreground mt-1">{hint.content}</p>
                 {hint.action && (
                   <Button variant="outline" size="sm" className="mt-2 text-xs" onClick={hint.action.handler}>
                     {hint.action.label}
@@ -927,7 +927,7 @@ export function FeatureDiscovery() {
     <Card className="w-full max-w-md">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <GraduationCap className="h-5 w-5 text-purple-500" />
+          <GraduationCap className="h-5 w-5 text-accent-foreground" />
           Discover More Features
         </CardTitle>
       </CardHeader>
@@ -937,7 +937,7 @@ export function FeatureDiscovery() {
             <div key={feature.id} className="flex items-center justify-between p-3 border rounded-lg">
               <div>
                 <h4 className="font-medium text-sm">{feature.name}</h4>
-                <p className="text-xs text-gray-500">{feature.description}</p>
+                <p className="text-xs text-muted-foreground">{feature.description}</p>
               </div>
               <Button variant="outline" size="sm" onClick={() => toggleFeature(feature.id, true)}>
                 <Eye className="h-4 w-4 mr-2" />

@@ -22,10 +22,12 @@ export function useWebSocket({ tenantId, token, enabled = true }: UseWebSocketOp
     if (!tenantId || !token || !enabled) return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
+    // Send token via Sec-WebSocket-Protocol header, not in the URL.
+    // URL query params are logged by proxies and appear in browser history/access logs.
+    const url = `${protocol}//${window.location.host}/ws`;
 
     try {
-      const ws = new WebSocket(url);
+      const ws = new WebSocket(url, [token]);
       wsRef.current = ws;
 
       ws.onopen = () => {

@@ -2,6 +2,22 @@ import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Component, ErrorInfo, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { reportClientError, reportErrorBoundaryShown, initGlobalErrorHandlers } from "@/lib/reportClientError";
+import { initDeadClickDetector } from "@/lib/deadClickDetector";
+import { initVisualAnomalyDetector } from "@/lib/visualAnomalyDetector";
+import { initPerformanceMonitor } from "@/lib/performanceMonitor";
+import { initJourneyTracker } from "@/lib/journeyTracker";
+import { initAdoptionTracker } from "@/lib/adoptionTracker";
+import { initThemeIntegrityChecker } from "@/lib/themeIntegrityChecker";
+
+// Ensure global error handlers and sentinel detectors are registered once
+initGlobalErrorHandlers();
+initDeadClickDetector();
+initVisualAnomalyDetector();
+initPerformanceMonitor();
+initJourneyTracker();
+initAdoptionTracker();
+initThemeIntegrityChecker();
 
 interface Props {
   children: ReactNode;
@@ -27,19 +43,31 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    this.setState(prevState => ({ 
-      error, 
-      errorInfo, 
-      retryCount: prevState.retryCount + 1 
+    const nextRetry = this.state.retryCount + 1;
+    this.setState(prevState => ({
+      error,
+      errorInfo,
+      retryCount: prevState.retryCount + 1
     }));
 
     // Log error to monitoring service (redacted in production)
     if (process.env.NODE_ENV === 'development') {
       console.error('Error caught by boundary:', error, errorInfo);
     } else {
-      // In production, log only essential error info without full component stack
       console.error('Error caught by boundary:', error.message, error.name);
     }
+
+    // Report the raw error to sentinel
+    reportClientError(error, errorInfo.componentStack);
+
+    // Report that user is seeing the "Something went wrong" error page
+    reportErrorBoundaryShown({
+      error,
+      retryCount: nextRetry,
+      maxRetries: 3,
+      page: window.location.pathname,
+      componentStack: errorInfo.componentStack,
+    });
 
     // Call custom error handler if provided
     if (this.props.onError) {
@@ -62,9 +90,9 @@ class ErrorBoundary extends Component<Props, State> {
       
       return this.props.fallback || (
         <div className="min-h-screen flex items-center justify-center bg-background p-4">
-          <Card className="w-full max-w-md border-red-200">
+          <Card className="w-full max-w-md border-destructive/30">
             <CardHeader className="text-center">
-              <CardTitle className="flex items-center gap-2 text-red-600">
+              <CardTitle className="flex items-center gap-2 text-destructive">
                 <AlertTriangle className="h-5 w-5" />
                 Something went wrong
               </CardTitle>

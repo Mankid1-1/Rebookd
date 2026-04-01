@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import { useTheme } from "@/contexts/ThemeContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,6 +8,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { trpc } from "@/lib/trpc";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { HelpTooltip } from "@/components/ui/HelpTooltip";
 import { Building2, Search, Shield, MoreHorizontal, Eye, Ban, TrendingUp, DollarSign, Users, Activity, RefreshCw } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
@@ -14,13 +18,12 @@ import { useLocation } from "wouter";
 import { toast } from "sonner";
 
 // Dynamic plan styles based on user theme
-const getDynamicPlanStyles = () => {
-  const isDarkMode = document.documentElement.classList.contains('dark');
+const getDynamicPlanStyles = (isDarkMode: boolean) => {
   return {
     free: isDarkMode ? "bg-slate-500/25 text-slate-300 border-slate-500/40" : "bg-slate-500/15 text-slate-400 border-slate-500/30",
-    rebooked: isDarkMode ? "bg-green-500/25 text-green-300 border-green-500/40" : "bg-green-500/15 text-green-400 border-green-500/30",
-    flex: isDarkMode ? "bg-blue-500/25 text-blue-300 border-blue-500/40" : "bg-blue-500/15 text-blue-400 border-blue-500/30",
-    trialing: isDarkMode ? "bg-yellow-500/25 text-yellow-300 border-yellow-500/40" : "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+    rebooked: isDarkMode ? "bg-success/25 text-success border-success/40" : "bg-success/15 text-success border-success/30",
+    flex: isDarkMode ? "bg-info/25 text-info border-info/40" : "bg-info/15 text-info border-info/30",
+    trialing: isDarkMode ? "bg-warning/25 text-warning border-warning/40" : "bg-warning/15 text-warning border-warning/30",
   };
 };
 
@@ -49,20 +52,32 @@ const buildPlanLookup = (plans?: any[]): Record<number, string> => {
 export default function AdminTenants() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const { isDark: isDarkMode } = useTheme();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [planFilter, setPlanFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
   // Dynamic configurations
-  const planStyles = getDynamicPlanStyles();
+  const planStyles = getDynamicPlanStyles(isDarkMode);
 
   useEffect(() => {
     if (user && user.role !== "admin") setLocation("/dashboard");
   }, [user, setLocation]);
 
+  const [planDialog, setPlanDialog] = useState<{ tenantId: number; tenantName: string; currentPlanSlug: string } | null>(null);
+
   const { data, isLoading, refetch } = trpc.admin.tenants.list.useQuery({ page, limit: 20 }, { retry: false });
   const { data: plansData } = trpc.plans.list.useQuery();
+
+  const changePlanMutation = trpc.admin.changePlan.useMutation({
+    onSuccess: () => {
+      toast.success("Plan updated successfully");
+      setPlanDialog(null);
+      refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   const tenants = data?.tenants ?? [];
   const total = data?.total ?? 0;
@@ -72,7 +87,7 @@ export default function AdminTenants() {
   // Dynamic pricing from real data
   const planPrices = getDynamicPlanPrices(plansData);
   const mrrEstimate = tenants.reduce((sum: number, t: any) => {
-    return sum + (planPrices[t.planSlug] ?? 0);
+    return sum + (planPrices[t.planSlug ?? 'free'] ?? 0);
   }, 0);
 
   const filtered = tenants.filter((t: any) => {
@@ -87,8 +102,8 @@ export default function AdminTenants() {
       <div className="p-6 space-y-5 max-w-7xl mx-auto">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center">
-              <Shield className="w-4 h-4 text-yellow-400" />
+            <div className="w-8 h-8 rounded-lg bg-warning/10 flex items-center justify-center">
+              <Shield className="w-4 h-4 text-warning" />
             </div>
             <div>
               <h1 className="text-2xl font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Tenants</h1>
@@ -103,10 +118,10 @@ export default function AdminTenants() {
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: "Total Tenants", value: total, icon: Building2, color: "text-blue-400", bg: "bg-blue-500/10" },
-            { label: "Active", value: activeCount, icon: Activity, color: "text-green-400", bg: "bg-green-500/10" },
-            { label: "MRR (est.)", value: `$${mrrEstimate.toLocaleString()}`, icon: DollarSign, color: "text-purple-400", bg: "bg-purple-500/10" },
-            { label: "Showing", value: filtered.length, icon: Users, color: "text-cyan-400", bg: "bg-cyan-500/10" },
+            { label: "Total Tenants", value: total, icon: Building2, color: "text-info", bg: "bg-info/10", tooltip: null },
+            { label: "Active", value: activeCount, icon: Activity, color: "text-success", bg: "bg-success/10", tooltip: null },
+            { label: "MRR (est.)", value: `$${mrrEstimate.toLocaleString()}`, icon: DollarSign, color: "text-accent-foreground", bg: "bg-accent/10", tooltip: "Total monthly subscription revenue across all active tenants" },
+            { label: "Showing", value: filtered.length, icon: Users, color: "text-primary", bg: "bg-primary/10", tooltip: null },
           ].map((s) => (
             <Card key={s.label} className="border-border bg-card">
               <CardContent className="p-4">
@@ -115,7 +130,11 @@ export default function AdminTenants() {
                     <s.icon className={`w-4 h-4 ${s.color}`} />
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">{s.label}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {s.tooltip ? (
+                        <HelpTooltip content={s.tooltip} variant="info">{s.label}</HelpTooltip>
+                      ) : s.label}
+                    </p>
                     <p className="text-lg font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{s.value}</p>
                   </div>
                 </div>
@@ -166,9 +185,13 @@ export default function AdminTenants() {
                   <TableRow className="border-border hover:bg-transparent">
                     <TableHead className="text-muted-foreground text-xs">Business</TableHead>
                     <TableHead className="text-muted-foreground text-xs">Industry</TableHead>
-                    <TableHead className="text-muted-foreground text-xs">Plan</TableHead>
+                    <TableHead className="text-muted-foreground text-xs">
+                      <HelpTooltip content="How this tenant is billed: Standard = $199/mo + revenue share, Founder = free forever, Flex = usage-based" variant="info">Plan</HelpTooltip>
+                    </TableHead>
                     <TableHead className="text-muted-foreground text-xs">Status</TableHead>
-                    <TableHead className="text-muted-foreground text-xs">Joined</TableHead>
+                    <TableHead className="text-muted-foreground text-xs">
+                      <HelpTooltip content="Date this business account was created" variant="info">Joined</HelpTooltip>
+                    </TableHead>
                     <TableHead className="text-muted-foreground text-xs w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -193,7 +216,7 @@ export default function AdminTenants() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={`text-[10px] ${tenant.active ? "text-green-400 border-green-500/30" : "text-red-400 border-red-500/30"}`}>
+                        <Badge variant="outline" className={`text-[10px] ${tenant.active ? "text-success border-success/30" : "text-destructive border-destructive/30"}`}>
                           {tenant.active ? "Active" : "Inactive"}
                         </Badge>
                       </TableCell>
@@ -207,13 +230,20 @@ export default function AdminTenants() {
                             <DropdownMenuItem onClick={() => toast.info(`Viewing tenant #${tenant.id} — impersonation coming soon`)}>
                               <Eye className="w-3.5 h-3.5 mr-2" /> View as tenant
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => toast.info(`Plan override for tenant #${tenant.id} — coming soon`)}>
+                            <DropdownMenuItem onClick={() => setPlanDialog({ tenantId: tenant.id, tenantName: tenant.name, currentPlanSlug: tenant.planSlug })}>
                               <TrendingUp className="w-3.5 h-3.5 mr-2" /> Override plan
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => toast.info(`Suspend tenant #${tenant.id} — coming soon`)}>
-                              <Ban className="w-3.5 h-3.5 mr-2" /> Suspend tenant
-                            </DropdownMenuItem>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => toast.info(`Suspend tenant #${tenant.id} — coming soon`)}>
+                                    <Ban className="w-3.5 h-3.5 mr-2" /> Suspend tenant
+                                  </DropdownMenuItem>
+                                </TooltipTrigger>
+                                <TooltipContent side="left"><p>Temporarily blocks tenant access to the platform. Subscription is paused.</p></TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -235,6 +265,29 @@ export default function AdminTenants() {
           </div>
         )}
       </div>
+
+      {/* Plan Override Dialog */}
+      <Dialog open={!!planDialog} onOpenChange={() => setPlanDialog(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Override Plan — {planDialog?.tenantName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 pt-2">
+            {(plansData ?? []).map((plan: any) => (
+              <Button
+                key={plan.id}
+                variant={planDialog?.currentPlanSlug === plan.slug ? "default" : "outline"}
+                className="w-full justify-between"
+                disabled={changePlanMutation.isPending}
+                onClick={() => changePlanMutation.mutate({ tenantId: planDialog!.tenantId, planId: plan.id })}
+              >
+                <span>{plan.name}</span>
+                <span className="text-xs opacity-60">${(plan.priceMonthly / 100).toFixed(0)}/mo</span>
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

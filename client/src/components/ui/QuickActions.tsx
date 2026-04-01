@@ -163,10 +163,10 @@ export const getDashboardQuickActions = (
   counts?: { messages?: number; tasks?: number },
   userPreferences?: { mostUsedActions?: string[] },
   userSkill?: any,
-  businessType?: string
+  businessType?: string,
+  isDarkMode?: boolean
 ): QuickAction[] => {
   const mostUsed = userPreferences?.mostUsedActions || [];
-  const isDarkMode = document.documentElement.classList.contains('dark');
   
   const baseActions: QuickAction[] = [
     {

@@ -212,9 +212,9 @@ export function MessageOptimizer({
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 90) return 'text-green-600';
-    if (score >= 70) return 'text-yellow-600';
-    return 'text-red-600';
+    if (score >= 90) return 'text-success';
+    if (score >= 70) return 'text-warning';
+    return 'text-destructive';
   };
 
   const generateOptimizedMessage = (original: string, tone: string, type: string): string => {
@@ -277,7 +277,7 @@ export function MessageOptimizer({
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Bot className="h-5 w-5 text-blue-500" />
+              <Bot className="h-5 w-5 text-info" />
               <CardTitle>AI Message Optimizer</CardTitle>
               <Badge variant="outline" className="text-xs">
                 <Sparkles className="h-3 w-3 mr-1" />
@@ -316,10 +316,10 @@ export function MessageOptimizer({
               className="min-h-[100px]"
             />
             <div className="flex justify-between items-center mt-2">
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-muted-foreground">
                 {message.length}/160 characters
               </span>
-              <span className={`text-xs ${message.length > 160 ? 'text-red-500' : 'text-gray-500'}`}>
+              <span className={`text-xs ${message.length > 160 ? 'text-destructive' : 'text-muted-foreground'}`}>
                 {message.length > 160 ? 'Too long for SMS' : 'SMS compatible'}
               </span>
             </div>
@@ -354,7 +354,7 @@ export function MessageOptimizer({
                     <SelectItem key={tone.value} value={tone.value}>
                       <div>
                         <div>{tone.label}</div>
-                        <div className="text-xs text-gray-500">{tone.description}</div>
+                        <div className="text-xs text-muted-foreground">{tone.description}</div>
                       </div>
                     </SelectItem>
                   ))}
@@ -365,7 +365,7 @@ export function MessageOptimizer({
 
           {/* Advanced Settings */}
           {showAdvanced && (
-            <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+            <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
               <div>
                 <label className="text-sm font-medium mb-2 block">
                   Creativity Level: {creativityLevel[0]}%
@@ -377,7 +377,7 @@ export function MessageOptimizer({
                   step={10}
                   className="w-full"
                 />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
                   <span>Conservative</span>
                   <span>Creative</span>
                 </div>
@@ -427,10 +427,10 @@ export function MessageOptimizer({
             <CardContent className="space-y-4">
               <div>
                 <label className="text-sm font-medium mb-2 block">
-                  <CheckCircle className="h-4 w-4 inline mr-1 text-green-500" />
+                  <CheckCircle className="h-4 w-4 inline mr-1 text-success" />
                   Optimized Version
                 </label>
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div className="p-3 bg-success/10 border border-success/20 rounded-lg">
                   <p className="text-sm">{optimization.optimizedMessage}</p>
                 </div>
               </div>
@@ -439,13 +439,13 @@ export function MessageOptimizer({
               {optimization.improvements.length > 0 && (
                 <div>
                   <label className="text-sm font-medium mb-2 block">
-                    <TrendingUp className="h-4 w-4 inline mr-1 text-blue-500" />
+                    <TrendingUp className="h-4 w-4 inline mr-1 text-info" />
                     AI Improvements
                   </label>
                   <ul className="space-y-1">
                     {optimization.improvements.map((improvement, index) => (
-                      <li key={index} className="text-sm text-gray-600 flex items-start">
-                        <CheckCircle className="h-3 w-3 mr-2 mt-0.5 text-green-500 flex-shrink-0" />
+                      <li key={index} className="text-sm text-muted-foreground flex items-start">
+                        <CheckCircle className="h-3 w-3 mr-2 mt-0.5 text-success flex-shrink-0" />
                         {improvement}
                       </li>
                     ))}
@@ -457,12 +457,12 @@ export function MessageOptimizer({
               {optimization.alternatives.length > 0 && (
                 <div>
                   <label className="text-sm font-medium mb-2 block">
-                    <RefreshCw className="h-4 w-4 inline mr-1 text-purple-500" />
+                    <RefreshCw className="h-4 w-4 inline mr-1 text-accent-foreground" />
                     Alternative Versions
                   </label>
                   <div className="space-y-2">
                     {optimization.alternatives.map((alternative, index) => (
-                      <div key={index} className="p-2 bg-gray-50 border rounded text-sm">
+                      <div key={index} className="p-2 bg-muted/50 border rounded text-sm">
                         {alternative}
                       </div>
                     ))}
@@ -477,7 +477,7 @@ export function MessageOptimizer({
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Performance Predictions</CardTitle>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   AI-powered predictions based on historical data
                 </p>
               </CardHeader>
@@ -486,10 +486,10 @@ export function MessageOptimizer({
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <MessageSquare className="h-4 w-4 text-blue-500" />
+                      <MessageSquare className="h-4 w-4 text-info" />
                       <span className="text-sm font-medium">Response Rate</span>
                     </div>
-                    <span className="text-sm font-bold text-blue-600">
+                    <span className="text-sm font-bold text-info">
                       {optimization.predictions.responseRate}%
                     </span>
                   </div>
@@ -500,10 +500,10 @@ export function MessageOptimizer({
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <Target className="h-4 w-4 text-green-500" />
+                      <Target className="h-4 w-4 text-success" />
                       <span className="text-sm font-medium">Conversion Rate</span>
                     </div>
-                    <span className="text-sm font-bold text-green-600">
+                    <span className="text-sm font-bold text-success">
                       {optimization.predictions.conversionRate}%
                     </span>
                   </div>
@@ -514,10 +514,10 @@ export function MessageOptimizer({
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-purple-500" />
+                      <Users className="h-4 w-4 text-accent-foreground" />
                       <span className="text-sm font-medium">Engagement Score</span>
                     </div>
-                    <span className="text-sm font-bold text-purple-600">
+                    <span className="text-sm font-bold text-accent-foreground">
                       {optimization.predictions.engagementScore}/100
                     </span>
                   </div>
@@ -525,12 +525,12 @@ export function MessageOptimizer({
                 </div>
 
                 {/* Insights */}
-                <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="bg-info/10 p-4 rounded-lg">
                   <div className="flex items-start gap-2">
-                    <Info className="h-4 w-4 text-blue-500 mt-0.5" />
+                    <Info className="h-4 w-4 text-info mt-0.5" />
                     <div>
                       <h4 className="font-medium text-sm mb-1">AI Insights</h4>
-                      <p className="text-xs text-blue-800">
+                      <p className="text-xs text-info-foreground">
                         This message is predicted to perform {optimization.score >= 90 ? 'excellently' : 'well'} 
                         based on your industry benchmarks and historical performance data.
                         {optimization.predictions.responseRate > 80 && 

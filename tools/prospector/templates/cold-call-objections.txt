@@ -1,0 +1,40 @@
+===== OBJECTION HANDLING GUIDE =====
+Rebooked Cold Call Reference
+=====
+
+OBJECTION: "I already use a booking system"
+RESPONSE: "That is great — Rebooked does not replace your booking system. It works alongside it. Your booking system handles scheduling. Rebooked handles what happens AFTER someone cancels or no-shows — the recovery. Most booking systems send one reminder and stop. Rebooked sends 19 different automated sequences to bring that client back."
+
+OBJECTION: "I do not have the budget right now"
+RESPONSE: "I totally understand — and that is exactly why I structured it the way I did. You pay nothing for 35 days. And after that, the $199 comes from revenue you would not have had without Rebooked. Most of our clients see 3-5x return on that investment. You are literally paying with money you would have lost."
+
+OBJECTION: "I will think about it"
+RESPONSE: "Of course — no pressure at all. Can I ask what specifically you would want to think through? Sometimes I can answer that right now and save you the back-and-forth."
+
+OBJECTION: "I do not get many no-shows"
+RESPONSE: "That is actually encouraging — it means your clients are engaged. But even at a 5% no-show rate, for a business doing 100+ appointments a month, that adds up fast. Plus Rebooked is not just no-shows — it handles win-backs for clients you have not seen in 30-90 days, post-visit upsells, birthday promos, review requests. It is a full revenue recovery engine."
+
+OBJECTION: "I already text my clients manually"
+RESPONSE: "That is dedication — seriously. But the math gets tough as you grow. Rebooked automates 19 different message sequences so you can focus on actually running your business. And it uses AI to rewrite every message in your brand voice, so it still sounds like you."
+
+OBJECTION: "Is this just another monthly subscription?"
+RESPONSE: "Fair concern. Here is the difference: most subscriptions cost you money. Rebooked is designed to MAKE you money. The 15% revenue share means I only earn when you earn. And the 35-day guarantee means if it does not work, you walk away without paying a cent."
+
+OBJECTION: "I need to talk to my partner/manager"
+RESPONSE: "Absolutely — would it help if I sent a quick one-page summary they can review? That way you both have the facts. What is the best email to send that to?"
+
+OBJECTION: "How is this different from [competitor]?"
+RESPONSE: "Great question. Most tools either send basic reminders OR require you to build complex automations from scratch. Rebooked comes with 19 pre-built, AI-powered workflows specifically designed for appointment businesses. Toggle them on, and they just work. Plus the risk-free guarantee — nobody else offers that."
+
+OBJECTION: "Sounds too good to be true"
+RESPONSE: "I get that a lot, honestly. The guarantee is real — I am a solo founder and I put it in writing. If Rebooked does not deliver positive ROI in 35 days, you pay nothing. I can only afford to make that guarantee because the product actually works."
+
+=====
+Key stats to drop naturally:
+- Average salon loses $67,000/year to no-shows
+- Rebooked recovers 40% of no-shows, 55% of cancellations
+- 19 pre-built automations, 15-minute setup
+- $199/month + 15% of recovered revenue
+- 35-day risk-free guarantee
+- $50/month referral payout for 6 months
+=====

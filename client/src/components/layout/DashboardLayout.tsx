@@ -32,6 +32,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
+import { RebookedIcon } from "@/components/RebookedLogo";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
   BarChart3,
@@ -61,6 +62,10 @@ import {
   Link2,
   Wrench,
   Compass,
+  Rocket,
+  Palette,
+  Eye,
+  Bug,
 } from "lucide-react";
 import * as React from "react";
 import { useLocation } from "wouter";
@@ -71,6 +76,152 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { useSkillLevel } from "@/contexts/SkillLevelContext";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useTheme, THEME_META, type ThemeName } from "@/contexts/ThemeContext";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+
+// ─── Compact Theme Picker ───────────────────────────────────────────────────
+
+const THEME_COLORS: Record<ThemeName, string> = {
+  abyss: "#d4a843",
+  light: "#3b7cf5",
+  corporate: "#d44030",
+  pink: "#d44090",
+  emerald: "#2a9060",
+};
+
+function CompactThemePicker() {
+  const { theme, setTheme } = useTheme();
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          className="h-7 w-7 rounded-md border border-sidebar-border flex items-center justify-center hover:bg-sidebar-accent transition-colors"
+          title="Change theme"
+        >
+          <Palette className="h-3.5 w-3.5 text-sidebar-foreground" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="top" align="start" className="w-auto p-2">
+        <div className="flex gap-1.5">
+          {(Object.keys(THEME_META) as ThemeName[]).map((key) => (
+            <button
+              key={key}
+              onClick={() => setTheme(key)}
+              className={`h-7 w-7 rounded-full border-2 transition-all ${
+                theme === key ? "border-primary scale-110" : "border-transparent hover:scale-105"
+              }`}
+              style={{ backgroundColor: THEME_COLORS[key] }}
+              title={THEME_META[key].label}
+            />
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Bug Report Button ─────────────────────────────────────────────────────
+
+function BugReportButton() {
+  const [open, setOpen] = React.useState(false);
+  const [description, setDescription] = React.useState("");
+  const [category, setCategory] = React.useState("bug");
+  const [submitting, setSubmitting] = React.useState(false);
+  const submitReport = trpc.misc.reportBug.useMutation();
+
+  const handleSubmit = async () => {
+    if (!description.trim()) {
+      toast.error("Please describe the issue");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await submitReport.mutateAsync({
+        description: description.trim(),
+        category,
+        page: window.location.pathname,
+        theme: document.documentElement.getAttribute("data-theme") || "unknown",
+      });
+      toast.success("Report submitted — our system will analyze and fix the issue automatically.");
+      setDescription("");
+      setCategory("bug");
+      setOpen(false);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to submit report");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DialogTrigger asChild>
+            <button
+              className="h-7 w-7 rounded-md border border-sidebar-border flex items-center justify-center hover:bg-sidebar-accent transition-colors"
+              title="Report a bug or issue"
+            >
+              <Bug className="h-3.5 w-3.5 text-sidebar-foreground" />
+            </button>
+          </DialogTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-[200px] text-xs">
+          Report a bug, visual glitch, or issue — our AI will analyze and fix it automatically
+        </TooltipContent>
+      </Tooltip>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Bug className="h-5 w-5 text-destructive" />
+            Report an Issue
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 pt-2">
+          <div className="space-y-1.5">
+            <Label>Category</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bug">Bug / Something broken</SelectItem>
+                <SelectItem value="visual">Visual / Theme glitch</SelectItem>
+                <SelectItem value="performance">Slow / Performance issue</SelectItem>
+                <SelectItem value="feature">Missing feature / Suggestion</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>What happened?</Label>
+            <Textarea
+              placeholder="Describe what you expected vs what actually happened..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              className="resize-none"
+            />
+            <p className="text-xs text-muted-foreground">
+              Current page: {typeof window !== "undefined" ? window.location.pathname : "/"}
+            </p>
+          </div>
+          <Button onClick={handleSubmit} disabled={submitting} className="w-full">
+            {submitting ? "Submitting..." : "Submit Report"}
+          </Button>
+          <p className="text-xs text-muted-foreground text-center">
+            Reports are analyzed by our AI system and fixes are deployed automatically when possible.
+          </p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 // ─── Navigation Configuration ────────────────────────────────────────────────
 
@@ -92,6 +243,7 @@ interface NavGroup {
 // Top-level items (always visible, no dropdown)
 const TOP_NAV: NavItem[] = [
   { icon: LayoutDashboard, labelKey: "sidebar.dashboard", fallback: "Dashboard", path: "/dashboard" },
+  { icon: Rocket, labelKey: "sidebar.setup", fallback: "Quick Setup", path: "/setup" },
   { icon: Users, labelKey: "sidebar.leads", fallback: "Leads", path: "/leads" },
   { icon: Inbox, labelKey: "sidebar.inbox", fallback: "Inbox", path: "/inbox" },
 ];
@@ -124,6 +276,7 @@ const TOOLS_GROUP: NavGroup = {
     { icon: ListOrdered, labelKey: "sidebar.waitingList", fallback: "Waiting List", path: "/waiting-list" },
     { icon: Star, labelKey: "sidebar.reviews", fallback: "Reviews", path: "/review-management" },
     { icon: RefreshCw, labelKey: "sidebar.rescheduling", fallback: "Rescheduling", path: "/rescheduling" },
+    { icon: Users, labelKey: "sidebar.contactImport", fallback: "Import Contacts", path: "/contact-import" },
   ],
 };
 
@@ -150,6 +303,8 @@ const ADMIN_NAV: NavItem[] = [
   { icon: Users, labelKey: "sidebar.users", fallback: "Users", path: "/admin/users" },
   { icon: TrendingUp, labelKey: "sidebar.systemHealth", fallback: "System Health", path: "/admin/health" },
   { icon: MessageSquare, labelKey: "sidebar.messages", fallback: "Messages", path: "/admin/messages" },
+  { icon: Rocket, labelKey: "sidebar.deployments", fallback: "Deployments", path: "/admin/deployments" },
+  { icon: Eye, labelKey: "sidebar.sentinel", fallback: "Sentinel", path: "/admin/sentinel" },
 ];
 
 // Admin collapsible: Platform overview
@@ -169,11 +324,16 @@ const ADMIN_PLATFORM_GROUP: NavGroup = {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const { data: tenant } = trpc.tenant.get.useQuery(undefined, { retry: false });
+  const { data: tenant } = trpc.tenant.get.useQuery(undefined, { retry: false, enabled: !!user?.tenantId });
+  const { t: tFunc } = useLocale();
 
   if (loading) return <DashboardLayoutSkeleton />;
 
-  const { t: tFunc } = useLocale();
+  // Redirect to onboarding if user has no tenant
+  if (user && !user.tenantId) {
+    window.location.href = "/onboarding";
+    return <DashboardLayoutSkeleton />;
+  }
 
   if (!user) {
     return (
@@ -340,9 +500,7 @@ function DashboardLayoutContent({
             </button>
             {!isCollapsed && (
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
-                  <Zap className="w-3.5 h-3.5 text-primary-foreground" />
-                </div>
+                <RebookedIcon size={28} />
                 <div className="min-w-0">
                   <p
                     className="font-bold text-sm tracking-tight truncate"
@@ -362,7 +520,7 @@ function DashboardLayoutContent({
         </SidebarHeader>
 
         {/* Navigation */}
-        <SidebarContent className="gap-0 py-3">
+        <SidebarContent className="gap-1 py-3">
           {isAdmin ? (
             <>
               {/* Admin: flat admin nav */}
@@ -375,14 +533,14 @@ function DashboardLayoutContent({
                 {renderFlatItems(ADMIN_NAV)}
               </SidebarGroup>
 
-              <div className="mx-4 my-2 border-t border-sidebar-border/50" />
+              <div className="mx-4 my-2 shrink-0 border-t border-sidebar-border/50" />
 
               {/* Admin: collapsible platform overview */}
               <SidebarGroup>
                 {renderCollapsibleGroup(ADMIN_PLATFORM_GROUP)}
               </SidebarGroup>
 
-              <div className="mx-4 my-2 border-t border-sidebar-border/50" />
+              <div className="mx-4 my-2 shrink-0 border-t border-sidebar-border/50" />
 
               {/* Admin: collapsible account */}
               <SidebarGroup>
@@ -396,7 +554,7 @@ function DashboardLayoutContent({
                 {renderFlatItems(TOP_NAV)}
               </SidebarGroup>
 
-              <div className="mx-4 my-1 border-t border-sidebar-border/50" />
+              <div className="mx-4 my-1 shrink-0 border-t border-sidebar-border/50" />
 
               {/* Services dropdown — Basic sees top 4 only, Intermediate sees top 4, Advanced sees all */}
               {skillLevel !== "basic" && (
@@ -416,7 +574,7 @@ function DashboardLayoutContent({
                 </SidebarGroup>
               )}
 
-              <div className="mx-4 my-1 border-t border-sidebar-border/50" />
+              <div className="mx-4 my-1 shrink-0 border-t border-sidebar-border/50" />
 
               {/* Analytics (flat) — Hidden for basic */}
               {skillLevel !== "basic" && (
@@ -432,7 +590,7 @@ function DashboardLayoutContent({
 
               {/* Discover More — Basic only */}
               {skillLevel === "basic" && (
-                <SidebarGroup className="mt-auto px-2 pb-1">
+                <SidebarGroup className="px-2 pb-1">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
@@ -456,9 +614,11 @@ function DashboardLayoutContent({
         </SidebarContent>
 
         {/* User Footer */}
-        <SidebarFooter className="p-3 border-t border-sidebar-border">
+        <SidebarFooter className="p-3 border-t border-sidebar-border relative shrink-0">
           {!isCollapsed && (
-            <div className="mb-2 flex justify-end">
+            <div className="mb-2 flex items-center justify-end gap-2">
+              <BugReportButton />
+              <CompactThemePicker />
               <LanguageSelector />
             </div>
           )}
@@ -522,9 +682,7 @@ function DashboardLayoutContent({
             <div className="flex items-center gap-3">
               <SidebarTrigger className="h-9 w-9 rounded-lg" />
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
-                  <Zap className="w-3 h-3 text-primary-foreground" />
-                </div>
+                <RebookedIcon size={24} />
                 <span
                   className="font-bold text-sm"
                   style={{ fontFamily: "'Space Grotesk', sans-serif" }}

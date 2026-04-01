@@ -9,6 +9,11 @@ import { billingRouter, plansRouter } from "./billing.router";
 import { adminRouter } from "./admin.router";
 import { webhooksRouter } from "./webhook.router";
 import { referralRouter } from "./referral.router";
+import { calendarRouter } from "./calendar.router";
+import { contactImportRouter } from "./contact-import.router";
+import { segmentRouter } from "./segment.router";
+import { n8nRouter } from "./n8n.router";
+import { n8nAdminRouter } from "./n8n-admin.router";
 import {
   locationsRouter,
   notificationsRouter,
@@ -18,6 +23,8 @@ import {
   personalizationRouter,
   reportsRouter,
   schedulingRouter,
+  platformStatsRouter,
+  miscRouter,
 } from "./misc.router";
 
 export const appRouter = router({
@@ -36,6 +43,11 @@ export const appRouter = router({
   onboarding: onboardingRouter,
   admin: adminRouter,
   referral: referralRouter,
+  calendar: calendarRouter,
+  contactImport: contactImportRouter,
+  segment: segmentRouter,
+  n8n: n8nRouter,
+  n8nAdmin: n8nAdminRouter,
   // Stub routers for procedures expected by frontend components/hooks
   locations: locationsRouter,
   notifications: notificationsRouter,
@@ -45,6 +57,8 @@ export const appRouter = router({
   personalization: personalizationRouter,
   reports: reportsRouter,
   scheduling: schedulingRouter,
+  platformStats: platformStatsRouter,
+  misc: miscRouter,
 });
 
 export type AppRouter = typeof appRouter;

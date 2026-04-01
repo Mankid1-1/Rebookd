@@ -1,6 +1,8 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useState, useEffect } from "react";
+import { HelpTooltip, HelpIcon } from "@/components/ui/HelpTooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,13 +37,22 @@ export default function CancellationRecovery() {
     fillRateTarget: 45 // 45% target fill rate
   });
 
-  const { data: dashData, isLoading } = trpc.analytics.dashboard.useQuery(undefined, { refetchInterval: 30000 });
+  const { data: dashData, isLoading } = trpc.analytics.dashboard.useQuery(undefined, { refetchInterval: 60_000 });
   const metrics: any = dashData?.metrics;
   const { data: settings } = trpc.tenant.get.useQuery(undefined, { retry: false });
   const { data: savedConfig } = trpc.featureConfig.get.useQuery(
     { feature: "cancellation-recovery" },
     { retry: false }
   );
+  const { data: automationsList } = trpc.automations.list.useQuery();
+  // For rebooking test: use a recently lost/cancelled lead (the person who cancelled)
+  const { data: cancelledLeads } = trpc.leads.list.useQuery({ limit: 1, status: "lost" } as any);
+  // For broadcast: use waiting list leads (qualified = opted in to be notified of openings)
+  const { data: waitlistLeads } = trpc.leads.list.useQuery({ limit: 1, status: "qualified" } as any);
+  const testAutomation = trpc.automations.test.useMutation({
+    onSuccess: () => toast.success("Recovery SMS sent! Check the lead's phone."),
+    onError: (err) => toast.error(err.message),
+  });
   const saveConfig = trpc.featureConfig.save.useMutation({
     onSuccess: () => toast.success("Configuration saved"),
     onError: (err) => toast.error(err.message),
@@ -58,11 +69,33 @@ export default function CancellationRecovery() {
   };
 
   const handleTestRebooking = () => {
-    toast.info("To test, add a lead with a phone number first. The automation will trigger automatically.");
+    // Target the cancelled lead — the person who actually cancelled
+    const lead = (cancelledLeads as any)?.leads?.[0] ?? (cancelledLeads as any)?.[0];
+    if (!lead?.phone) {
+      toast.info("No cancelled leads found. A lead must cancel first to test recovery.");
+      return;
+    }
+    const auto = (automationsList as any[])?.find((a: any) => a.key === 'cancellation_same_day' || a.key === 'cancellation_rescue_48h');
+    if (!auto) {
+      toast.info("Enable a Cancellation Recovery automation on the Automations page first.");
+      return;
+    }
+    testAutomation.mutate({ automationId: auto.id, testPhone: lead.phone });
   };
 
   const handleTriggerBroadcast = () => {
-    toast.info("To test, add a lead with a phone number first. The automation will trigger automatically.");
+    // Target waiting list leads — customers who opted in to be notified of openings
+    const lead = (waitlistLeads as any)?.leads?.[0] ?? (waitlistLeads as any)?.[0];
+    if (!lead?.phone) {
+      toast.info("No one is on your waiting list yet. Leads with 'Qualified' status are your waiting list.");
+      return;
+    }
+    const auto = (automationsList as any[])?.find((a: any) => a.key === 'cancellation_flurry');
+    if (!auto) {
+      toast.info("Enable the Cancellation Flurry automation on the Automations page first.");
+      return;
+    }
+    testAutomation.mutate({ automationId: auto.id, testPhone: lead.phone });
   };
 
   const recoveryRate = metrics?.leadCount > 0
@@ -92,24 +125,48 @@ export default function CancellationRecovery() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold">Cancellation Recovery</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold">Cancellation Recovery</h1>
+              <HelpIcon content={{ basic: "Win back clients who cancelled their appointment", intermediate: "Cancellation recovery automation — re-engage cancelled appointments with incentives", advanced: "Triggered by appointment status change to 'cancelled'. Sends acknowledgement then follow-up rebook offer. Revenue tracked in recovery_events" }} />
+            </div>
             <p className="text-muted-foreground mt-2">
-              The moment someone cancels, we resell that slot automatically with 30-60% fill rate
+              When someone cancels, automated outreach helps fill the open slot
             </p>
           </div>
           <div className="flex gap-2">
-            <Button onClick={handleTestRebooking} variant="outline">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Test Rebooking
-            </Button>
-            <Button onClick={handleTriggerBroadcast} variant="outline">
-              <Bell className="h-4 w-4 mr-2" />
-              Broadcast Slots
-            </Button>
-            <Button onClick={handleSaveConfig}>
-              <Settings className="h-4 w-4 mr-2" />
-              Save Configuration
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={handleTestRebooking} variant="outline">
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Test Rebooking
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent><p>Simulate a cancellation to verify your recovery automations are working correctly.</p></TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={handleTriggerBroadcast} variant="outline">
+                    <Bell className="h-4 w-4 mr-2" />
+                    Broadcast Slots
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent><p>Manually send an SMS blast to all eligible leads announcing available open slots right now.</p></TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={handleSaveConfig}>
+                    <Settings className="h-4 w-4 mr-2" />
+                    Save Configuration
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent><p>Save all changes to your cancellation recovery settings.</p></TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
 
@@ -118,11 +175,11 @@ export default function CancellationRecovery() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-red-500/10 rounded-lg mr-3">
-                  <Users className="h-6 w-6 text-red-400" />
+                <div className="p-2 bg-destructive/10 rounded-lg mr-3">
+                  <Users className="h-6 w-6 text-destructive" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Leads Contacted</p>
+                  <p className="text-sm font-medium text-muted-foreground"><HelpTooltip content="Number of leads sent a win-back SMS after their appointment was cancelled" variant="info">Leads Contacted</HelpTooltip></p>
                   <p className="text-2xl font-bold">{metrics?.contactedCount || 0}</p>
                 </div>
               </div>
@@ -132,11 +189,11 @@ export default function CancellationRecovery() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-green-500/10 rounded-lg mr-3">
-                  <TrendingUp className="h-6 w-6 text-green-400" />
+                <div className="p-2 bg-success/10 rounded-lg mr-3">
+                  <TrendingUp className="h-6 w-6 text-success" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Appointments Recovered</p>
+                  <p className="text-sm font-medium text-muted-foreground"><HelpTooltip content="Cancelled appointments that were successfully re-booked after a recovery SMS" variant="info">Appointments Recovered</HelpTooltip></p>
                   <p className="text-2xl font-bold">{metrics?.bookedCount || 0}</p>
                 </div>
               </div>
@@ -146,11 +203,11 @@ export default function CancellationRecovery() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
-                  <Zap className="h-6 w-6 text-blue-400" />
+                <div className="p-2 bg-info/10 rounded-lg mr-3">
+                  <Zap className="h-6 w-6 text-info" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Recovery Rate</p>
+                  <p className="text-sm font-medium text-muted-foreground"><HelpTooltip content="Percentage of cancellations that were re-booked after receiving a win-back SMS" variant="info">Recovery Rate</HelpTooltip></p>
                   <p className="text-2xl font-bold">{recoveryRate}%</p>
                 </div>
               </div>
@@ -160,11 +217,11 @@ export default function CancellationRecovery() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-500/10 rounded-lg mr-3">
-                  <MessageSquare className="h-6 w-6 text-purple-400" />
+                <div className="p-2 bg-accent/10 rounded-lg mr-3">
+                  <MessageSquare className="h-6 w-6 text-accent" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Messages Sent</p>
+                  <p className="text-sm font-medium text-muted-foreground"><HelpTooltip content="Total cancellation recovery SMS messages sent across all campaigns" variant="info">Messages Sent</HelpTooltip></p>
                   <p className="text-2xl font-bold">{metrics?.messagesSent || 0}</p>
                 </div>
               </div>
@@ -176,21 +233,45 @@ export default function CancellationRecovery() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <Card>
             <CardHeader>
-              <CardTitle>Configuration</CardTitle>
+              <CardTitle>
+                <HelpTooltip content="Configure how Rebooked responds the moment a cancellation is detected — from instant waitlist outreach to mass slot broadcasts." variant="info">
+                  Configuration
+                </HelpTooltip>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="grid w-full grid-cols-4">
-                  <TabsTrigger value="instant">Instant</TabsTrigger>
-                  <TabsTrigger value="waitlist">Waitlist</TabsTrigger>
-                  <TabsTrigger value="broadcast">Broadcast</TabsTrigger>
-                  <TabsTrigger value="advanced">Advanced</TabsTrigger>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild><TabsTrigger value="instant">Instant</TabsTrigger></TooltipTrigger>
+                      <TooltipContent><p>Contact the top waitlisted lead the second a cancellation is detected.</p></TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild><TabsTrigger value="waitlist">Waitlist</TabsTrigger></TooltipTrigger>
+                      <TooltipContent><p>Work through your waitlist sequentially to fill the open slot automatically.</p></TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild><TabsTrigger value="broadcast">Broadcast</TabsTrigger></TooltipTrigger>
+                      <TooltipContent><p>Send an SMS blast to all eligible leads announcing the newly available slot.</p></TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild><TabsTrigger value="advanced">Advanced</TabsTrigger></TooltipTrigger>
+                      <TooltipContent><p>Fine-tune urgency language, A/B testing, and calendar integration options.</p></TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </TabsList>
 
                 <TabsContent value="instant" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="instant-rebooking">Instant Rebooking</Label>
+                      <Label htmlFor="instant-rebooking"><HelpTooltip content="Immediately contacts your highest-priority waitlisted clients the moment a cancellation is detected" variant="info">Instant Rebooking</HelpTooltip></Label>
                       <Switch
                         id="instant-rebooking"
                         checked={config.instantRebooking}
@@ -199,7 +280,7 @@ export default function CancellationRecovery() {
                         }
                       />
                     </div>
-                    <div className="p-4 bg-green-500/10 rounded-lg">
+                    <div className="p-4 bg-success/10 rounded-lg">
                       <h4 className="font-medium mb-2">Instant Rebooking Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Immediate slot offers to waitlist</li>
@@ -214,7 +295,7 @@ export default function CancellationRecovery() {
                 <TabsContent value="waitlist" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="waitlist-fill">Waitlist Auto-Fill</Label>
+                      <Label htmlFor="waitlist-fill"><HelpTooltip content="Automatically works through your waitlist to fill the cancelled slot without manual intervention" variant="info">Waitlist Auto-Fill</HelpTooltip></Label>
                       <Switch
                         id="waitlist-fill"
                         checked={config.waitlistAutoFill}
@@ -223,7 +304,7 @@ export default function CancellationRecovery() {
                         }
                       />
                     </div>
-                    <div className="p-4 bg-blue-500/10 rounded-lg">
+                    <div className="p-4 bg-info/10 rounded-lg">
                       <h4 className="font-medium mb-2">Waitlist Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Automatic gap filling</li>
@@ -238,7 +319,7 @@ export default function CancellationRecovery() {
                 <TabsContent value="broadcast" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="broadcast-slots">Broadcast Open Slots</Label>
+                      <Label htmlFor="broadcast-slots"><HelpTooltip content="Sends a mass SMS to eligible leads announcing an open slot — maximises the chance of filling it quickly" variant="info">Broadcast Open Slots</HelpTooltip></Label>
                       <Switch
                         id="broadcast-slots"
                         checked={config.broadcastOpenSlots}
@@ -248,7 +329,7 @@ export default function CancellationRecovery() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Fill Rate Target (%)</Label>
+                      <Label><HelpTooltip content="Your target percentage of cancelled slots to recover. Used to benchmark performance on your dashboard." variant="info">Fill Rate Target (%)</HelpTooltip></Label>
                       <Input
                         type="number"
                         value={config.fillRateTarget}
@@ -259,7 +340,7 @@ export default function CancellationRecovery() {
                         max={100}
                       />
                     </div>
-                    <div className="p-4 bg-purple-500/10 rounded-lg">
+                    <div className="p-4 bg-accent/10 rounded-lg">
                       <h4 className="font-medium mb-2">Broadcast Features</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Mass notification system</li>
@@ -274,7 +355,7 @@ export default function CancellationRecovery() {
                 <TabsContent value="advanced" className="space-y-6 mt-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="urgency-messaging">Urgency Messaging</Label>
+                      <Label htmlFor="urgency-messaging"><HelpTooltip content="Adds time-sensitive language to recovery messages (e.g. 'slot just opened') to drive faster responses" variant="info">Urgency Messaging</HelpTooltip></Label>
                       <Switch
                         id="urgency-messaging"
                         checked={config.urgencyMessaging}
@@ -283,7 +364,7 @@ export default function CancellationRecovery() {
                         }
                       />
                     </div>
-                    <div className="p-4 bg-orange-500/10 rounded-lg">
+                    <div className="p-4 bg-warning/10 rounded-lg">
                       <h4 className="font-medium mb-2">Advanced Options</h4>
                       <ul className="space-y-2 text-sm">
                         <li>• Custom urgency templates</li>
@@ -300,7 +381,11 @@ export default function CancellationRecovery() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Live Recovery Activity</CardTitle>
+              <CardTitle>
+                <HelpTooltip content="A real-time feed of cancellation events and the recovery actions Rebooked took — which leads were contacted, which slots were filled." variant="info">
+                  Live Recovery Activity
+                </HelpTooltip>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -317,13 +402,15 @@ export default function CancellationRecovery() {
         {/* Fill Rate Performance */}
         <Card>
           <CardHeader>
-            <CardTitle>Recovery Performance</CardTitle>
+            <CardTitle>
+              <span className="flex items-center gap-2">Recovery Performance <HelpIcon content={{ basic: "How many cancellations have been recovered", intermediate: "Cancellation recovery rate, revenue saved, and average time to rebook", advanced: "recoveryRate = bookedCount / leadCount. Fill rate target configurable per tenant. Metrics from recovery_events and analytics.dashboard" }} /></span>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>Current Recovery Rate</Label>
+                  <Label><HelpTooltip content="Percentage of cancellations that were re-booked after receiving a win-back SMS" variant="info">Current Recovery Rate</HelpTooltip></Label>
                   <div className="flex items-center space-x-2">
                     <Progress value={recoveryRate} className="flex-1" />
                     <span className="text-sm font-medium">{recoveryRate}%</span>
@@ -334,17 +421,17 @@ export default function CancellationRecovery() {
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center p-3 bg-red-500/10 rounded-lg">
-                  <p className="text-2xl font-bold text-red-400">{metrics?.contactedCount || 0}</p>
-                  <p className="text-sm text-muted-foreground">Leads Contacted</p>
+                <div className="text-center p-3 bg-destructive/10 rounded-lg">
+                  <p className="text-2xl font-bold text-destructive">{metrics?.contactedCount || 0}</p>
+                  <p className="text-sm text-muted-foreground"><HelpTooltip content="Number of leads sent a win-back SMS after their appointment was cancelled" variant="info">Leads Contacted</HelpTooltip></p>
                 </div>
-                <div className="text-center p-3 bg-green-500/10 rounded-lg">
-                  <p className="text-2xl font-bold text-green-400">{metrics?.bookedCount || 0}</p>
-                  <p className="text-sm text-muted-foreground">Appointments Recovered</p>
+                <div className="text-center p-3 bg-success/10 rounded-lg">
+                  <p className="text-2xl font-bold text-success">{metrics?.bookedCount || 0}</p>
+                  <p className="text-sm text-muted-foreground"><HelpTooltip content="Cancelled appointments that were successfully re-booked after a recovery SMS" variant="info">Appointments Recovered</HelpTooltip></p>
                 </div>
-                <div className="text-center p-3 bg-blue-500/10 rounded-lg">
-                  <p className="text-2xl font-bold text-blue-400">{metrics?.messagesSent || 0}</p>
-                  <p className="text-sm text-muted-foreground">Messages Sent</p>
+                <div className="text-center p-3 bg-info/10 rounded-lg">
+                  <p className="text-2xl font-bold text-info">{metrics?.messagesSent || 0}</p>
+                  <p className="text-sm text-muted-foreground"><HelpTooltip content="Total cancellation recovery SMS messages sent across all campaigns" variant="info">Messages Sent</HelpTooltip></p>
                 </div>
               </div>
             </div>

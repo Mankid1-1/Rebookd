@@ -81,34 +81,34 @@ export function ActivityFeed({ activities, loading, onRefresh, onActivityClick }
   };
 
   const getActivityColor = (type: string, status?: string) => {
-    if (status === 'success') return 'bg-green-500';
-    if (status === 'failed') return 'bg-red-500';
-    if (status === 'pending') return 'bg-yellow-500';
-    
+    if (status === 'success') return 'bg-success';
+    if (status === 'failed') return 'bg-destructive';
+    if (status === 'pending') return 'bg-warning';
+
     switch (type) {
       case 'lead':
-        return 'bg-blue-500';
+        return 'bg-info';
       case 'message':
-        return 'bg-purple-500';
+        return 'bg-accent';
       case 'booking':
-        return 'bg-green-500';
+        return 'bg-success';
       case 'payment':
-        return 'bg-yellow-500';
+        return 'bg-warning';
       case 'call':
-        return 'bg-orange-500';
+        return 'bg-warning';
       default:
-        return 'bg-gray-500';
+        return 'bg-muted-foreground';
     }
   };
 
   const getStatusIcon = (status?: string) => {
     switch (status) {
       case 'success':
-        return <CheckCircle className="h-3 w-3 text-green-500" />;
+        return <CheckCircle className="h-3 w-3 text-success" />;
       case 'failed':
-        return <XCircle className="h-3 w-3 text-red-500" />;
+        return <XCircle className="h-3 w-3 text-destructive" />;
       case 'pending':
-        return <AlertCircle className="h-3 w-3 text-yellow-500" />;
+        return <AlertCircle className="h-3 w-3 text-warning" />;
       default:
         return null;
     }
@@ -141,10 +141,10 @@ export function ActivityFeed({ activities, loading, onRefresh, onActivityClick }
           <div className="space-y-4">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="flex items-start space-x-3">
-                <div className="w-2 h-2 bg-gray-200 rounded-full mt-2 animate-pulse"></div>
+                <div className="w-2 h-2 bg-muted rounded-full mt-2 animate-pulse"></div>
                 <div className="flex-1">
-                  <div className="h-4 bg-gray-200 rounded animate-pulse mb-2"></div>
-                  <div className="h-3 bg-gray-200 rounded animate-pulse w-3/4"></div>
+                  <div className="h-4 bg-muted rounded animate-pulse mb-2"></div>
+                  <div className="h-3 bg-muted rounded animate-pulse w-3/4"></div>
                 </div>
               </div>
             ))}
@@ -182,7 +182,7 @@ export function ActivityFeed({ activities, loading, onRefresh, onActivityClick }
                 placeholder="Search activities..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
           </div>
@@ -191,7 +191,7 @@ export function ActivityFeed({ activities, loading, onRefresh, onActivityClick }
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="all">All Activities</option>
               <option value="lead">Leads</option>
@@ -206,7 +206,7 @@ export function ActivityFeed({ activities, loading, onRefresh, onActivityClick }
         {/* Activity List */}
         {filteredActivities.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
-            <Clock className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+            <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
             <p>No recent activity</p>
             <p className="text-sm mt-2">
               {searchTerm || filter !== 'all' 
@@ -220,7 +220,7 @@ export function ActivityFeed({ activities, loading, onRefresh, onActivityClick }
             {filteredActivities.map((activity, index) => (
               <div
                 key={activity.id || index}
-                className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-gray-50 transition-colors cursor-pointer"
+                className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
                 onClick={() => onActivityClick?.(activity)}
               >
                 <div className={`w-2 h-2 rounded-full mt-2 ${getActivityColor(activity.type, activity.status)}`}></div>
@@ -230,12 +230,12 @@ export function ActivityFeed({ activities, loading, onRefresh, onActivityClick }
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         {getActivityIcon(activity.type)}
-                        <p className="text-sm font-medium text-gray-900 truncate">
+                        <p className="text-sm font-medium text-foreground truncate">
                           {activity.title}
                         </p>
                         {getStatusIcon(activity.status)}
                       </div>
-                      <p className="text-sm text-gray-500 truncate">
+                      <p className="text-sm text-muted-foreground truncate">
                         {activity.description}
                       </p>
                       
@@ -261,7 +261,7 @@ export function ActivityFeed({ activities, loading, onRefresh, onActivityClick }
                     </div>
                     
                     <div className="flex flex-col items-end ml-4">
-                      <span className="text-xs text-gray-400 whitespace-nowrap">
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
                         {formatRelativeTime(activity.createdAt)}
                       </span>
                       <Button variant="ghost" size="sm" className="mt-1 p-1">
@@ -295,7 +295,7 @@ interface ActivityDetailProps {
 
 export function ActivityDetail({ activity, onClose }: ActivityDetailProps) {
   return (
-    <Card className="border-l-4 border-l-blue-500">
+    <Card className="border-l-4 border-l-info">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
         <div className="flex items-center gap-3">
           <div className={`w-3 h-3 rounded-full ${getActivityColor(activity.type, activity.status)}`}></div>
@@ -314,7 +314,7 @@ export function ActivityDetail({ activity, onClose }: ActivityDetailProps) {
       <CardContent className="space-y-4">
         <div>
           <h4 className="font-medium mb-2">Details</h4>
-          <p className="text-sm text-gray-600">{activity.description}</p>
+          <p className="text-sm text-muted-foreground">{activity.description}</p>
         </div>
         
         {activity.metadata && (
@@ -355,22 +355,22 @@ export function ActivityDetail({ activity, onClose }: ActivityDetailProps) {
 }
 
 function getActivityColor(type: string, status?: string) {
-  if (status === 'success') return 'bg-green-500';
-  if (status === 'failed') return 'bg-red-500';
-  if (status === 'pending') return 'bg-yellow-500';
-  
+  if (status === 'success') return 'bg-success';
+  if (status === 'failed') return 'bg-destructive';
+  if (status === 'pending') return 'bg-warning';
+
   switch (type) {
     case 'lead':
-      return 'bg-blue-500';
+      return 'bg-info';
     case 'message':
-      return 'bg-purple-500';
+      return 'bg-accent';
     case 'booking':
-      return 'bg-green-500';
+      return 'bg-success';
     case 'payment':
-      return 'bg-yellow-500';
+      return 'bg-warning';
     case 'call':
-      return 'bg-orange-500';
+      return 'bg-warning';
     default:
-      return 'bg-gray-500';
+      return 'bg-muted-foreground';
   }
 }

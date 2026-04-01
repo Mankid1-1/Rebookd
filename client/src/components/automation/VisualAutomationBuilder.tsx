@@ -27,16 +27,22 @@ import {
 import { toast } from "sonner";
 import { useDynamicAutomationNodes } from "@/hooks/useDynamicConfiguration";
 import { trpc } from "@/lib/trpc";
+import { useTheme } from "@/contexts/ThemeContext";
 
 // Dynamic colors based on user theme
-const getDynamicAutomationColors = () => {
-  const isDarkMode = document.documentElement.classList.contains('dark');
+const getDynamicAutomationColors = (isDarkMode: boolean) => {
+  // Use CSS custom property values via getComputedStyle at render time
+  const root = typeof document !== "undefined" ? getComputedStyle(document.documentElement) : null;
+  const primary = root?.getPropertyValue("--primary")?.trim();
+  const muted = root?.getPropertyValue("--muted-foreground")?.trim();
+  const border = root?.getPropertyValue("--border")?.trim();
+
   return {
-    connection: isDarkMode ? "#60a5fa" : "#3b82f6",
-    connectionHover: isDarkMode ? "#93c5fd" : "#2563eb", 
-    connectionDefault: isDarkMode ? "#9ca3af" : "#6b7280",
-    grid: isDarkMode ? "#374151" : "#e5e7eb",
-    arrow: isDarkMode ? "#9ca3af" : "#6b7280"
+    connection: primary ? `hsl(${primary})` : "hsl(var(--info))",
+    connectionHover: primary ? `hsl(${primary} / 0.75)` : "hsl(var(--info) / 0.75)",
+    connectionDefault: muted ? `hsl(${muted})` : "hsl(var(--muted-foreground))",
+    grid: border ? `hsl(${border})` : "hsl(var(--border))",
+    arrow: muted ? `hsl(${muted})` : "hsl(var(--muted-foreground))",
   };
 };
 
@@ -516,9 +522,9 @@ export default function VisualAutomationBuilder({
   };
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="h-screen flex flex-col bg-muted/50">
       {/* Header */}
-      <div className="bg-white border-b px-4 py-3">
+      <div className="bg-card border-b px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div>
@@ -528,7 +534,7 @@ export default function VisualAutomationBuilder({
                 className="text-lg font-semibold border-none p-0 h-auto"
                 placeholder="Workflow Name"
               />
-              <p className="text-sm text-gray-500">{workflow.description}</p>
+              <p className="text-sm text-muted-foreground">{workflow.description}</p>
             </div>
             <Badge variant={workflow.status === 'active' ? 'default' : 'secondary'}>
               {workflow.status}
@@ -536,7 +542,7 @@ export default function VisualAutomationBuilder({
           </div>
           
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
               <Button variant="ghost" size="sm" onClick={handleZoomOut}>
                 <Minimize2 className="h-4 w-4" />
               </Button>
@@ -567,28 +573,28 @@ export default function VisualAutomationBuilder({
 
       <div className="flex flex-1 overflow-hidden">
         {/* Node Palette */}
-        <div className="w-80 bg-white border-r overflow-y-auto">
+        <div className="w-80 bg-card border-r overflow-y-auto">
           <div className="p-4">
             <h3 className="font-semibold mb-4">Node Library</h3>
-            
+
             {['Triggers', 'Actions', 'Conditions', 'Flow Control', 'Integrations'].map(category => (
               <div key={category} className="mb-6">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">{category}</h4>
+                <h4 className="text-sm font-medium text-muted-foreground mb-2">{category}</h4>
                 <div className="space-y-2">
                   {NODE_TEMPLATES
                     .filter(template => template.category === category)
                     .map(template => (
                       <div
                         key={template.name}
-                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                        className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted transition-colors"
                         onClick={() => !readOnly && addNode(template)}
                       >
-                        <div className="p-2 bg-white rounded border">
+                        <div className="p-2 bg-card rounded border">
                           {template.icon}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-sm">{template.name}</div>
-                          <div className="text-xs text-gray-500 truncate">{template.description}</div>
+                          <div className="text-xs text-muted-foreground truncate">{template.description}</div>
                         </div>
                       </div>
                     ))}
@@ -633,7 +639,7 @@ export default function VisualAutomationBuilder({
                       fill="none"
                       stroke={selectedConnection?.id === connection.id ? colors.connection : colors.connectionDefault}
                       strokeWidth={selectedConnection?.id === connection.id ? 3 : 2}
-                      className="pointer-events-auto cursor-pointer hover:stroke-blue-500"
+                      className="pointer-events-auto cursor-pointer hover:stroke-primary"
                       onClick={() => setSelectedConnection(connection)}
                     />
                     <Arrowhead
@@ -662,8 +668,8 @@ export default function VisualAutomationBuilder({
             {workflow.nodes.map(node => (
               <div
                 key={node.id}
-                className={`absolute bg-white border rounded-lg shadow-sm cursor-move transition-shadow ${
-                  selectedNode?.id === node.id ? 'border-blue-500 shadow-lg' : 'border-gray-200'
+                className={`absolute bg-card border rounded-lg shadow-sm cursor-move transition-shadow ${
+                  selectedNode?.id === node.id ? 'border-primary shadow-lg' : 'border-border'
                 } ${isDragging && draggedNode?.id === node.id ? 'opacity-75' : ''}`}
                 style={{
                   left: node.position.x,
@@ -676,13 +682,13 @@ export default function VisualAutomationBuilder({
                 onClick={() => setSelectedNode(node)}
               >
                 {/* Node Header */}
-                <div className="flex items-center gap-2 p-3 border-b bg-gray-50 rounded-t-lg">
-                  <div className="p-1 bg-white rounded border">
+                <div className="flex items-center gap-2 p-3 border-b bg-muted/50 rounded-t-lg">
+                  <div className="p-1 bg-card rounded border">
                     {node.icon}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm truncate">{node.name}</div>
-                    <div className="text-xs text-gray-500">{node.type}</div>
+                    <div className="text-xs text-muted-foreground">{node.type}</div>
                   </div>
                   {!readOnly && (
                     <Button
@@ -706,7 +712,7 @@ export default function VisualAutomationBuilder({
                     {node.inputs.map((port, index) => (
                       <div
                         key={port.id}
-                        className="w-3 h-3 bg-blue-500 rounded-full border-2 border-white cursor-pointer hover:bg-blue-600"
+                        className="w-3 h-3 bg-primary rounded-full border-2 border-card cursor-pointer hover:bg-primary/80"
                         style={{ top: `${index * 20}px` }}
                         onMouseDown={(e) => handlePortMouseDown(e, node.id, port.id, 'input')}
                         onMouseUp={(e) => handlePortMouseUp(e, node.id, port.id, 'input')}
@@ -720,7 +726,7 @@ export default function VisualAutomationBuilder({
                     {node.outputs.map((port, index) => (
                       <div
                         key={port.id}
-                        className="w-3 h-3 bg-green-500 rounded-full border-2 border-white cursor-pointer hover:bg-green-600"
+                        className="w-3 h-3 bg-success rounded-full border-2 border-card cursor-pointer hover:bg-success/80"
                         style={{ top: `${index * 20}px` }}
                         onMouseDown={(e) => handlePortMouseDown(e, node.id, port.id, 'output')}
                         title={port.name}
@@ -731,9 +737,9 @@ export default function VisualAutomationBuilder({
 
                 {/* Node Content */}
                 <div className="p-3 pt-6">
-                  <div className="text-xs text-gray-600 mb-2">{node.description}</div>
+                  <div className="text-xs text-muted-foreground mb-2">{node.description}</div>
                   {Object.entries(node.config).length > 0 && (
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-muted-foreground/70">
                       {Object.keys(node.config).length} configuration{Object.keys(node.config).length !== 1 ? 's' : ''}
                     </div>
                   )}
@@ -744,7 +750,7 @@ export default function VisualAutomationBuilder({
         </div>
 
         {/* Properties Panel */}
-        <div className="w-80 bg-white border-l overflow-y-auto">
+        <div className="w-80 bg-card border-l overflow-y-auto">
           {selectedNode ? (
             <div className="p-4">
               <div className="flex items-center justify-between mb-4">
@@ -824,9 +830,9 @@ export default function VisualAutomationBuilder({
               </div>
             </div>
           ) : (
-            <div className="p-4 text-center text-gray-500">
+            <div className="p-4 text-center text-muted-foreground">
               <div className="mb-4">
-                <Settings className="h-12 w-12 mx-auto text-gray-300" />
+                <Settings className="h-12 w-12 mx-auto text-muted-foreground/40" />
               </div>
               <p>Select a node to view its properties</p>
             </div>

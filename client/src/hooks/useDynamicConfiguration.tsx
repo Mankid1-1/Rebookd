@@ -8,7 +8,7 @@
 import React from 'react';
 import { useProgressiveDisclosureContext } from '@/components/ui/ProgressiveDisclosure';
 import { trpc } from '@/lib/trpc';
-import { useAuth } from '@/_core/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth';
 
 // Dynamic status configuration based on real business data
 export function useDynamicStatuses() {
@@ -29,18 +29,18 @@ export function useDynamicStatuses() {
     
     // Adaptive defaults based on user skill level
     const baseStatuses = [
-      { value: "new", label: "New", color: "bg-blue-500", order: 1, enabled: true },
-      { value: "contacted", label: "Contacted", color: "bg-yellow-500", order: 2, enabled: true },
-      { value: "qualified", label: "Qualified", color: "bg-purple-500", order: 3, enabled: true },
-      { value: "booked", label: "Booked", color: "bg-green-500", order: 4, enabled: true },
-      { value: "lost", label: "Lost", color: "bg-red-500", order: 5, enabled: true },
+      { value: "new", label: "New", color: "bg-info", order: 1, enabled: true },
+      { value: "contacted", label: "Contacted", color: "bg-warning", order: 2, enabled: true },
+      { value: "qualified", label: "Qualified", color: "bg-accent", order: 3, enabled: true },
+      { value: "booked", label: "Booked", color: "bg-success", order: 4, enabled: true },
+      { value: "lost", label: "Lost", color: "bg-destructive", order: 5, enabled: true },
     ];
-    
+
     // All statuses available at every skill level
     baseStatuses.push(
-      { value: "unsubscribed", label: "Unsubscribed", color: "bg-gray-500", order: 6, enabled: true },
-      { value: "followup_scheduled", label: "Follow-up Scheduled", color: "bg-orange-500", order: 7, enabled: true },
-      { value: "custom", label: "Custom Status", color: "bg-indigo-500", order: 8, enabled: true }
+      { value: "unsubscribed", label: "Unsubscribed", color: "bg-muted-foreground", order: 6, enabled: true },
+      { value: "followup_scheduled", label: "Follow-up Scheduled", color: "bg-warning", order: 7, enabled: true },
+      { value: "custom", label: "Custom Status", color: "bg-accent", order: 8, enabled: true }
     );
 
     return baseStatuses;

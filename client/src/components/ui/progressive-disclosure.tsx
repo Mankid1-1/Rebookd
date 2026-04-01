@@ -93,20 +93,20 @@ export function ProgressiveDisclosure({
 
   const getComplexityColor = (complexity: string) => {
     switch (complexity) {
-      case 'basic': return 'text-green-600';
-      case 'intermediate': return 'text-yellow-600';
-      case 'advanced': return 'text-orange-600';
-      case 'expert': return 'text-red-600';
-      default: return 'text-gray-600';
+      case 'basic': return 'text-success';
+      case 'intermediate': return 'text-warning';
+      case 'advanced': return 'text-warning';
+      case 'expert': return 'text-destructive';
+      default: return 'text-muted-foreground';
     }
   };
 
   const getComplexityBadge = (complexity: string) => {
     switch (complexity) {
-      case 'basic': return <Badge className="bg-green-100 text-green-800">Basic</Badge>;
-      case 'intermediate': return <Badge className="bg-yellow-100 text-yellow-800">Intermediate</Badge>;
-      case 'advanced': return <Badge className="bg-orange-100 text-orange-800">Advanced</Badge>;
-      case 'expert': return <Badge className="bg-red-100 text-red-800">Expert</Badge>;
+      case 'basic': return <Badge className="bg-success/10 text-success">Basic</Badge>;
+      case 'intermediate': return <Badge className="bg-warning/10 text-warning">Intermediate</Badge>;
+      case 'advanced': return <Badge className="bg-warning/10 text-warning">Advanced</Badge>;
+      case 'expert': return <Badge className="bg-destructive/10 text-destructive">Expert</Badge>;
       default: return <Badge variant="secondary">Unknown</Badge>;
     }
   };
@@ -146,15 +146,15 @@ export function ProgressiveDisclosure({
                 <span className="font-medium">{currentLevelData?.name}</span>
                 {currentLevelData && getComplexityBadge(currentLevelData.complexity)}
               </div>
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-muted-foreground">
                 Level {currentLevelIndex + 1} of {levels.length}
               </span>
             </div>
             
             {/* Progress Bar */}
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="w-full bg-muted rounded-full h-2">
               <div
-                className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                className="bg-primary h-2 rounded-full transition-all duration-500"
                 style={{ width: `${((currentLevelIndex + 1) / levels.length) * 100}%` }}
               />
             </div>
@@ -218,8 +218,8 @@ export function ProgressiveDisclosure({
                     className={cn(
                       "p-3 border rounded-lg cursor-pointer transition-colors",
                       currentLevel === level.id
-                        ? 'bg-blue-50 border-blue-500'
-                        : 'hover:bg-gray-50'
+                        ? 'bg-info/5 border-info'
+                        : 'hover:bg-muted/50'
                     )}
                     onClick={() => {
                       if (canProgressToLevel(level.id) || level.id === currentLevel) {
@@ -232,13 +232,13 @@ export function ProgressiveDisclosure({
                       <div className="flex items-center gap-3">
                         <div className={cn(
                           "p-2 rounded-lg",
-                          currentLevel === level.id ? 'bg-blue-100' : 'bg-gray-100'
+                          currentLevel === level.id ? 'bg-info/10' : 'bg-muted'
                         )}>
                           {level.icon}
                         </div>
                         <div>
                           <div className="font-medium">{level.name}</div>
-                          <div className="text-sm text-gray-500">{level.description}</div>
+                          <div className="text-sm text-muted-foreground">{level.description}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -255,7 +255,7 @@ export function ProgressiveDisclosure({
                     {/* Prerequisites */}
                     {level.prerequisites && level.prerequisites.length > 0 && (
                       <div className="mt-3 pt-3 border-t">
-                        <div className="text-xs text-gray-500 mb-2">Prerequisites:</div>
+                        <div className="text-xs text-muted-foreground mb-2">Prerequisites:</div>
                         <div className="flex flex-wrap gap-1">
                           {level.prerequisites.map((prereq) => (
                             <Badge
@@ -273,11 +273,11 @@ export function ProgressiveDisclosure({
                     
                     {/* Features */}
                     <div className="mt-3 pt-3 border-t">
-                      <div className="text-xs text-gray-500 mb-2">Features:</div>
+                      <div className="text-xs text-muted-foreground mb-2">Features:</div>
                       <div className="space-y-1">
                         {level.features.map((feature) => (
                           <div key={feature} className="flex items-center gap-2 text-sm">
-                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            <div className="w-2 h-2 bg-primary rounded-full"></div>
                             <span>{feature}</span>
                           </div>
                         ))}
@@ -385,9 +385,9 @@ export function ProgressiveContent({
     return (
       <Card className="border-dashed">
         <CardContent className="text-center py-8">
-          <EyeOff className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-          <h3 className="font-medium text-gray-900 mb-2">Feature Locked</h3>
-          <p className="text-sm text-gray-500 mb-4">
+          <EyeOff className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+          <h3 className="font-medium text-foreground mb-2">Feature Locked</h3>
+          <p className="text-sm text-muted-foreground mb-4">
             This feature is available at a higher experience level.
           </p>
           <div className="flex items-center justify-center gap-2">
@@ -433,7 +433,7 @@ export function ProgressiveField({
         <div>
           <label className="text-sm font-medium">{label}</label>
           {description && (
-            <p className="text-xs text-gray-500">{description}</p>
+            <p className="text-xs text-muted-foreground">{description}</p>
           )}
         </div>
         
@@ -449,10 +449,10 @@ export function ProgressiveField({
       </div>
       
       {showHint && hint && (
-        <div className="bg-blue-50 p-3 rounded-lg">
+        <div className="bg-info/5 p-3 rounded-lg">
           <div className="flex items-start gap-2">
-            <Info className="h-4 w-4 text-blue-500 mt-0.5" />
-            <p className="text-sm text-blue-800">{hint}</p>
+            <Info className="h-4 w-4 text-info mt-0.5" />
+            <p className="text-sm text-info-foreground">{hint}</p>
           </div>
         </div>
       )}
@@ -465,7 +465,7 @@ export function ProgressiveField({
       </div>
       
       {!isAvailable && (
-        <div className="text-xs text-gray-500 flex items-center gap-1">
+        <div className="text-xs text-muted-foreground flex items-center gap-1">
           <EyeOff className="h-3 w-3" />
           <span>Advanced feature - unlock by progressing</span>
         </div>
@@ -490,7 +490,7 @@ export function ProgressiveSettings() {
         <div className="flex items-center justify-between">
           <div>
             <div className="font-medium">Show Hints</div>
-            <div className="text-sm text-gray-500">Display helpful hints and tips</div>
+            <div className="text-sm text-muted-foreground">Display helpful hints and tips</div>
           </div>
           <Switch
             checked={userPreferences.showHints}
@@ -503,7 +503,7 @@ export function ProgressiveSettings() {
         <div className="flex items-center justify-between">
           <div>
             <div className="font-medium">Auto Progress</div>
-            <div className="text-sm text-gray-500">Automatically advance to next level</div>
+            <div className="text-sm text-muted-foreground">Automatically advance to next level</div>
           </div>
           <Switch
             checked={userPreferences.autoProgress}
@@ -516,7 +516,7 @@ export function ProgressiveSettings() {
         <div className="flex items-center justify-between">
           <div>
             <div className="font-medium">Skip Tutorials</div>
-            <div className="text-sm text-gray-500">Skip interactive tutorials</div>
+            <div className="text-sm text-muted-foreground">Skip interactive tutorials</div>
           </div>
           <Switch
             checked={userPreferences.skipTutorials}

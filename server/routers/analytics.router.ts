@@ -6,6 +6,35 @@ import * as AnalyticsService from "../services/analytics.service";
 import * as LeadService from "../services/lead.service";
 import * as TenantService from "../services/tenant.service";
 
+// ── Real Data Helpers (no hardcoded multipliers) ─────────────────────────────
+
+async function getRealRevenue(db: any, tenantId: number, since: Date): Promise<number> {
+  try {
+    const [row] = await db
+      .select({ total: sql<number>`COALESCE(SUM(${recoveryEvents.realizedRevenue}), 0)` })
+      .from(recoveryEvents)
+      .where(and(eq(recoveryEvents.tenantId, tenantId), gte(recoveryEvents.createdAt, since)));
+    return Number(row?.total ?? 0);
+  } catch {
+    return 0; // table may not have data yet
+  }
+}
+
+async function getRealDeliveryStats(db: any, tenantId: number, since: Date): Promise<{ total: number; delivered: number; failed: number; rate: number }> {
+  const [row] = await db
+    .select({
+      total: sql<number>`COUNT(*)`,
+      delivered: sql<number>`SUM(CASE WHEN ${messages.status} = 'delivered' THEN 1 ELSE 0 END)`,
+      failed: sql<number>`SUM(CASE WHEN ${messages.status} = 'failed' THEN 1 ELSE 0 END)`,
+    })
+    .from(messages)
+    .where(and(eq(messages.tenantId, tenantId), eq(messages.direction, "outbound"), gte(messages.createdAt, since)));
+  const total = Number(row?.total ?? 0);
+  const delivered = Number(row?.delivered ?? 0);
+  const failed = Number(row?.failed ?? 0);
+  return { total, delivered, failed, rate: total > 0 ? Math.round((delivered / total) * 100) : 0 };
+}
+
 export const analyticsRouter = router({
   dashboard: tenantProcedure.input(z.object({ days: z.number().int().min(1).max(90).default(30) }).optional()).query(async ({ ctx, input }) => {
     const [metrics, statusBreakdown, messageVolume, recentMessages, revenueMetrics, revenueTrends] = await Promise.all([
@@ -17,7 +46,9 @@ export const analyticsRouter = router({
       AnalyticsService.getRevenueTrends(ctx.db, ctx.tenantId, 90),
     ]);
     const leakage = await AnalyticsService.getLeakageMetrics(ctx.db, ctx.tenantId);
-    return { metrics, statusBreakdown, messageVolume, recentMessages, leakage, revenueMetrics, revenueTrends };
+    const since = new Date(Date.now() - (input?.days ?? 30) * 24 * 60 * 60 * 1000);
+    const deliveryStats = await getRealDeliveryStats(ctx.db, ctx.tenantId, since);
+    return { metrics, statusBreakdown, messageVolume, recentMessages, leakage, revenueMetrics, revenueTrends, deliveryStats };
   }),
 
   revenueLeakage: tenantProcedure.input(z.object({ days: z.number().int().min(1).max(365).default(90) })).query(async ({ ctx, input }) => {
@@ -81,7 +112,8 @@ export const analyticsRouter = router({
     const noShows = Number(lostRows[0]?.c ?? 0);
     const recovered = Number(bookedRows[0]?.c ?? 0);
     const messagesSent = Number(msgRows[0]?.c ?? 0);
-    return { totalAppointments: total, noShows, recovered, recoveryRate: noShows > 0 ? Math.round((recovered / noShows) * 100) : 0, revenueRecovered: recovered * 150, messagesSent, period: "30d" };
+    const realRevenue = await getRealRevenue(ctx.db, tid, thirtyDaysAgo);
+    return { totalAppointments: total, noShows, recovered, recoveryRate: noShows > 0 ? Math.round((recovered / noShows) * 100) : 0, revenueRecovered: realRevenue, messagesSent, period: "30d" };
   }),
 
   cancellationRecoveryMetrics: tenantProcedure.query(async ({ ctx }) => {
@@ -94,7 +126,8 @@ export const analyticsRouter = router({
     ]);
     const cancellations = Number(lostRows[0]?.c ?? 0);
     const rebooked = Number(rebookedRows[0]?.c ?? 0);
-    return { cancellations, rebooked, recoveryRate: cancellations > 0 ? Math.round((rebooked / cancellations) * 100) : 0, revenueRecovered: rebooked * 150, pendingOutreach: Number(contactedRows[0]?.c ?? 0), period: "30d" };
+    const realRevenue = await getRealRevenue(ctx.db, tid, thirtyDaysAgo);
+    return { cancellations, rebooked, recoveryRate: cancellations > 0 ? Math.round((rebooked / cancellations) * 100) : 0, revenueRecovered: realRevenue, pendingOutreach: Number(contactedRows[0]?.c ?? 0), period: "30d" };
   }),
 
   retentionMetrics: tenantProcedure.query(async ({ ctx }) => {
@@ -111,7 +144,8 @@ export const analyticsRouter = router({
     const active = Number(activeRows[0]?.c ?? 0);
     const churned = Number(lostRows[0]?.c ?? 0);
     const reactivated = Number(bookedRows[0]?.c ?? 0);
-    return { totalClients: total, activeClients: active, churnedClients: churned, retentionRate: total > 0 ? Math.round((active / total) * 100) : 100, reactivated, period: "90d", rebookedClients: reactivated, ltvExpansion: reactivated * 150, bronzeClients: Math.round(active * 0.5), silverClients: Math.round(active * 0.3), goldClients: Math.round(active * 0.2) };
+    const realRevenue = await getRealRevenue(ctx.db, tid, ninetyDaysAgo);
+    return { totalClients: total, activeClients: active, churnedClients: churned, retentionRate: total > 0 ? Math.round((active / total) * 100) : 100, reactivated, period: "90d", rebookedClients: reactivated, ltvExpansion: realRevenue, bronzeClients: 0, silverClients: 0, goldClients: 0 };
   }),
 
   smartSchedulingMetrics: tenantProcedure.query(async ({ ctx }) => {
@@ -124,9 +158,10 @@ export const analyticsRouter = router({
       ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), eq(leads.status, "booked"), gte(leads.createdAt, sevenDaysAgo))),
     ]);
     const upcoming = Number(upcomingRows[0]?.c ?? 0);
-    const slots = Math.max(0, 40 - upcoming);
-    const fillRate = Math.min(100, Math.round((upcoming / 40) * 100));
-    return { upcomingAppointments: upcoming, slotsAvailable: slots, fillRate, newLeadsThisWeek: Number(totalRows[0]?.c ?? 0), bookedThisWeek: Number(bookedRows[0]?.c ?? 0), period: "7d", totalSlots: 40, filledSlots: upcoming, utilizationRate: fillRate, gapsFilled: Math.round(upcoming * 0.2), revenueImpact: upcoming * 150 };
+    const newLeads = Number(totalRows[0]?.c ?? 0);
+    const booked = Number(bookedRows[0]?.c ?? 0);
+    const realRevenue = await getRealRevenue(ctx.db, tid, sevenDaysAgo);
+    return { upcomingAppointments: upcoming, slotsAvailable: 0, fillRate: 0, newLeadsThisWeek: newLeads, bookedThisWeek: booked, period: "7d", totalSlots: 0, filledSlots: upcoming, utilizationRate: 0, gapsFilled: 0, revenueImpact: realRevenue };
   }),
 
   bookingConversionMetrics: tenantProcedure.query(async ({ ctx }) => {
@@ -140,18 +175,18 @@ export const analyticsRouter = router({
     ]);
     const total = Number(totalRows[0]?.c ?? 0);
     const booked = Number(bookedRows[0]?.c ?? 0);
+    const realRevenue = await getRealRevenue(ctx.db, tid, thirtyDaysAgo);
     return {
       totalLeads: total,
       booked,
       qualified: Number(qualifiedRows[0]?.c ?? 0),
       contacted: Number(contactedRows[0]?.c ?? 0),
       conversionRate: total > 0 ? Math.round((booked / total) * 100) : 0,
-      revenueFromConversions: booked * 150,
+      revenueFromConversions: realRevenue,
       period: "30d",
-      // Additional fields for component compatibility
       bookingsGenerated: booked,
-      mobileOptimization: Math.min(100, 60 + booked),
-      revenueImpact: booked * 150,
+      mobileOptimization: 0,
+      revenueImpact: realRevenue,
     };
   }),
 
@@ -180,7 +215,8 @@ export const analyticsRouter = router({
     ]);
     const booked = Number(bookedRows[0]?.c ?? 0);
     const lost = Number(lostRows[0]?.c ?? 0);
-    return { confirmedBookings: booked, lostToNoPayment: lost, enforcementRate: (booked + lost) > 0 ? Math.round((booked / (booked + lost)) * 100) : 100, revenueProtected: booked * 150, period: "30d", cardOnFileRate: booked > 0 ? Math.round((booked / (booked + lost)) * 100) : 0, cancellationRevenue: lost * 2500, noShowsReduced: Math.round(booked * 0.15), revenueImpact: booked * 15000 };
+    const realRevenue = await getRealRevenue(ctx.db, tid, thirtyDaysAgo);
+    return { confirmedBookings: booked, lostToNoPayment: lost, enforcementRate: (booked + lost) > 0 ? Math.round((booked / (booked + lost)) * 100) : 0, revenueProtected: realRevenue, period: "30d", cardOnFileRate: 0, cancellationRevenue: 0, noShowsReduced: 0, revenueImpact: realRevenue };
   }),
 
   afterHoursMetrics: tenantProcedure.query(async ({ ctx }) => {
@@ -221,7 +257,7 @@ export const analyticsRouter = router({
     ]);
     const totalRuns = Number(totalRunsRows[0]?.c ?? 0);
     const failed = Number(failedRows[0]?.c ?? 0);
-    return { activeAutomations: Number(activeRows[0]?.c ?? 0), totalRuns, failedRuns: failed, successRate: totalRuns > 0 ? Math.round(((totalRuns - failed) / totalRuns) * 100) : 100, messagesSentByAutomation: Number(msgRows[0]?.c ?? 0), period: "30d" };
+    return { activeAutomations: Number(activeRows[0]?.c ?? 0), totalRuns, failedRuns: failed, successRate: totalRuns > 0 ? Math.round(((totalRuns - failed) / totalRuns) * 100) : 0, messagesSentByAutomation: Number(msgRows[0]?.c ?? 0), period: "30d" };
   }),
 
   calendarIntegrationMetrics: tenantProcedure.query(async ({ ctx }) => {
@@ -232,8 +268,7 @@ export const analyticsRouter = router({
     const [bookedRows] = await Promise.all([
       ctx.db.select({ c: sql<number>`count(*)` }).from(leads).where(and(eq(leads.tenantId, tid), isNotNull(leads.appointmentAt))),
     ]);
-    const lastSyncAt = new Date().toISOString();
-    return { connectedCalendars: connected, syncedAppointments: Number(bookedRows[0]?.c ?? 0), syncErrors: 0, lastSyncAt, lastSync: lastSyncAt, period: "30d" };
+    return { connectedCalendars: connected, syncedAppointments: Number(bookedRows[0]?.c ?? 0), syncErrors: 0, lastSyncAt: null, lastSync: null, period: "30d" };
   }),
 
   waitingListMetrics: tenantProcedure.query(async ({ ctx }) => {
@@ -248,7 +283,7 @@ export const analyticsRouter = router({
     const filled = Number(bookedRows[0]?.c ?? 0);
     const flurriesSent = Number(msgRows[0]?.c ?? 0);
     const fillRate = (waitlistSize + filled) > 0 ? Math.round((filled / (waitlistSize + filled)) * 100) : 0;
-    return { activeWaitlistSize: waitlistSize, filledFromWaitlist: filled, flurriesSent, fillRate, period: "30d", cancellationFlurriesSent: flurriesSent, filledThisWeek: filled, avgWaitTimeHours: 4, recentActivity: [] as any[], filledViaFlurry: Math.round(filled * 0.6), avgResponseTimeMinutes: 12, flurryFillRate: fillRate };
+    return { activeWaitlistSize: waitlistSize, filledFromWaitlist: filled, flurriesSent, fillRate, period: "30d", cancellationFlurriesSent: flurriesSent, filledThisWeek: filled, avgWaitTimeHours: 0, recentActivity: [] as any[], filledViaFlurry: 0, avgResponseTimeMinutes: 0, flurryFillRate: fillRate };
   }),
 
   reviewManagementMetrics: tenantProcedure.query(async ({ ctx }) => {
@@ -261,7 +296,14 @@ export const analyticsRouter = router({
     ]);
     const requested = Number(bookedRows[0]?.c ?? 0);
     const received = Number(inboundRows[0]?.c ?? 0);
-    return { reviewsRequested: requested, reviewsReceived: Math.min(received, requested), averageRating: 4.7, responseRate: requested > 0 ? Math.min(100, Math.round((received / requested) * 100)) : 0, period: "30d", ratingDistribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }, recentActivity: [] as any[] };
+    return { reviewsRequested: requested, reviewsReceived: Math.min(received, requested), averageRating: 0, responseRate: requested > 0 ? Math.min(100, Math.round((received / requested) * 100)) : 0, period: "30d", ratingDistribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }, recentActivity: [] as any[] };
+  }),
+
+  // ─── After-Hours Queue Processing ────────────────────────────────
+  processAfterHoursQueue: tenantProcedure.mutation(async ({ ctx }) => {
+    const AfterHoursService = await import("../services/after-hours.service");
+    const result = await AfterHoursService.processAfterHoursQueue(ctx.db, ctx.tenantId);
+    return result;
   }),
 
   // ─── Stage 12: Revenue Attribution by Automation ─────────────────
@@ -274,26 +316,29 @@ export const analyticsRouter = router({
       const tid = ctx.tenantId;
 
       // Get automation-level revenue from recovery events
-      const rows = await ctx.db
-        .select({
-          automationId: recoveryEvents.automationId,
-          automationName: automations.name,
-          totalEvents: sql<number>`COUNT(*)`,
-          conversions: sql<number>`SUM(CASE WHEN ${recoveryEvents.status} IN ('converted', 'realized', 'manual_realized') THEN 1 ELSE 0 END)`,
-          totalRevenue: sql<number>`COALESCE(SUM(${recoveryEvents.realizedRevenue}), 0)`,
-          estimatedRevenue: sql<number>`COALESCE(SUM(${recoveryEvents.estimatedRevenue}), 0)`,
-        })
-        .from(recoveryEvents)
-        .innerJoin(automations, eq(recoveryEvents.automationId, automations.id))
-        .where(
-          and(
-            eq(recoveryEvents.tenantId, tid),
-            gte(recoveryEvents.sentAt, daysAgo),
-            isNotNull(recoveryEvents.automationId),
+      let rows: any[] = [];
+      try {
+        rows = await ctx.db
+          .select({
+            automationId: recoveryEvents.automationId,
+            automationName: automations.name,
+            totalEvents: sql<number>`COUNT(*)`,
+            conversions: sql<number>`SUM(CASE WHEN ${recoveryEvents.status} IN ('converted', 'realized', 'manual_realized') THEN 1 ELSE 0 END)`,
+            totalRevenue: sql<number>`COALESCE(SUM(${recoveryEvents.realizedRevenue}), 0)`,
+            estimatedRevenue: sql<number>`COALESCE(SUM(${recoveryEvents.estimatedRevenue}), 0)`,
+          })
+          .from(recoveryEvents)
+          .innerJoin(automations, eq(recoveryEvents.automationId, automations.id))
+          .where(
+            and(
+              eq(recoveryEvents.tenantId, tid),
+              gte(recoveryEvents.sentAt, daysAgo),
+              isNotNull(recoveryEvents.automationId),
+            )
           )
-        )
-        .groupBy(recoveryEvents.automationId, automations.name)
-        .orderBy(desc(sql`totalRevenue`));
+          .groupBy(recoveryEvents.automationId, automations.name)
+          .orderBy(desc(sql`totalRevenue`));
+      } catch { /* recovery_events query failed — return empty */ }
 
       return {
         automations: rows.map((r) => ({
@@ -355,7 +400,7 @@ export const analyticsRouter = router({
     const reschedules = Number(contactedRows[0]?.c ?? 0);
     const rebooked = Number(bookedRows[0]?.c ?? 0);
     const prevented = Math.min(rebooked, Number(lostRows[0]?.c ?? 0));
-    return { totalReschedules: reschedules, successfulRebooks: rebooked, preventedNoShows: prevented, avgRescheduleTimeMinutes: 12, avgRescheduleTime: 12, period: "30d" };
+    return { totalReschedules: reschedules, successfulRebooks: rebooked, preventedNoShows: prevented, avgRescheduleTimeMinutes: 0, avgRescheduleTime: 0, period: "30d" };
   }),
 
   // ─── Additional analytics procedures used by hooks and components ─────────
@@ -374,19 +419,19 @@ export const analyticsRouter = router({
     const lost = Number(lostRows[0]?.c ?? 0);
     const total = Number(totalRows[0]?.c ?? 0);
     const msgSent = Number(msgRows[0]?.c ?? 0);
+    const realRevenue = await getRealRevenue(ctx.db, tid, thirtyDaysAgo);
     return {
       totalRecovered: recovered,
       totalLost: lost,
       totalLeads: total,
       messagesSent: msgSent,
       recoveryRate: lost > 0 ? Math.round((recovered / lost) * 100) : 0,
-      estimatedRevenue: recovered * 150,
+      estimatedRevenue: realRevenue,
       period: "30d",
-      // Additional fields for component compatibility
-      totalLeakage: lost * 150,
-      recoveredRevenue: recovered * 150,
+      totalLeakage: 0,
+      recoveredRevenue: realRevenue,
       recoveryActions: { byType: {} as Record<string, unknown>, total: msgSent },
-      automationAttribution: { automationRecovered: recovered * 120, manualRecovered: recovered * 30 },
+      automationAttribution: { automationRecovered: realRevenue, manualRecovered: 0 },
       timeSeriesData: [] as Array<{ timestamp: string; recovered: number; leakage: number; automationRevenue: number; automationActions: number }>,
     };
   }),
@@ -394,16 +439,19 @@ export const analyticsRouter = router({
   automationPerformance: tenantProcedure.query(async ({ ctx }) => {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const tid = ctx.tenantId;
-    const [activeRows, totalRunsRows, msgRows] = await Promise.all([
+    const [activeRows, totalRunsRows, failedRows, msgRows] = await Promise.all([
       ctx.db.select({ c: sql<number>`count(*)` }).from(automations).where(and(eq(automations.tenantId, tid), eq(automations.enabled, true), isNull(automations.deletedAt))),
-      ctx.db.select({ c: sql<number>`sum(${automations.runCount})` }).from(automations).where(and(eq(automations.tenantId, tid), isNull(automations.deletedAt))),
+      ctx.db.select({ c: sql<number>`COALESCE(sum(${automations.runCount}), 0)` }).from(automations).where(and(eq(automations.tenantId, tid), isNull(automations.deletedAt))),
+      ctx.db.select({ c: sql<number>`COALESCE(sum(${automations.errorCount}), 0)` }).from(automations).where(and(eq(automations.tenantId, tid), isNull(automations.deletedAt))),
       ctx.db.select({ c: sql<number>`count(*)` }).from(messages).where(and(eq(messages.tenantId, tid), isNotNull(messages.automationId), gte(messages.createdAt, thirtyDaysAgo))),
     ]);
+    const totalRuns = Number(totalRunsRows[0]?.c ?? 0);
+    const failedRuns = Number(failedRows[0]?.c ?? 0);
     return {
       activeAutomations: Number(activeRows[0]?.c ?? 0),
-      totalRuns: Number(totalRunsRows[0]?.c ?? 0),
+      totalRuns,
       messagesSent: Number(msgRows[0]?.c ?? 0),
-      successRate: 95,
+      successRate: totalRuns > 0 ? Math.round(((totalRuns - failedRuns) / totalRuns) * 100) : 0,
       period: "30d",
     };
   }),
@@ -419,15 +467,16 @@ export const analyticsRouter = router({
     ]);
     const recentBooked = Number(bookedRows[0]?.c ?? 0);
     const lost = Number(lostRows[0]?.c ?? 0);
+    const realRevenue = await getRealRevenue(ctx.db, tid, thirtyDaysAgo);
     return {
-      totalRecoveredRevenue: recentBooked * 150,
-      recentRecoveredRevenue: recentBooked * 150,
-      potentialRevenue: (Number(qualifiedRows[0]?.c ?? 0) + lost) * 150,
-      lostRevenue: lost * 150,
-      pipelineRevenue: Number(contactedRows[0]?.c ?? 0) * 150,
+      totalRecoveredRevenue: realRevenue,
+      recentRecoveredRevenue: realRevenue,
+      potentialRevenue: 0,
+      lostRevenue: 0,
+      pipelineRevenue: 0,
       overallRecoveryRate: lost > 0 ? Math.round((recentBooked / lost) * 100) : 0,
       recentRecoveryRate: lost > 0 ? Math.round((recentBooked / lost) * 100) : 0,
-      avgRevenuePerBooking: 150,
+      avgRevenuePerBooking: recentBooked > 0 ? Math.round(realRevenue / recentBooked) : 0,
       recentBookingsCount: recentBooked,
       lostLeadsCount: lost,
       qualifiedLeadsCount: Number(qualifiedRows[0]?.c ?? 0),
@@ -448,14 +497,13 @@ export const analyticsRouter = router({
     const rate = total > 0 ? Math.round((booked / total) * 100) : 0;
     return {
       conversionRate: rate,
-      overallConversionRate: rate, // alias for component compatibility
+      overallConversionRate: rate,
       totalLeads: total,
       converted: booked,
-      avgTimeToConvert: 2.5,
+      avgTimeToConvert: 0,
       period: "30d",
-      // Additional fields for dynamic automation hook compatibility
-      noShowRate: 18,
-      cancellationRate: 12,
+      noShowRate: 0,
+      cancellationRate: 0,
       recentBookings: booked,
     };
   }),
@@ -565,4 +613,29 @@ export const analyticsRouter = router({
       ],
     };
   }),
+
+  // ─── n8n Analytics Endpoints ─────────────────────────────────────────────
+  n8nMetrics: tenantProcedure
+    .input(z.object({ days: z.number().int().min(1).max(90).default(30) }).optional())
+    .query(async ({ ctx, input }) => {
+      const { getN8nExecutionMetrics } = await import("../services/n8n-analytics.service");
+      const from = new Date(Date.now() - (input?.days ?? 30) * 24 * 60 * 60 * 1000);
+      return await getN8nExecutionMetrics(ctx.db, ctx.tenantId, { from, to: new Date() });
+    }),
+
+  n8nComparison: tenantProcedure
+    .input(z.object({ days: z.number().int().min(1).max(90).default(30) }).optional())
+    .query(async ({ ctx, input }) => {
+      const { getN8nVsBuiltInComparison } = await import("../services/n8n-analytics.service");
+      const from = new Date(Date.now() - (input?.days ?? 30) * 24 * 60 * 60 * 1000);
+      return await getN8nVsBuiltInComparison(ctx.db, ctx.tenantId, { from, to: new Date() });
+    }),
+
+  n8nWorkflowRoi: tenantProcedure
+    .input(z.object({ days: z.number().int().min(1).max(90).default(30) }).optional())
+    .query(async ({ ctx, input }) => {
+      const { getPerWorkflowRoi } = await import("../services/n8n-analytics.service");
+      const from = new Date(Date.now() - (input?.days ?? 30) * 24 * 60 * 60 * 1000);
+      return await getPerWorkflowRoi(ctx.db, ctx.tenantId, { from, to: new Date() });
+    }),
 });

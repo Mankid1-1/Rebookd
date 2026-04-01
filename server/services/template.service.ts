@@ -11,6 +11,19 @@ export async function getTemplates(db: Db, tenantId: number) {
     .orderBy(templates.name);
 }
 
+/**
+ * Look up a template by its unique key for a tenant.
+ * Used by the automation engine to resolve custom message bodies.
+ */
+export async function getTemplateByKey(db: Db, tenantId: number, key: string) {
+  const result = await db
+    .select()
+    .from(templates)
+    .where(and(eq(templates.tenantId, tenantId), eq(templates.key, key), isNull(templates.deletedAt)))
+    .limit(1);
+  return result[0] ?? null;
+}
+
 export async function getTemplateById(db: Db, tenantId: number, templateId: number) {
   const result = await db
     .select()

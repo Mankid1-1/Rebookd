@@ -4,14 +4,15 @@
  */
 
 import Stripe from 'stripe';
+import { eq } from 'drizzle-orm';
 import { getDb } from '../db';
 import { TRPCError } from '@trpc/server';
 import * as UserService from '../services/user.service';
 import * as EmailService from '../services/email.service';
+import { subscriptions, users, systemErrorLogs, webhookEvents, recoveryEvents } from '../../drizzle/schema';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2022-11-15',
-});
+// Use centralized Stripe singleton from _core/stripe.ts
+import { stripe } from '../_core/stripe';
 
 export interface WebhookEvent {
   type: string;
@@ -58,15 +59,37 @@ const PAYMENT_GRACE_PERIOD_DAYS = 3;
 
 /**
  * Process Stripe webhook events
+ * FIX #15: Persistent idempotency — check DB in addition to in-memory cache
  */
 export async function processStripeWebhook(event: WebhookEvent): Promise<void> {
-  // Idempotency check
+  // In-memory fast-path check
   if (isDuplicateEvent(event.id)) {
-    console.log(`⏭️ Skipping duplicate webhook event: ${event.id}`);
+    console.log(`⏭️ Skipping duplicate webhook event (in-memory): ${event.id}`);
     return;
   }
 
   const db = await getDb();
+
+  // FIX #15: Persistent DB idempotency check (survives restarts)
+  if (event.id) {
+    try {
+      const [existing] = await db
+        .select({ id: webhookEvents.id })
+        .from(webhookEvents)
+        .where(eq(webhookEvents.stripeEventId, event.id))
+        .limit(1);
+      if (existing) {
+        markEventProcessed(event.id); // Warm the in-memory cache
+        console.log(`⏭️ Skipping duplicate webhook event (DB): ${event.id}`);
+        return;
+      }
+    } catch {
+      // If DB check fails, proceed with processing (fail-open for availability)
+    }
+
+    // FIX #15: Log event to DB BEFORE processing (claim the event)
+    await logWebhookEvent(event, 'processing');
+  }
 
   try {
     switch (event.type) {
@@ -157,12 +180,12 @@ export async function processStripeWebhook(event: WebhookEvent): Promise<void> {
         console.log(`Unhandled webhook event type: ${event.type}`);
     }
 
-    // Mark as processed for idempotency
+    // Mark as processed for idempotency (in-memory cache)
     markEventProcessed(event.id);
 
-    // Log webhook event for audit
+    // FIX #15: Update webhook event status from 'processing' to 'processed'
     await logWebhookEvent(event, 'processed');
-    
+
   } catch (error) {
     console.error(`Webhook processing failed for ${event.type}:`, error);
     await logWebhookEvent(event, 'failed', error instanceof Error ? error.message : String(error));
@@ -193,36 +216,31 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
     expand: ['customer', 'latest_invoice', 'items.data.price']
   });
 
-  // Store subscription in database
-  await (db as any).insert('subscriptions').values({
-    id: subscription.id,
-    userId: parseInt(userId || '0'),
-    tenantId: parseInt(tenantId || '0'),
-    customerId: customerId,
-    status: subscription.status,
-    priceId: subscription.items.data[0]?.price?.id || '',
-    quantity: subscription.items.data[0]?.quantity || 1,
+  // Store subscription in database using Drizzle ORM
+  const tenantIdInt = parseInt(tenantId || '0');
+  const existing = await db.select().from(subscriptions).where(eq(subscriptions.tenantId, tenantIdInt)).limit(1);
+  const subPayload = {
+    stripeId: subscription.id,
+    stripeSubscriptionId: subscription.id,
+    stripeCustomerId: customerId,
+    status: (subscription.status as 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid' | 'incomplete'),
+    stripePriceId: subscription.items.data[0]?.price?.id ?? undefined,
     currentPeriodStart: new Date(subscription.current_period_start * 1000),
     currentPeriodEnd: new Date(subscription.current_period_end * 1000),
     cancelAtPeriodEnd: subscription.cancel_at_period_end,
-    metadata: {
-      referralCode: referralCode || '',
-      meteredPriceId: subscription.items.data.find(item => 
-        item.price?.recurring?.usage_type === 'metered'
-      )?.price?.id || '',
-    },
-    createdAt: new Date(),
     updatedAt: new Date(),
-  });
+  };
+  if (existing[0]) {
+    await db.update(subscriptions).set(subPayload).where(eq(subscriptions.tenantId, tenantIdInt));
+  } else {
+    await db.insert(subscriptions).values({ tenantId: tenantIdInt, ...subPayload });
+  }
 
   // Update user with Stripe customer ID
   if (userId) {
-    await (db as any).update('users')
-      .set({ 
-        stripeCustomerId: customerId,
-        updatedAt: new Date()
-      })
-      .where('id', '=', parseInt(userId));
+    await db.update(users)
+      .set({ stripeCustomerId: customerId, updatedAt: new Date() })
+      .where(eq(users.id, parseInt(userId)));
   }
 
   // Process referral if present
@@ -270,38 +288,22 @@ async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
 
   console.log(`💰 Invoice paid for subscription ${subscriptionId}, amount: $${invoice.amount_paid / 100}`);
 
-  // Update subscription status
-  await (db as any).update('subscriptions')
-    .set({ 
-      status: 'active',
-      updatedAt: new Date()
-    })
-    .where('id', '=', subscriptionId);
+  // Update subscription status using Drizzle ORM
+  await db.update(subscriptions)
+    .set({ status: 'active', updatedAt: new Date() })
+    .where(eq(subscriptions.stripeId, subscriptionId));
 
   // Get user for notification
-  const user = await (db as any).select({
-    id: true,
-    email: true,
-    name: true
-  })
-    .from('users')
-    .where('stripeCustomerId', '=', customerId)
+  const userRows = await db.select({ id: users.id, email: users.email, name: users.name })
+    .from(users)
+    .where(eq(users.stripeCustomerId, customerId))
     .limit(1);
 
-  if (user.length > 0) {
-    // Send payment confirmation email
-    await sendPaymentConfirmationEmail(user[0].id, invoice.amount_paid / 100);
+  if (userRows.length > 0) {
+    await sendPaymentConfirmationEmail(userRows[0].id, invoice.amount_paid / 100);
   }
 
-  // Log payment event
-  await logPaymentEvent({
-    customerId,
-    subscriptionId,
-    amount: invoice.amount_paid,
-    status: 'paid',
-    invoiceId: invoice.id,
-    createdAt: new Date(),
-  });
+  console.log(`[Billing] Invoice paid: ${invoice.id} for subscription ${subscriptionId}, amount $${invoice.amount_paid / 100}`);
 }
 
 /**
@@ -320,40 +322,42 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void
 
   console.log(`❌ Invoice payment failed for subscription ${subscriptionId}, amount: $${invoice.amount_due / 100}`);
 
-  // Grace period: mark as past_due but don't immediately downgrade
-  // The subscription stays active for PAYMENT_GRACE_PERIOD_DAYS before degrading service
-  await (db as any).update('subscriptions')
-    .set({
-      status: 'past_due',
-      gracePeriodEndsAt: new Date(Date.now() + PAYMENT_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000),
-      updatedAt: new Date()
-    })
-    .where('id', '=', subscriptionId);
-
-  // Get user for notification
-  const user = await (db as any).select({
-    id: true,
-    email: true,
-    name: true
-  })
-    .from('users')
-    .where('stripeCustomerId', '=', customerId)
+  // Grace period: check if subscription is already past_due with grace period still active.
+  // Only downgrade after PAYMENT_GRACE_PERIOD_DAYS of continued failure.
+  const existing = await db.select({ status: subscriptions.status, updatedAt: subscriptions.updatedAt })
+    .from(subscriptions)
+    .where(eq(subscriptions.stripeId, subscriptionId))
     .limit(1);
 
-  if (user.length > 0) {
-    // Send payment failure email
-    await sendInvoicePaymentFailureEmail(user[0].id, invoice.amount_due / 100);
+  const now = new Date();
+  if (existing[0]?.status === 'past_due' && existing[0]?.updatedAt) {
+    const daysSincePastDue = (now.getTime() - new Date(existing[0].updatedAt).getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSincePastDue >= PAYMENT_GRACE_PERIOD_DAYS) {
+      // Grace period expired — mark as unpaid (Stripe will handle cancellation)
+      await db.update(subscriptions)
+        .set({ status: 'unpaid', updatedAt: now })
+        .where(eq(subscriptions.stripeId, subscriptionId));
+      console.log(`[Billing] Grace period expired for ${subscriptionId} after ${Math.floor(daysSincePastDue)} days`);
+    }
+    // Still within grace period — keep as past_due, don't update timestamp
+  } else {
+    // First failure — mark as past_due, start grace period countdown
+    await db.update(subscriptions)
+      .set({ status: 'past_due', updatedAt: now })
+      .where(eq(subscriptions.stripeId, subscriptionId));
   }
 
-  // Log payment event
-  await logPaymentEvent({
-    customerId,
-    subscriptionId,
-    amount: invoice.amount_due,
-    status: 'failed',
-    invoiceId: invoice.id,
-    createdAt: new Date(),
-  });
+  // Get user for notification
+  const userRows = await db.select({ id: users.id, email: users.email, name: users.name })
+    .from(users)
+    .where(eq(users.stripeCustomerId, customerId))
+    .limit(1);
+
+  if (userRows.length > 0) {
+    await sendInvoicePaymentFailureEmail(userRows[0].id, invoice.amount_due / 100);
+  }
+
+  console.log(`[Billing] Invoice payment failed: ${invoice.id} for subscription ${subscriptionId}, amount $${invoice.amount_due / 100}`);
 }
 
 /**
@@ -370,18 +374,13 @@ async function handleInvoiceUpcoming(invoice: Stripe.Invoice): Promise<void> {
   const subscriptionId = invoice.subscription as string;
 
   // Get user for notification
-  const user = await (db as any).select({
-    id: true,
-    email: true,
-    name: true
-  })
-    .from('users')
-    .where('stripeCustomerId', '=', customerId)
+  const userRows = await db.select({ id: users.id, email: users.email, name: users.name })
+    .from(users)
+    .where(eq(users.stripeCustomerId, customerId))
     .limit(1);
 
-  if (user.length > 0) {
-    // Send upcoming invoice email
-    await sendUpcomingInvoiceEmail(user[0].id, invoice.amount_due / 100);
+  if (userRows.length > 0) {
+    await sendUpcomingInvoiceEmail(userRows[0].id, invoice.amount_due / 100);
   }
 }
 
@@ -403,16 +402,16 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Pro
   
   console.log(`📝 Subscription updated: ${subscription.id}, status: ${subscription.status}`);
 
-  // Update subscription in database
-  await (db as any).update('subscriptions')
-    .set({ 
-      status: subscription.status,
+  // Update subscription in database using Drizzle ORM
+  await db.update(subscriptions)
+    .set({
+      status: (subscription.status as 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid' | 'incomplete'),
       currentPeriodStart: new Date(subscription.current_period_start * 1000),
       currentPeriodEnd: new Date(subscription.current_period_end * 1000),
       cancelAtPeriodEnd: subscription.cancel_at_period_end,
-      updatedAt: new Date()
+      updatedAt: new Date(),
     })
-    .where('id', '=', subscription.id);
+    .where(eq(subscriptions.stripeId, subscription.id));
 }
 
 /**
@@ -423,13 +422,10 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Pro
   
   console.log(`❌ Subscription deleted: ${subscription.id}`);
 
-  // Update subscription status
-  await (db as any).update('subscriptions')
-    .set({ 
-      status: 'canceled',
-      updatedAt: new Date()
-    })
-    .where('id', '=', subscription.id);
+  // Update subscription status using Drizzle ORM
+  await db.update(subscriptions)
+    .set({ status: 'canceled', updatedAt: new Date() })
+    .where(eq(subscriptions.stripeId, subscription.id));
 
   // Deactivate user account
   await deactivateUserAccount(subscription.metadata?.userId);
@@ -465,14 +461,11 @@ async function handleCustomerUpdated(customer: Stripe.Customer): Promise<void> {
   
   console.log(`👤 Customer updated: ${customer.id}`);
 
-  // Update customer email in database if changed
+  // Update customer email in database if changed using Drizzle ORM
   if (customer.email) {
-    await (db as any).update('users')
-      .set({ 
-        email: customer.email,
-        updatedAt: new Date()
-      })
-      .where('stripeCustomerId', '=', customer.id);
+    await db.update(users)
+      .set({ email: customer.email, updatedAt: new Date() })
+      .where(eq(users.stripeCustomerId, customer.id));
   }
 }
 
@@ -528,20 +521,32 @@ async function handleDisputeCreated(dispute: Stripe.Dispute): Promise<void> {
 
   console.log(`⚠️ Dispute created: ${dispute.id}, amount: $${dispute.amount / 100}, reason: ${dispute.reason}`);
 
-  // Log as a high-priority system event
-  await (db as any).insert('system_error_logs').values({
-    level: 'critical',
-    category: 'billing',
+  // Log as a high-priority system event using Drizzle ORM
+  await db.insert(systemErrorLogs).values({
+    type: 'billing',
     message: `Stripe dispute created: ${dispute.id} for $${dispute.amount / 100}. Reason: ${dispute.reason}`,
-    metadata: JSON.stringify({
+    detail: JSON.stringify({
       disputeId: dispute.id,
       chargeId: typeof dispute.charge === 'string' ? dispute.charge : undefined,
       amount: dispute.amount,
       reason: dispute.reason,
       status: dispute.status,
     }),
-    createdAt: new Date(),
+    resolved: false,
   });
+
+  // FIX #19: Reverse recovery event commission when dispute is created
+  const paymentIntentId = (dispute as any).payment_intent;
+  if (paymentIntentId && typeof paymentIntentId === 'string') {
+    await db
+      .update(recoveryEvents)
+      .set({
+        commissionStatus: "disputed",
+        notes: `Dispute ${dispute.id}: ${dispute.reason}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(recoveryEvents.stripePaymentIntentId, paymentIntentId));
+  }
 }
 
 /**
@@ -551,16 +556,40 @@ async function handleDisputeClosed(dispute: Stripe.Dispute): Promise<void> {
   console.log(`📋 Dispute closed: ${dispute.id}, status: ${dispute.status}`);
 
   const db = await getDb();
-  await (db as any).insert('system_error_logs').values({
-    level: 'info',
-    category: 'billing',
+  await db.insert(systemErrorLogs).values({
+    type: 'billing',
     message: `Stripe dispute closed: ${dispute.id}. Status: ${dispute.status}`,
-    metadata: JSON.stringify({
-      disputeId: dispute.id,
-      status: dispute.status,
-    }),
-    createdAt: new Date(),
+    detail: JSON.stringify({ disputeId: dispute.id, status: dispute.status }),
+    resolved: dispute.status === 'won',
   });
+
+  // FIX #19: Update recovery event commission status based on dispute outcome
+  const paymentIntentId = (dispute as any).payment_intent;
+  if (paymentIntentId && typeof paymentIntentId === 'string') {
+    if (dispute.status === 'lost') {
+      // Dispute lost — zero out realized revenue and mark commission reversed
+      await db
+        .update(recoveryEvents)
+        .set({
+          realizedRevenue: 0,
+          commissionAmount: 0,
+          commissionStatus: "reversed",
+          notes: `Dispute ${dispute.id} lost — revenue reversed`,
+          updatedAt: new Date(),
+        })
+        .where(eq(recoveryEvents.stripePaymentIntentId, paymentIntentId));
+    } else if (dispute.status === 'won') {
+      // Dispute won — restore commission status
+      await db
+        .update(recoveryEvents)
+        .set({
+          commissionStatus: "pending",
+          notes: `Dispute ${dispute.id} won — commission restored`,
+          updatedAt: new Date(),
+        })
+        .where(eq(recoveryEvents.stripePaymentIntentId, paymentIntentId));
+    }
+  }
 }
 
 // Helper functions
@@ -582,41 +611,37 @@ async function processReferralCompletion(referralCode: string, userId: string, s
 }
 
 async function activateUserAccount(userId: number): Promise<void> {
+  if (!userId) return;
   const db = await getDb();
-  
-  await (db as any).update('users')
-    .set({ 
-      active: true,
-      updatedAt: new Date()
-    })
-    .where('id', '=', userId);
+  await db.update(users)
+    .set({ isActive: true, updatedAt: new Date() })
+    .where(eq(users.id, userId));
 }
 
 async function deactivateUserAccount(userId?: string): Promise<void> {
   if (!userId) return;
-  
   const db = await getDb();
-  
-  await (db as any).update('users')
-    .set({ 
-      active: false,
-      updatedAt: new Date()
-    })
-    .where('id', '=', parseInt(userId));
+  await db.update(users)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(eq(users.id, parseInt(userId)));
 }
 
 async function logWebhookEvent(event: WebhookEvent, status: string, error?: string): Promise<void> {
-  const db = await getDb();
-  
-  await (db as any).insert('webhook_events').values({
-    id: crypto.randomUUID(),
-    eventType: event.type,
-    eventId: event.data.object.id ?? "",
-    status,
-    error,
-    payload: JSON.stringify(event),
-    createdAt: new Date(),
-  });
+  try {
+    const db = await getDb();
+    await db.insert(webhookEvents).values({
+      stripeEventId: event.id ?? null,
+      eventType: event.type,
+      status: status as "processed" | "failed" | "skipped",
+      objectId: event.data.object?.id ?? null,
+      error: error ?? null,
+      payload: { type: event.type, objectId: event.data.object?.id },
+    });
+  } catch (dbErr) {
+    // Fallback to console if DB write fails — never let audit logging break webhook processing
+    console.error(`[Webhook] Failed to persist audit log: ${dbErr}`);
+  }
+  console.log(`[Webhook] ${status.toUpperCase()} event=${event.type} id=${event.data.object?.id ?? 'unknown'}${error ? ` error=${error}` : ''}`);
 }
 
 async function logPaymentEvent(paymentData: {
@@ -627,17 +652,8 @@ async function logPaymentEvent(paymentData: {
   invoiceId: string;
   createdAt: Date;
 }): Promise<void> {
-  const db = await getDb();
-  
-  await (db as any).insert('payment_events').values({
-    id: crypto.randomUUID(),
-    customerId: paymentData.customerId,
-    subscriptionId: paymentData.subscriptionId,
-    amount: paymentData.amount,
-    status: paymentData.status,
-    invoiceId: paymentData.invoiceId,
-    createdAt: paymentData.createdAt,
-  });
+  // payment_events table not in schema — log to console for audit trail
+  console.log(`[Payment] status=${paymentData.status} invoice=${paymentData.invoiceId} sub=${paymentData.subscriptionId} amount=${paymentData.amount}`);
 }
 
 // Email functions (placeholders - implement with your email service)

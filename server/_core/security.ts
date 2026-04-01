@@ -39,6 +39,14 @@ const SANITIZATION_SKIP_PATHS = [
   "/api/inbound-sms",
   "/api/webhooks/telnyx",
   "/api/webhooks/twilio",
+  "/api/auth/verify-email",  // Clicked from email - no Origin header
+  "/api/auth/signin",        // Server-rendered login form POST
+  "/api/calendar/",          // OAuth callbacks from Google/Outlook/Calendly — redirects have no Origin
+  "/api/version",            // Health check from curl/monitoring
+  "/api/health",             // Health check endpoint
+  "/api/trpc/ai.",           // AI chat/generation: user text naturally contains patterns that false-positive
+  "/api/system/client-error", // Client-side telemetry (dead clicks, CLS) — contains selectors/URLs that false-positive
+  "/api/system/deploy-record", // Internal deploy script call from localhost — no Origin header
 ];
 
 // ─── Security Headers ────────────────────────────────────────────────────────
@@ -60,9 +68,8 @@ function buildCsp(): string {
     "upgrade-insecure-requests": [],
   };
 
-  // In development, allow Vite HMR websocket and inline scripts
+  // In development, allow Vite HMR websocket
   if (IS_DEV) {
-    directives["script-src"].push("'unsafe-inline'");
     directives["connect-src"].push("ws://localhost:*", "ws://127.0.0.1:*", "http://localhost:*");
     delete directives["upgrade-insecure-requests"];
   }
@@ -75,13 +82,7 @@ function buildCsp(): string {
 const CSP_HEADER = buildCsp();
 
 export function securityHeaders(req: Request, res: Response, next: NextFunction): void {
-  // Login page is server-rendered HTML with inline scripts — needs unsafe-inline
-  if (req.path === "/login" || req.path === "/api/auth/verify-email") {
-    const loginCsp = CSP_HEADER.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'");
-    res.setHeader("Content-Security-Policy", loginCsp);
-  } else {
-    res.setHeader("Content-Security-Policy", CSP_HEADER);
-  }
+  res.setHeader("Content-Security-Policy", CSP_HEADER);
 
   // Prevent MIME-type sniffing
   res.setHeader("X-Content-Type-Options", "nosniff");
@@ -104,9 +105,9 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
   // Feature / Permissions policy
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
 
-  // Cross-origin isolation headers
-  res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
-  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  // Cross-origin policy (use "same-site" to avoid breaking module preloads
+  // when nginx proxies static assets without forwarding Host header)
+  res.setHeader("Cross-Origin-Resource-Policy", "same-site");
   res.setHeader("X-Permitted-Cross-Domain-Policies", "none");
 
   // Cache-Control for API responses (prevent caching sensitive data)
@@ -135,7 +136,7 @@ function stripHtmlTags(value: string): string {
 const SQL_PATTERNS: RegExp[] = [
   /(\b(UNION|SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|EXEC|EXECUTE)\b\s)/i,
   /(\b(OR|AND)\b\s+[\w'"]+\s*=\s*[\w'"]+)/i,
-  /(--|#|\/\*)/,
+  /(--\s|\/\*)/,  // SQL comments (-- with space, or /* block). # removed — too many false positives on URLs
   /(\bWAITFOR\b\s+\bDELAY\b)/i,
   /(\bBENCHMARK\b\s*\()/i,
   /(\bSLEEP\b\s*\()/i,
@@ -249,6 +250,15 @@ export function sanitizeObject(
         .replace(/<[^>]*>/g, "")
         .replace(/\$\w+/g, "")
         .replace(/(--|\/\*|\*\/)/g, "");
+    }
+    // Auto-tokenize any credit card numbers that slip through input fields
+    const cardPattern = /\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\b/;
+    if (cardPattern.test(stripped)) {
+      logger.warn("Auto-tokenized credit card number in request input", {
+        ip: context?.ip,
+        path: context?.path,
+      });
+      return stripped.replace(cardPattern, "[REDACTED]");
     }
     return stripped;
   }
@@ -367,10 +377,11 @@ export function authRateLimit(
   next: NextFunction,
 ): void {
   // Only rate-limit mutating auth endpoints (POST), not session checks (GET /auth.me)
+  // Matches both REST paths (/api/auth/signin) and tRPC paths (/api/trpc/auth.login)
   if (req.method !== "POST" ||
     !req.path.startsWith("/api/") ||
     !req.path.match(
-      /\/(signin|signup|register|reset-password|forgot-password)/i,
+      /\/(signin|signup|register|reset-password|forgot-password)|auth\.(login|signup|requestPasswordReset|resetPassword)/i,
     )
   ) {
     return next();
@@ -515,7 +526,11 @@ export function corsHardening(
     } else if (IS_PRODUCTION && req.path.startsWith("/api/")) {
       // In production, block API requests with no Origin header
       // (allows server-to-server via webhook skip paths)
-      if (!SANITIZATION_SKIP_PATHS.some((p) => req.path.startsWith(p))) {
+      // Also allow same-origin requests where browser sends Referer but not Origin (GET requests)
+      const referer = req.headers.referer || req.headers.referrer;
+      const isSameOriginReferer = referer && ALL_ALLOWED_ORIGINS.some((o) => referer.startsWith(o));
+      const isSkipPath = SANITIZATION_SKIP_PATHS.some((p) => req.path.startsWith(p));
+      if (!isSkipPath && !isSameOriginReferer) {
         logger.warn("Blocked request with no Origin header in production", {
           path: req.path,
           ip: req.ip,
@@ -704,8 +719,14 @@ export async function auditLog(
       return;
     }
 
+    // Skip DB insert if no valid userId — FK constraint requires a real user
+    if (!userId) {
+      logger.debug("Audit log skipped (no userId)", { action, path: details.path });
+      return;
+    }
+
     await db.insert(adminAuditLogs).values({
-      adminUserId: userId || 0,
+      adminUserId: userId,
       action,
       route: details.path || details.route || null,
       metadata: {

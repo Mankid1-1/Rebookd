@@ -34,7 +34,11 @@ export async function createContext(opts: CreateExpressContextOptions): Promise<
 
   try {
     user = await sdk.authenticateRequest(opts.req);
-  } catch {
+  } catch (authErr) {
+    const msg = authErr instanceof Error ? authErr.message : String(authErr);
+    if (msg !== "Invalid session cookie" && msg !== "Missing session cookie") {
+      console.error("[Auth] authenticateRequest failed:", msg);
+    }
     user = null;
   }
 

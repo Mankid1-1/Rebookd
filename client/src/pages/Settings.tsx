@@ -1,8 +1,11 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import { EncryptionBadge } from "@/components/ui/EncryptionBadge";
+import { HelpTooltip, HelpIcon } from "@/components/ui/HelpTooltip";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneInput } from "@/components/ui/SmartInput";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import {
   Building2, Key, Phone, Plus, Trash2, Bell, Shield, Clock,
@@ -17,12 +21,17 @@ import {
   AlertTriangle, CheckCircle2, Circle, Loader2, Link2,
   Mail, MessageSquare, Users, UserPlus, CreditCard, Calendar,
   Lock, FileText, Heart, Zap, TrendingUp, Settings as SettingsIcon,
-  Rocket, Check,
+  Rocket, Check, Palette, Smartphone, Wifi, WifiOff, Battery, Signal,
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { QRCodeSVG } from "qrcode.react";
 import { useLocale } from "@/contexts/LocaleContext";
+import { ThemeSelector } from "@/components/ThemeSelector";
 import { useSkillLevel } from "@/contexts/SkillLevelContext";
+import TechLevelGuide, { GuidePrompt, isGuideSuppressed } from "@/components/TechLevelGuide";
+import { N8nSettings } from "@/components/settings/N8nSettings";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -122,6 +131,183 @@ const SectionHeading = ({ children }: { children: React.ReactNode }) => (
   </h3>
 );
 
+// ─── SMS Gateway Devices ─────────────────────────────────────────────────────
+
+function SmsGatewayDevicesCard() {
+  const [showAddDevice, setShowAddDevice] = useState(false);
+  const utils = trpc.useUtils();
+
+  const { data: devices = [], isLoading, isError } = trpc.tenant.getPhoneserviceDevices.useQuery(undefined, {
+    retry: false,
+    refetchInterval: 30_000, // Refresh every 30s to show live status
+  });
+
+  const generateToken = trpc.tenant.generateDeviceSetupToken.useMutation({
+    onError: () => toast.error("Failed to generate setup code. Check Phoneservice configuration."),
+  });
+
+  const deactivateDevice = trpc.tenant.deactivatePhoneserviceDevice.useMutation({
+    onSuccess: () => {
+      toast.success("Device removed");
+      utils.tenant.getPhoneserviceDevices.invalidate();
+    },
+    onError: () => toast.error("Failed to remove device"),
+  });
+
+  const handleAddDevice = async () => {
+    await generateToken.mutateAsync();
+    setShowAddDevice(true);
+  };
+
+  const formatLastSeen = (lastSeen: string | null) => {
+    if (!lastSeen) return "Never";
+    const diff = Date.now() - new Date(lastSeen).getTime();
+    if (diff < 60_000) return "Just now";
+    if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`;
+    if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`;
+    return new Date(lastSeen).toLocaleDateString();
+  };
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                <Smartphone className="w-4 h-4 text-primary" /> SMS Gateway Devices
+                <HelpTooltip content="Connect Android phones as SMS gateways. Each device sends and receives texts using its own SIM card." variant="info"><span /></HelpTooltip>
+              </CardTitle>
+              <CardDescription>Your connected SMS gateway phones</CardDescription>
+            </div>
+            <Button size="sm" onClick={handleAddDevice} disabled={generateToken.isPending}>
+              {generateToken.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}
+              Add Device
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isError ? (
+            <div className="text-center py-6 text-muted-foreground">
+              <Smartphone className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">Could not connect to SMS gateway server</p>
+              <p className="text-xs mt-1">Make sure the Phoneservice server is running and configured in your environment</p>
+            </div>
+          ) : isLoading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading devices...
+            </div>
+          ) : devices.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Smartphone className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">No devices connected yet</p>
+              <p className="text-xs mt-1">Click "Add Device" to connect an Android phone as an SMS gateway</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {devices.map((device: { id: number; phoneNumber: string; label: string | null; status: string; lastSeenAt: string | null; batteryLevel: number | null; carrier: string | null }) => (
+                <div key={device.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2.5 h-2.5 rounded-full ${device.status === "online" ? "bg-success" : "bg-muted-foreground"}`} />
+                    <div>
+                      <p className="text-sm font-medium">{device.phoneNumber}</p>
+                      <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
+                        {device.label && <span>{device.label}</span>}
+                        <span className="flex items-center gap-1">
+                          {device.status === "online" ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                          {device.status}
+                        </span>
+                        {device.batteryLevel != null && (
+                          <span className="flex items-center gap-1">
+                            <Battery className="w-3 h-3" /> {device.batteryLevel}%
+                          </span>
+                        )}
+                        {device.carrier && <span>{device.carrier}</span>}
+                        <span>Last seen: {formatLastSeen(device.lastSeenAt)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Remove Device</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will disconnect {device.phoneNumber} from your account. The phone will stop sending and receiving messages.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => deactivateDevice.mutate({ deviceId: device.id })}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Remove
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Add Device Modal with QR Code */}
+      <Dialog open={showAddDevice} onOpenChange={setShowAddDevice}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add SMS Gateway Device</DialogTitle>
+            <DialogDescription>
+              Scan this QR code with the Phoneservice Gateway app on your Android phone
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4 py-4">
+            {generateToken.data?.qrData ? (
+              <>
+                <div className="p-4 bg-white rounded-lg">
+                  <QRCodeSVG value={generateToken.data.qrData} size={220} level="M" />
+                </div>
+                <div className="text-center text-sm space-y-2">
+                  <p className="text-muted-foreground">
+                    Token expires in 24 hours
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`${generateToken.data.serverUrl}/download`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline flex items-center gap-1"
+                    >
+                      <Download className="w-4 h-4" /> Download the app
+                    </a>
+                  </div>
+                </div>
+                <Separator />
+                <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+                  <li>Download and install the Phoneservice Gateway app</li>
+                  <li>Open the app and tap "Scan QR Code"</li>
+                  <li>Point your camera at the QR code above</li>
+                  <li>The phone will connect automatically</li>
+                </ol>
+              </>
+            ) : (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin" />
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function Settings() {
@@ -178,6 +364,11 @@ export default function Settings() {
   const [defaultSenderName, setDefaultSenderName] = useState("");
   const [messageFooter, setMessageFooter] = useState("Reply STOP to opt out.");
   const [aiTone, setAiTone] = useState<"friendly" | "professional" | "urgent">("friendly");
+
+  // ── Guide state ──
+  const [showGuidePrompt, setShowGuidePrompt] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [guidePendingLevel, setGuidePendingLevel] = useState<"basic" | "intermediate" | "advanced">(currentSkillLevel as any || "basic");
 
   // ── Notification state ──
   const [emailNotifs, setEmailNotifs] = useState({
@@ -380,6 +571,11 @@ export default function Settings() {
     try {
       await setSkillLevel(level);
       toast.success("Experience level updated");
+      // Offer guide tour if not suppressed
+      if (!isGuideSuppressed()) {
+        setGuidePendingLevel(level);
+        setShowGuidePrompt(true);
+      }
     } catch {
       toast.error("Failed to update experience level");
     }
@@ -400,17 +596,37 @@ export default function Settings() {
 
   const stripeConnected = false;
 
+  const [, setLocation] = useLocation();
+
   return (
     <DashboardLayout>
+      <GuidePrompt
+        open={showGuidePrompt}
+        onAccept={() => {
+          setShowGuidePrompt(false);
+          setShowGuide(true);
+        }}
+        onDecline={() => setShowGuidePrompt(false)}
+        level={guidePendingLevel}
+      />
+      <TechLevelGuide
+        open={showGuide}
+        onClose={() => setShowGuide(false)}
+        level={guidePendingLevel}
+        onNavigate={(path) => setLocation(path)}
+      />
       <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div>
-          <h1
-            className="text-2xl font-bold tracking-tight"
-            style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-          >
-            {t('settings.title')}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1
+              className="text-2xl font-bold tracking-tight"
+              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+            >
+              {t('settings.title')}
+            </h1>
+            <HelpIcon content={{ basic: "Change your business information and preferences", intermediate: "Business profile, hours, messaging preferences, compliance settings, and integrations", advanced: "Tenant-level configuration stored in tenants table. Changes propagate to automation evaluation and message rendering" }} />
+          </div>
           <p className="text-muted-foreground text-sm mt-1">
             {t('settings.subtitle')}
           </p>
@@ -418,9 +634,9 @@ export default function Settings() {
 
         {/* Setup checklist */}
         {phones.length === 0 && (
-          <div className="border border-yellow-500/20 bg-yellow-500/5 rounded-xl p-4 space-y-2.5">
+          <div className="border border-warning/20 bg-warning/5 rounded-xl p-4 space-y-2.5">
             <p className="text-sm font-medium flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-yellow-500" /> Quick setup checklist
+              <AlertTriangle className="w-4 h-4 text-warning" /> Quick setup checklist
             </p>
             {[
               { done: !!tenant?.name && tenant.name !== "My Business", label: "Set your business name" },
@@ -429,7 +645,7 @@ export default function Settings() {
             ].map(({ done, label }) => (
               <div key={label} className="flex items-center gap-2.5 w-full text-left">
                 {done
-                  ? <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+                  ? <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
                   : <Circle className="w-4 h-4 text-muted-foreground shrink-0" />}
                 <span className={`text-sm ${done ? "line-through text-muted-foreground" : "text-foreground"}`}>
                   {label}
@@ -443,27 +659,45 @@ export default function Settings() {
         <Tabs defaultValue="profile" className="space-y-6">
           <TabsList className="flex w-full overflow-x-auto">
             <TabsTrigger value="profile" className="gap-1.5 text-xs sm:text-sm flex-shrink-0">
-              <Building2 className="w-3.5 h-3.5 hidden sm:inline" /> Profile
+              <Building2 className="w-3.5 h-3.5 hidden sm:inline" /> {t('settings.tabProfile')}
+            </TabsTrigger>
+            <TabsTrigger value="appearance" className="gap-1.5 text-xs sm:text-sm flex-shrink-0">
+              <Palette className="w-3.5 h-3.5 hidden sm:inline" /> Appearance
             </TabsTrigger>
             <TabsTrigger value="hours" className="gap-1.5 text-xs sm:text-sm flex-shrink-0">
-              <Clock className="w-3.5 h-3.5 hidden sm:inline" /> Hours
+              <Clock className="w-3.5 h-3.5 hidden sm:inline" /> {t('settings.tabHours')}
             </TabsTrigger>
             <TabsTrigger value="compliance" className="gap-1.5 text-xs sm:text-sm flex-shrink-0">
-              <Shield className="w-3.5 h-3.5 hidden sm:inline" /> Compliance
+              <Shield className="w-3.5 h-3.5 hidden sm:inline" /> {t('settings.tabCompliance')}
             </TabsTrigger>
             <TabsTrigger value="notifications" className="gap-1.5 text-xs sm:text-sm flex-shrink-0">
-              <Bell className="w-3.5 h-3.5 hidden sm:inline" /> Alerts
+              <Bell className="w-3.5 h-3.5 hidden sm:inline" /> {t('settings.tabAlerts')}
             </TabsTrigger>
             <TabsTrigger value="integrations" className="gap-1.5 text-xs sm:text-sm flex-shrink-0">
-              <Link2 className="w-3.5 h-3.5 hidden sm:inline" /> Integrations
+              <Link2 className="w-3.5 h-3.5 hidden sm:inline" /> {t('settings.integrations')}
             </TabsTrigger>
             <TabsTrigger value="security" className="gap-1.5 text-xs sm:text-sm flex-shrink-0">
-              <Lock className="w-3.5 h-3.5 hidden sm:inline" /> Security
+              <Lock className="w-3.5 h-3.5 hidden sm:inline" /> {t('settings.tabSecurity')}
             </TabsTrigger>
             <TabsTrigger value="team" className="gap-1.5 text-xs sm:text-sm flex-shrink-0">
-              <Users className="w-3.5 h-3.5 hidden sm:inline" /> Team
+              <Users className="w-3.5 h-3.5 hidden sm:inline" /> {t('settings.team')}
             </TabsTrigger>
           </TabsList>
+
+          {/* ═══════════════════════ APPEARANCE TAB ═══════════════════════ */}
+          <TabsContent value="appearance" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                  <Palette className="w-4 h-4 text-primary" /> Theme
+                </CardTitle>
+                <CardDescription>Choose a theme that matches your brand and style</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ThemeSelector />
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* ═══════════════════════ BUSINESS PROFILE TAB ═══════════════════════ */}
           <TabsContent value="profile" className="space-y-6">
@@ -471,6 +705,7 @@ export default function Settings() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                   <Building2 className="w-4 h-4 text-primary" /> Business Information
+                  <HelpIcon content={{ basic: "Your business name, phone number, and contact information", intermediate: "Business details used in automated messages and client-facing communications" }} />
                 </CardTitle>
                 <CardDescription>Your public-facing business details</CardDescription>
               </CardHeader>
@@ -495,7 +730,10 @@ export default function Settings() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="biz-name">Business name <span className="text-destructive">*</span></Label>
+                    <Label htmlFor="biz-name" className="flex items-center gap-1">
+                      Business name <span className="text-destructive">*</span>
+                      <HelpTooltip content="Used in all automated messages as {{business}} variable. Keep it short and recognizable." variant="info"><span /></HelpTooltip>
+                    </Label>
                     <Input
                       id="biz-name"
                       value={name}
@@ -507,16 +745,12 @@ export default function Settings() {
                       <p className="text-xs text-destructive">{businessErrors.name}</p>
                     )}
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="biz-phone">Phone number</Label>
-                    <Input
-                      id="biz-phone"
-                      type="tel"
-                      value={businessPhone}
-                      onChange={(e) => setBusinessPhone(e.target.value)}
-                      placeholder="+1 (555) 000-0000"
-                    />
-                  </div>
+                  <PhoneInput
+                    label="Phone number"
+                    placeholder="Phone number"
+                    name="biz-phone"
+                    onChange={(e) => setBusinessPhone(e.target.value)}
+                  />
                   <div className="space-y-1.5">
                     <Label htmlFor="biz-email">Email</Label>
                     <Input
@@ -594,7 +828,10 @@ export default function Settings() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label>Industry</Label>
+                    <Label className="flex items-center gap-1">
+                      Industry
+                      <HelpTooltip content="Used to customize automation templates and messaging tone for your type of business" variant="info"><span /></HelpTooltip>
+                    </Label>
                     <Select value={industry || "other"} onValueChange={setIndustry}>
                       <SelectTrigger><SelectValue placeholder="Select your industry" /></SelectTrigger>
                       <SelectContent>
@@ -605,7 +842,10 @@ export default function Settings() {
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Timezone</Label>
+                    <Label className="flex items-center gap-1">
+                      Timezone
+                      <HelpTooltip content="All scheduled messages and appointments use this timezone. Must match your booking software." variant="info"><span /></HelpTooltip>
+                    </Label>
                     <Select value={timezone || "America/New_York"} onValueChange={setTimezone}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -624,6 +864,7 @@ export default function Settings() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                   <Zap className="w-4 h-4 text-primary" /> Experience Level
+                  <HelpIcon content={{ basic: "Choose how much detail you want to see — basic keeps things simple", intermediate: "Controls UI complexity: basic shows essentials, intermediate adds customization, advanced shows everything", advanced: "Stored in users.skill_level column. Affects conditional rendering across all pages and tooltip content depth" }} />
                 </CardTitle>
                 <CardDescription>
                   Controls the level of guidance and features shown throughout the platform. You can change this anytime.
@@ -714,6 +955,7 @@ export default function Settings() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                   <Clock className="w-4 h-4 text-primary" /> Weekly Schedule
+                  <HelpIcon content={{ basic: "Set when your business is open — Rebooked won't send messages outside these hours", intermediate: "Business hours define the after-hours auto-reply window and quiet hours for TCPA compliance", advanced: "Hours stored as JSON in tenants.business_hours. After-hours service evaluates current time against these windows before sending" }} />
                 </CardTitle>
                 <CardDescription>Set your operating hours for each day of the week</CardDescription>
               </CardHeader>
@@ -824,6 +1066,7 @@ export default function Settings() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                   <MessageSquare className="w-4 h-4 text-primary" /> After-Hours Auto-Reply
+                  <HelpTooltip content="Automatically respond to incoming SMS messages with this message when you're unavailable" variant="info"><span /></HelpTooltip>
                 </CardTitle>
                 <CardDescription>Automatically respond to messages received outside business hours</CardDescription>
               </CardHeader>
@@ -863,11 +1106,15 @@ export default function Settings() {
 
           {/* ═══════════════════════ MESSAGING & COMPLIANCE TAB ═══════════════════════ */}
           <TabsContent value="compliance" className="space-y-6">
+            {/* Encryption & Privacy Notice */}
+            <EncryptionBadge variant="card" />
+
             {/* TCPA Compliance */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                   <Shield className="w-4 h-4 text-primary" /> TCPA Compliance
+                  <HelpIcon content={{ basic: "Rules that stop messages from being sent too early or too late", intermediate: "TCPA quiet hours (default 9pm-8am). Messages queued during quiet hours are held until the window opens", advanced: "TCPA compliance enforced in sms.service.ts. Messages scheduled during quiet hours stored with send_after timestamp. Opt-in/out tracked per lead" }} />
                 </CardTitle>
                 <CardDescription>
                   Telephone Consumer Protection Act compliance settings. These controls help ensure your messaging practices meet federal regulations.
@@ -881,6 +1128,7 @@ export default function Settings() {
                       <Label className="flex items-center gap-2">
                         Quiet hours enforcement
                         <Badge variant="secondary" className="text-[10px] h-5">Required</Badge>
+                        <HelpTooltip content="No messages will be sent during these hours, even if an automation would normally fire" variant="info"><span /></HelpTooltip>
                       </Label>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         No messages before 8 AM or after 9 PM in the recipient's timezone
@@ -1036,7 +1284,7 @@ export default function Settings() {
                     </div>
                     <div className="flex items-center gap-2">
                       {baaStatus === "signed" ? (
-                        <Badge className="bg-green-500/10 text-green-500 border-green-500/20">
+                        <Badge className="bg-success/10 text-success border-success/20">
                           <CheckCircle2 className="w-3 h-3 mr-1" /> Signed
                         </Badge>
                       ) : baaStatus === "pending" ? (
@@ -1067,7 +1315,7 @@ export default function Settings() {
                         All stored data is encrypted using AES-256 encryption at rest
                       </p>
                     </div>
-                    <Badge className="bg-green-500/10 text-green-500 border-green-500/20">
+                    <Badge className="bg-success/10 text-success border-success/20">
                       <CheckCircle2 className="w-3 h-3 mr-1" /> Active
                     </Badge>
                   </div>
@@ -1142,6 +1390,7 @@ export default function Settings() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                   <Mail className="w-4 h-4 text-primary" /> Email Notifications
+                  <HelpTooltip content="Where Rebooked sends admin alerts, weekly reports, and billing notices" variant="info"><span /></HelpTooltip>
                 </CardTitle>
                 <CardDescription>Choose which emails you want to receive</CardDescription>
               </CardHeader>
@@ -1290,7 +1539,7 @@ export default function Settings() {
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between p-4 rounded-lg bg-muted/30">
                   <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${stripeConnected ? "bg-green-500" : "bg-muted-foreground/40"}`} />
+                    <div className={`w-3 h-3 rounded-full ${stripeConnected ? "bg-success" : "bg-muted-foreground/40"}`} />
                     <div>
                       <p className="text-sm font-medium">
                         {stripeConnected ? "Stripe account connected" : "Stripe not connected"}
@@ -1364,41 +1613,21 @@ export default function Settings() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                   <Phone className="w-4 h-4 text-primary" /> SMS Phone Numbers
+                  <HelpTooltip content="The phone number your clients will see messages coming from" variant="info"><span /></HelpTooltip>
                 </CardTitle>
-                <CardDescription>Manage your outbound SMS numbers</CardDescription>
+                <CardDescription>Your dedicated SMS number for automations</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="bg-muted/30 rounded-lg p-3 text-xs text-muted-foreground space-y-1">
-                  <p className="font-medium text-foreground">Setup steps</p>
-                  <p>1. Buy a number in your <a href="https://console.twilio.com" target="_blank" rel="noopener" className="text-primary underline">Twilio Console</a> or <a href="https://portal.telnyx.com" target="_blank" rel="noopener" className="text-primary underline">Telnyx Portal</a></p>
-                  <p>2. Add your number below</p>
-                  <p>3. Set the inbound webhook URL to:</p>
-                  <code className="block bg-muted rounded px-2 py-1 mt-1 select-all font-mono text-[11px]">
-                    {typeof window !== "undefined" ? window.location.origin : "https://yourdomain.com"}/api/twilio/inbound
-                  </code>
+                <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 text-sm space-y-2">
+                  <p className="font-medium text-foreground flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-success" /> SMS is included with your plan
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    All message costs are covered by Rebooked. You don't need to set up any external SMS provider — we handle everything for you.
+                  </p>
                 </div>
 
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="+15550000000"
-                    value={newPhone}
-                    onChange={(e) => setNewPhone(e.target.value)}
-                  />
-                  <Button
-                    size="sm"
-                    disabled={!newPhone.trim() || addPhone.isPending}
-                    onClick={() => addPhone.mutate({ number: newPhone })}
-                  >
-                    {addPhone.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 mr-1" />}
-                    Add
-                  </Button>
-                </div>
-
-                <Separator />
-
-                {phones.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">No phone numbers configured yet.</p>
-                ) : (
+                {phones.length > 0 && (
                   <div className="space-y-2">
                     {phones.map((phone: any) => (
                       <div key={phone.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
@@ -1409,42 +1638,6 @@ export default function Settings() {
                             {phone.label && <span className="text-xs text-muted-foreground">{phone.label}</span>}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {!phone.isDefault && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 text-xs"
-                              onClick={() => setDefault.mutate({ phoneNumberId: phone.id })}
-                            >
-                              Set default
-                            </Button>
-                          )}
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Remove phone number?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This will remove {phone.number} from your account. Existing conversations using this number will no longer be able to send messages.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  className="bg-destructive hover:bg-destructive/90"
-                                  onClick={() => removePhone.mutate({ phoneNumberId: phone.id })}
-                                >
-                                  Remove
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
                       </div>
                     ))}
                   </div>
@@ -1452,17 +1645,24 @@ export default function Settings() {
               </CardContent>
             </Card>
 
+            {/* SMS Gateway Devices */}
+            <SmsGatewayDevicesCard />
+
             {/* Webhooks */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                   <Link2 className="w-4 h-4 text-primary" /> Webhook Configuration
+                  <HelpTooltip content="Connect your booking software to auto-import contacts and sync appointments" variant="info"><span /></HelpTooltip>
                 </CardTitle>
                 <CardDescription>Receive real-time event notifications via HTTP POST</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="webhook-url">Webhook URL</Label>
+                  <Label htmlFor="webhook-url" className="flex items-center gap-1">
+                    Webhook URL
+                    <HelpTooltip content="Rebooked will POST lead and booking events to this URL in real time" variant="info"><span /></HelpTooltip>
+                  </Label>
                   <Input
                     id="webhook-url"
                     type="url"
@@ -1513,6 +1713,7 @@ export default function Settings() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                   <Key className="w-4 h-4 text-primary" /> API Keys
+                  <HelpIcon content={{ basic: "Special codes for connecting other apps to Rebooked", intermediate: "API keys for programmatic access. Use with the Rebooked API to manage leads and messages", advanced: "API keys stored hashed in api_keys table. Authentication via X-API-Key header, scoped to tenant" }} />
                 </CardTitle>
                 <CardDescription>Create and manage API keys for external integrations. Keys are only shown once at creation.</CardDescription>
               </CardHeader>
@@ -1600,6 +1801,9 @@ export default function Settings() {
               </CardContent>
             </Card>
 
+            {/* n8n Automation Engine */}
+            <N8nSettings />
+
             <div className="flex justify-end">
               <Button onClick={() => toast.success("Integration settings saved")} className="min-w-[140px]">
                 Save integrations
@@ -1672,6 +1876,7 @@ export default function Settings() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                   <Shield className="w-4 h-4 text-primary" /> Two-Factor Authentication
+                  <HelpTooltip content="Adds an extra security step when logging in. Strongly recommended." variant="info"><span /></HelpTooltip>
                 </CardTitle>
                 <CardDescription>Add an extra layer of security to your account</CardDescription>
               </CardHeader>
@@ -1951,13 +2156,13 @@ export default function Settings() {
                     {pendingInvitations.map((inv) => (
                       <div key={inv.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-yellow-500/10 flex items-center justify-center text-yellow-600 font-semibold text-sm">
+                          <div className="w-9 h-9 rounded-full bg-warning/10 flex items-center justify-center text-warning font-semibold text-sm">
                             {inv.email.charAt(0).toUpperCase()}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
                               <p className="text-sm font-medium">{inv.email}</p>
-                              <Badge variant="outline" className="text-[10px] h-5 text-yellow-500 border-yellow-500/20">
+                              <Badge variant="outline" className="text-[10px] h-5 text-warning border-warning/20">
                                 Pending
                               </Badge>
                             </div>

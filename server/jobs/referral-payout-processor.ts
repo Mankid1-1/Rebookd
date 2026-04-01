@@ -17,17 +17,19 @@ export async function processReferralPayouts(): Promise<{ processed: number; tot
   console.log('🎯 Processing scheduled referral payouts...');
   
   try {
-    const result = await processScheduledPayouts();
+    // FIX #16: processScheduledPayouts requires a `db` parameter
+    const db = await getDb();
+    const result = await processScheduledPayouts(db);
     
-    const message = result.processed > 0 
-      ? `Successfully processed ${result.processed} referral payouts out of ${result.total} scheduled`
-      : `No payouts ready for processing (${result.total} scheduled)`;
-    
+    const message = result.processed > 0
+      ? `Successfully processed ${result.processed} referral payouts (${result.totalAmount / 100} USD)`
+      : `No payouts ready for processing`;
+
     console.log(`✅ ${message}`);
-    
+
     return {
       processed: result.processed,
-      total: result.total,
+      total: result.processed,
       message
     };
   } catch (error) {

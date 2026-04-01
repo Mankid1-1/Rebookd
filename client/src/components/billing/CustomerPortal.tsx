@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { safeStripeRedirect } from '@/utils/safeRedirect';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -150,7 +151,7 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
       const data = await response.json();
 
       if (data.success) {
-        window.location.href = data.portalUrl;
+        safeStripeRedirect(data.portalUrl);
       } else {
         setError(data.message || 'Failed to create portal session');
       }
@@ -171,7 +172,7 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
       const data = await response.json();
 
       if (data.success) {
-        window.open(data.pdfUrl, '_blank');
+        window.open(data.pdfUrl, '_blank', 'noopener,noreferrer');
       } else {
         setError('Failed to download invoice');
       }
@@ -210,7 +211,7 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-info"></div>
       </div>
     );
   }
@@ -233,8 +234,8 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Subscription Management</h2>
-          <p className="text-gray-600">Manage your billing and subscription preferences</p>
+          <h2 className="text-2xl font-bold text-foreground">Subscription Management</h2>
+          <p className="text-muted-foreground">Manage your billing and subscription preferences</p>
         </div>
         <Button onClick={openCustomerPortal} className="flex items-center gap-2">
           <Settings className="w-4 h-4" />
@@ -244,9 +245,9 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
 
       {/* Error Display */}
       {error && (
-        <Alert className="border-red-200 bg-red-50">
-          <AlertCircle className="h-4 w-4 text-red-600" />
-          <AlertDescription className="text-red-800">
+        <Alert className="border-destructive/20 bg-destructive/10">
+          <AlertCircle className="h-4 w-4 text-destructive" />
+          <AlertDescription className="text-destructive-foreground">
             {error}
           </AlertDescription>
         </Alert>
@@ -273,7 +274,7 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
                   <Badge variant="outline">Cancels at period end</Badge>
                 )}
               </div>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 Current period: {formatDate(subscription.currentPeriodStart)} - {formatDate(subscription.currentPeriodEnd)}
               </p>
             </div>
@@ -281,7 +282,7 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
               <div className="text-2xl font-bold">
                 ${subscription.items.reduce((sum, item) => sum + (item.amount / 100), 0)}
               </div>
-              <p className="text-sm text-gray-500">per month</p>
+              <p className="text-sm text-muted-foreground">per month</p>
             </div>
           </div>
 
@@ -292,7 +293,7 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
               <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg">
                 <div>
                   <p className="font-medium">{item.nickname}</p>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     {item.usageType === 'metered' ? 'Usage-based billing' : 'Fixed amount'}
                   </p>
                 </div>
@@ -301,7 +302,7 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
                     {item.usageType === 'metered' ? `${revenueSharePercent}% of recovered revenue` : `$${item.amount / 100}`}
                   </p>
                   {item.quantity > 1 && (
-                    <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
+                    <p className="text-sm text-muted-foreground">Quantity: {item.quantity}</p>
                   )}
                 </div>
               </div>
@@ -312,14 +313,14 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
           {currentUsage.totalUsage > 0 && (
             <div className="space-y-3">
               <h4 className="font-semibold">Current Usage</h4>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="bg-info/10 border border-info/20 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-blue-800">Revenue Recovered This Period</span>
-                  <span className="text-2xl font-bold text-blue-800">
+                  <span className="text-info-foreground">Revenue Recovered This Period</span>
+                  <span className="text-2xl font-bold text-info-foreground">
                     ${currentUsage.totalUsage.toFixed(2)}
                   </span>
                 </div>
-                <div className="text-sm text-blue-600">
+                <div className="text-sm text-info">
                   Estimated charge: ${currentUsage.items.reduce((sum, item) => sum + item.estimatedCharge, 0).toFixed(2)}
                 </div>
               </div>
@@ -330,15 +331,15 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
           {upcomingInvoice && (
             <div className="space-y-3">
               <h4 className="font-semibold">Upcoming Invoice</h4>
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="bg-muted/50 border border-border rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-gray-700">Amount Due</span>
+                  <span className="text-muted-foreground">Amount Due</span>
                   <span className="text-xl font-bold">
                     ${upcomingInvoice.amount.toFixed(2)}
                   </span>
                 </div>
                 {upcomingInvoice.dueDate && (
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-muted-foreground">
                     Due: {formatDate(upcomingInvoice.dueDate)}
                   </p>
                 )}
@@ -375,19 +376,19 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
             <CardContent>
               <div className="space-y-4">
                 {paymentMethods.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">
+                  <p className="text-center text-muted-foreground py-8">
                     No payment methods on file
                   </p>
                 ) : (
                   paymentMethods.map((method) => (
                     <div key={method.id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex items-center gap-4">
-                        <CreditCard className="w-5 h-5 text-gray-400" />
+                        <CreditCard className="w-5 h-5 text-muted-foreground" />
                         <div>
                           <p className="font-medium">
                             {method.card?.brand.toUpperCase()} •••• {method.card?.last4}
                           </p>
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-muted-foreground">
                             Expires {method.card?.expMonth}/{method.card?.expYear}
                           </p>
                         </div>
@@ -419,19 +420,19 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
             <CardContent>
               <div className="space-y-4">
                 {billingHistory.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">
+                  <p className="text-center text-muted-foreground py-8">
                     No billing history available
                   </p>
                 ) : (
                   billingHistory.map((invoice) => (
                     <div key={invoice.id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex items-center gap-4">
-                        <FileText className="w-5 h-5 text-gray-400" />
+                        <FileText className="w-5 h-5 text-muted-foreground" />
                         <div>
                           <p className="font-medium">
                             {formatDate(invoice.createdAt)}
                           </p>
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-muted-foreground">
                             Invoice #{invoice.id.slice(-8)}
                           </p>
                         </div>
@@ -441,7 +442,7 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
                           <p className="font-medium">
                             ${(invoice.amount / 100).toFixed(2)}
                           </p>
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-muted-foreground">
                             {invoice.status.toUpperCase()}
                           </p>
                         </div>
@@ -473,7 +474,7 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
             <CardContent>
               <div className="space-y-4">
                 {currentUsage.items.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">
+                  <p className="text-center text-muted-foreground py-8">
                     No usage-based billing active
                   </p>
                 ) : (
@@ -485,18 +486,18 @@ export function CustomerPortal({ customerId, onSubscriptionChange }: CustomerPor
                           <p className="font-medium">
                             ${item.estimatedCharge.toFixed(2)}
                           </p>
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-muted-foreground">
                             Current charge
                           </p>
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
-                          <p className="text-gray-500">Total Usage</p>
+                          <p className="text-muted-foreground">Total Usage</p>
                           <p className="font-medium">${item.totalUsage.toFixed(2)}</p>
                         </div>
                         <div>
-                          <p className="text-gray-500">Rate</p>
+                          <p className="text-muted-foreground">Rate</p>
                           <p className="font-medium">{(item.unitAmount / 100).toFixed(2)}%</p>
                         </div>
                       </div>

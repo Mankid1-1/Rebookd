@@ -16,9 +16,11 @@
  */
 
 import { eq, and, sql, desc, gte, lte, isNull, isNotNull, inArray } from "drizzle-orm";
-import { recoveryEvents, leads, messages, automations } from "../../drizzle/schema";
+import { recoveryEvents, leads, messages, automations, subscriptions, plans } from "../../drizzle/schema";
 import type { Db } from "../_core/context";
 import { logger } from "../_core/logger";
+
+const DEFAULT_COMMISSION_RATE = 0.15;
 
 // ─── Tracking Token Generation ───────────────────────────────────────────────
 
@@ -194,6 +196,30 @@ export async function markRecoveryRealized(
     conditions.push(eq(recoveryEvents.id, data.recoveryEventId));
   }
 
+  // FIX #18: Read commission rate from the tenant's plan instead of hardcoding 15%
+  let commissionRate = DEFAULT_COMMISSION_RATE;
+  try {
+    const [sub] = await db
+      .select({ planId: subscriptions.planId })
+      .from(subscriptions)
+      .where(eq(subscriptions.tenantId, tenantId))
+      .orderBy(desc(subscriptions.createdAt))
+      .limit(1);
+    if (sub?.planId) {
+      const [plan] = await db
+        .select({ revenueSharePercent: plans.revenueSharePercent })
+        .from(plans)
+        .where(eq(plans.id, sub.planId))
+        .limit(1);
+      if (plan && plan.revenueSharePercent > 0) {
+        commissionRate = plan.revenueSharePercent / 100;
+      }
+    }
+  } catch {
+    // Fallback to default rate if plan lookup fails
+  }
+  const commissionAmount = Math.round(data.realizedRevenue * commissionRate);
+
   await db
     .update(recoveryEvents)
     .set({
@@ -201,6 +227,9 @@ export async function markRecoveryRealized(
       stripePaymentIntentId: data.stripePaymentIntentId,
       stripeInvoiceId: data.stripeInvoiceId,
       realizedRevenue: data.realizedRevenue,
+      commissionRate: String(commissionRate),
+      commissionAmount,
+      commissionStatus: "pending",
       realizedAt: now,
       updatedAt: now,
     })
@@ -211,11 +240,16 @@ export async function markRecoveryRealized(
     leadId,
     stripePaymentIntentId: data.stripePaymentIntentId,
     realizedRevenue: data.realizedRevenue,
+    commissionAmount,
   });
 }
 
+// FIX #22: Threshold above which manual recoveries require notes (fraud prevention)
+const MANUAL_RECOVERY_PROOF_THRESHOLD_CENTS = 10000; // $100
+
 /**
  * Manually mark a recovery as realized (for off-platform payments like cash/POS).
+ * FIX #22: Requires notes for recoveries above the proof threshold.
  */
 export async function markManualRecovery(
   db: Db,
@@ -227,6 +261,13 @@ export async function markManualRecovery(
     recoveryEventId?: number;
   }
 ): Promise<void> {
+  // FIX #22: Require notes/proof for manual recoveries above threshold
+  if (data.realizedRevenue >= MANUAL_RECOVERY_PROOF_THRESHOLD_CENTS && !data.notes?.trim()) {
+    throw new Error(
+      `Manual recovery of $${(data.realizedRevenue / 100).toFixed(2)} requires notes/proof. ` +
+      `Please provide a description of the off-platform payment (e.g., POS receipt, cash payment reference).`
+    );
+  }
   const now = new Date();
 
   if (data.recoveryEventId) {
