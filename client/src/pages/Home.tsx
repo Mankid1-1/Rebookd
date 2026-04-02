@@ -21,6 +21,9 @@ import { HowItWorks } from "@/components/landing/HowItWorks";
 import { PlatformCapabilities } from "@/components/landing/PlatformCapabilities";
 import { AutomationsExplorer } from "@/components/landing/AutomationsExplorer";
 import { TestimonialsSection } from "@/components/landing/TestimonialsSection";
+import { JsonLd, REBOOKED_ORGANIZATION, REBOOKED_SOFTWARE } from "@/components/seo/JsonLd";
+import { usePageMeta } from "@/hooks/usePageMeta";
+import { trackFunnelEvent } from "@/lib/funnelEvents";
 
 // ─── ROI CALCULATOR (inline — used only in pricing) ─────────────────────────
 function ROICalculator({ planPrice, revenueShare, planName }: { planPrice: number; revenueShare: number; planName: string }) {
@@ -110,12 +113,24 @@ export default function Home() {
   const founderSlotsRemaining = 10 - stats.founderSlotsUsed;
   const flexSlotsRemaining = 10 - stats.flexSlotsUsed;
 
+  usePageMeta({
+    title: "Rebooked — AI-Powered SMS Revenue Recovery",
+    description: "Reduce no-shows, recover cancellations, and win back lapsed clients automatically. 35-day ROI guarantee for appointment businesses.",
+    ogUrl: "https://rebooked.org",
+  });
+
   useEffect(() => {
     if (!loading && user) setLocation("/dashboard");
   }, [user, loading, setLocation]);
 
+  useEffect(() => {
+    trackFunnelEvent("page_view_landing");
+  }, []);
+
   return (
     <div className="min-h-screen bg-background text-foreground scroll-smooth" style={{ fontFamily: "'Inter', sans-serif" }}>
+      <JsonLd data={REBOOKED_ORGANIZATION} />
+      <JsonLd data={REBOOKED_SOFTWARE} />
 
       {/* ── Hero + Nav + Banner ── */}
       <HeroSection stats={stats} />

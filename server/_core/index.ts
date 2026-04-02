@@ -7,6 +7,8 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerInboundWebhooks } from "./inboundWebhook";
 import { registerCallWebhooks } from "../api/call-webhooks";
+import { registerFunnelTrackEndpoint } from "../api/funnel-track";
+import { registerSitemapEndpoint } from "../api/sitemap";
 import { registerStripeWebhook } from "./stripe";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -214,6 +216,10 @@ async function startServer() {
   registerInboundWebhooks(app);
   // Voice call webhooks (Twilio Voice, Telnyx Voice, generic VoIP)
   registerCallWebhooks(app);
+  // Funnel event tracking beacon (public, no auth)
+  registerFunnelTrackEndpoint(app);
+  // Dynamic sitemap.xml
+  registerSitemapEndpoint(app);
 
   // ─── Health check ─────────────────────────────────────────────────────────
   app.get("/health", async (_req, res) => {

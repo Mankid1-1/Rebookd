@@ -35,6 +35,7 @@ import { EmailService } from "./services/email.service";
 import { gracefulShutdown } from "./_core/graceful-shutdown";
 import { triggerPayoutProcessing } from "./jobs/process-referral-payouts";
 import { syncAllDueConnections } from "./services/calendar/calendar-sync.service";
+import { processEmailSequenceQueue } from "./services/email-marketing.service";
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -1070,6 +1071,16 @@ async function runCycleInner() {
         logger.error("Worker: DLQ reprocessing failed", { error: String(err) });
       }
     }
+  }
+
+  // Process email drip sequence queue (every cycle, ~1 minute)
+  try {
+    const emailsSent = await processEmailSequenceQueue(db);
+    if (emailsSent > 0) {
+      logger.info("Worker: Email sequences processed", { sent: emailsSent });
+    }
+  } catch (err) {
+    logger.error("Worker: Email sequence processing failed", { error: String(err) });
   }
 
   // Cleanup expired tokenization vault entries

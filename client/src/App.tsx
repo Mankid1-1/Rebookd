@@ -10,9 +10,10 @@ import { LocaleOnboardingModal } from "./components/LanguageSelector";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LocaleProvider } from "./contexts/LocaleContext";
 import { SkillLevelProvider } from "./contexts/SkillLevelContext";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { AuthGuard } from "./components/layout/AuthGuard";
 import { GlobalAIChat } from "./components/chat/GlobalAIChat";
+import { captureAttribution } from "./lib/attribution";
 
 // Lazy load heavy components for code splitting
 const Home = lazy(() => import("@/pages/Home"));
@@ -427,6 +428,8 @@ function Router() {
 }
 
 function App() {
+  useEffect(() => { captureAttribution(); }, []);
+
   return (
     <ErrorBoundary>
       <LiveUpdateBanner />

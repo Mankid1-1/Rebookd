@@ -29,6 +29,7 @@ import { RebookedLogo } from "@/components/RebookedLogo";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { trackFunnelEvent } from "@/lib/funnelEvents";
 import { useLocale } from "@/contexts/LocaleContext";
 import { Palette } from "lucide-react";
 import { useTheme, THEME_META, type ThemeName } from "@/contexts/ThemeContext";
@@ -129,6 +130,12 @@ export default function Onboarding() {
   const [calendarConnected, setCalendarConnected] = useState(false);
 
   const utils = trpc.useUtils();
+
+  // Track onboarding funnel
+  useEffect(() => { trackFunnelEvent("onboarding_started"); }, []);
+  useEffect(() => {
+    if (step > 0) trackFunnelEvent("onboarding_step_completed", { step });
+  }, [step]);
 
   // Handle return from OAuth callback — resume at calendar step
   useEffect(() => {
@@ -244,6 +251,7 @@ export default function Onboarding() {
       // Invalidate caches and redirect
       await utils.tenant.get.invalidate();
       await utils.auth.me.invalidate();
+      trackFunnelEvent("onboarding_completed", { automationsEnabled: enabledKeys.length });
       toast.success("You're all set! Welcome to Rebooked.");
       setLocation("/dashboard?welcome=true");
     } catch (err: any) {

@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { DollarSign, TrendingUp } from "lucide-react";
+import { DollarSign, TrendingUp, Mail } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import type { IndustryConfig } from "@/data/industries";
+import { EmailCaptureModal } from "./EmailCaptureModal";
+import { trackFunnelEvent } from "@/lib/funnelEvents";
 
 interface IndustryROICalculatorProps {
   config: IndustryConfig;
@@ -11,6 +13,8 @@ export function IndustryROICalculator({ config }: IndustryROICalculatorProps) {
   const [avgValue, setAvgValue] = useState(config.avgAppointmentValue);
   const [noShows, setNoShows] = useState(config.defaultNoShows);
   const [cancellations, setCancellations] = useState(config.defaultCancellations);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [hasTrackedUsage, setHasTrackedUsage] = useState(false);
 
   const noShowRecoveryRate = 0.40;
   const cancellationRebookRate = 0.55;
@@ -174,9 +178,39 @@ export function IndustryROICalculator({ config }: IndustryROICalculatorProps) {
                 Based on 40% no-show recovery and 55% cancellation rebook rate
               </div>
             </div>
+
+            {/* Email capture CTA */}
+            <button
+              onClick={() => {
+                if (!hasTrackedUsage) {
+                  trackFunnelEvent("roi_calculator_used", {
+                    industry: config.slug,
+                    avgValue,
+                    noShows,
+                    cancellations,
+                    grossRevenue,
+                    roi,
+                  });
+                  setHasTrackedUsage(true);
+                }
+                trackFunnelEvent("email_capture_shown", { industry: config.slug });
+                setEmailModalOpen(true);
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-card border border-border rounded-xl text-sm font-medium text-foreground hover:bg-muted transition-colors"
+            >
+              <Mail className="h-4 w-4 text-primary" />
+              Email me this ROI breakdown
+            </button>
           </div>
         </div>
       </div>
+
+      <EmailCaptureModal
+        isOpen={emailModalOpen}
+        onClose={() => setEmailModalOpen(false)}
+        industry={config.slug}
+        roiData={{ avgValue, noShows, cancellations, grossRevenue, netProfit, roi }}
+      />
     </section>
   );
 }

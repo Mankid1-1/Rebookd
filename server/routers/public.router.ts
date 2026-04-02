@@ -19,6 +19,7 @@ import { logger } from "../_core/logger";
 import * as ReviewRoutingService from "../services/review-routing.service";
 import * as BookingPageService from "../services/booking-page.service";
 import * as PublicBookingService from "../services/public-booking.service";
+import { enrollInSequence } from "../services/email-marketing.service";
 
 export const publicRouter = router({
   // ─── Get Feedback Page Data ─────────────────────────────────────────────
@@ -113,6 +114,66 @@ export const publicRouter = router({
       }
 
       return result;
+    }),
+
+  // ─── Email Subscriber Capture ────────────────────────────────────────────
+  // Pre-signup lead capture from ROI calculator, industry pages, blog, etc.
+  captureEmail: publicProcedure
+    .input(
+      z.object({
+        email: z.string().email().max(320),
+        name: z.string().max(255).optional(),
+        source: z.enum(["roi_calculator", "industry_page", "blog", "waitlist", "footer"]).default("roi_calculator"),
+        industry: z.string().max(100).optional(),
+        roiData: z.record(z.unknown()).optional(),
+        attribution: z.record(z.unknown()).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        // Upsert — if email already exists, just update source/attribution
+        await ctx.db.execute({
+          sql: `INSERT INTO email_subscribers (email, name, source, industry, roiData, attribution)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                  name = COALESCE(VALUES(name), name),
+                  source = VALUES(source),
+                  industry = COALESCE(VALUES(industry), industry),
+                  roiData = COALESCE(VALUES(roiData), roiData),
+                  attribution = COALESCE(VALUES(attribution), attribution)`,
+          params: [
+            input.email,
+            input.name || null,
+            input.source,
+            input.industry || null,
+            input.roiData ? JSON.stringify(input.roiData) : null,
+            input.attribution ? JSON.stringify(input.attribution) : null,
+          ],
+        });
+
+        // Enroll in welcome drip sequence (fire-and-forget)
+        try {
+          const [sub] = await ctx.db.execute({
+            sql: `SELECT id FROM email_subscribers WHERE email = ? LIMIT 1`,
+            params: [input.email],
+          }) as any;
+          const rows = sub as any[];
+          if (rows?.[0]?.id) {
+            await enrollInSequence(ctx.db, rows[0].id, "welcome", {
+              name: input.name,
+              industry: input.industry,
+              ...(input.roiData || {}),
+            });
+          }
+        } catch (enrollErr) {
+          logger.warn("Failed to enroll in welcome sequence", { error: String(enrollErr) });
+        }
+
+        return { success: true as const };
+      } catch (err) {
+        logger.error("Failed to capture email subscriber", { error: String(err), email: input.email.slice(0, 3) + "***" });
+        return { success: false as const, error: "capture_failed" };
+      }
     }),
 
   // ─── Public Booking: Get booking page by slug ────────────────────────────

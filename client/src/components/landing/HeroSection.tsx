@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { RebookedLogo } from "@/components/RebookedLogo";
 import { useLocation } from "wouter";
 import { getLoginUrl } from "@/const";
+import { trackFunnelEvent } from "@/lib/funnelEvents";
 import { useAnimatedCounter, fadeInUp, staggerContainer } from "@/lib/animations";
 import { AUTOMATION_COUNT } from "@/data/automations";
 import { useTheme, THEME_META, type ThemeName } from "@/contexts/ThemeContext";
@@ -145,7 +146,7 @@ export function HeroSection({ stats }: HeroSectionProps) {
           </motion.div>
 
           <motion.div variants={fadeInUp} className="flex items-center justify-center gap-4 flex-wrap">
-            <Button size="lg" className="h-12 px-8 text-base" onClick={() => setLocation(getLoginUrl())}>
+            <Button size="lg" className="h-12 px-8 text-base" onClick={() => { trackFunnelEvent("cta_click_hero"); setLocation(getLoginUrl()); }}>
               Claim your founding spot <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           </motion.div>

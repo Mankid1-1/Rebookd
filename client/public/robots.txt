@@ -1,0 +1,21 @@
+User-agent: *
+Allow: /
+Allow: /for/
+Allow: /blog/
+
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /api/
+Disallow: /settings
+Disallow: /billing
+Disallow: /onboarding
+Disallow: /leads
+Disallow: /inbox
+Disallow: /automations
+Disallow: /templates
+Disallow: /analytics
+Disallow: /referral
+Disallow: /setup
+Disallow: /stripe-connect
+
+Sitemap: https://rebooked.org/sitemap.xml
