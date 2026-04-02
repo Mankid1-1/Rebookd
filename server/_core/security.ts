@@ -105,9 +105,11 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
   // Feature / Permissions policy
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
 
-  // Cross-origin policy (use "same-site" to avoid breaking module preloads
-  // when nginx proxies static assets without forwarding Host header)
-  res.setHeader("Cross-Origin-Resource-Policy", "same-site");
+  // Cross-origin policy:
+  // - API routes stay "same-site" (no reason for cross-origin APIs to be loaded by other sites)
+  // - HTML pages use "cross-origin" so third-party pixels (Reddit, Meta, etc.) can operate
+  const corp = req.path.startsWith("/api/") ? "same-site" : "cross-origin";
+  res.setHeader("Cross-Origin-Resource-Policy", corp);
   res.setHeader("X-Permitted-Cross-Domain-Policies", "none");
 
   // Cache-Control for API responses (prevent caching sensitive data)
