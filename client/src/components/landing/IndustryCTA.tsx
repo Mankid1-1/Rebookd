@@ -3,6 +3,7 @@ import { ArrowRight, Shield, Zap, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RebookedLogo } from "@/components/RebookedLogo";
 import type { IndustryConfig } from "@/data/industries";
+import { trackFunnelEvent } from "@/lib/funnelEvents";
 
 interface IndustryCTAProps {
   config: IndustryConfig;
@@ -36,7 +37,7 @@ export function IndustryCTA({ config }: IndustryCTAProps) {
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
-            <Link href={signupUrl}>
+            <Link href={signupUrl} onClick={() => trackFunnelEvent("cta_click_hero", { source: "industry_landing", industry: config.slug })}>
               <Button size="lg" className="font-semibold text-base px-10 w-full sm:w-auto">
                 Claim Your Free Spot
                 <ArrowRight className="ml-2 h-4 w-4" />

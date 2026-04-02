@@ -1,7 +1,14 @@
 import { Link } from "wouter";
 import { ArrowLeft, FileText } from "lucide-react";
+import { usePageMeta } from "@/hooks/usePageMeta";
 
 export default function Terms() {
+  usePageMeta({
+    title: "Terms of Service — Rebooked",
+    description: "Terms of service for the Rebooked AI-powered SMS revenue recovery platform. $199/mo + 15% revenue share with 35-day ROI guarantee.",
+    ogUrl: "https://rebooked.org/terms",
+  });
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border/50 py-4 px-6">

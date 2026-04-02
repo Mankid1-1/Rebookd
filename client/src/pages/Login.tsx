@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, Eye, EyeOff, Gift, Loader2, Mail, Palette } from "lucide-react";
 import { RebookedLogo } from "@/components/RebookedLogo";
 import { useTheme, THEME_META, type ThemeName } from "@/contexts/ThemeContext";
+import { trackFunnelEvent } from "@/lib/funnelEvents";
 
 type Tab = "signin" | "signup" | "forgot";
 
@@ -288,8 +289,12 @@ function SignUpForm({ onSuccess }: { onSuccess: () => void }) {
   // Capture referral code from URL
   const referralCode = new URLSearchParams(window.location.search).get("ref") || undefined;
 
+  // Track signup form view
+  useEffect(() => { trackFunnelEvent("signup_started"); }, []);
+
   const signupMutation = trpc.auth.signup.useMutation({
     onSuccess: (data) => {
+      trackFunnelEvent("signup_completed", { hasReferral: !!referralCode });
       if (data.pendingVerification) {
         setSuccess("Check your email for a verification link. Once verified, you can sign in.");
       } else {

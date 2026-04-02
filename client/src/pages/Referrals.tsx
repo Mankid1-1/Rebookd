@@ -10,7 +10,8 @@ import {
   Copy, Check, Users, DollarSign, Clock, Gift, Share2, ArrowRight, TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { trackFunnelEvent } from "@/lib/funnelEvents";
 
 export default function Referrals() {
   const [copied, setCopied] = useState(false);
@@ -27,10 +28,14 @@ export default function Referrals() {
   const referralCode = codeQuery.data?.code || "";
   const referralLink = codeQuery.data?.link || "";
 
+  // Track referral page view
+  useEffect(() => { trackFunnelEvent("referral_prompt_shown"); }, []);
+
   const handleCopy = () => {
     if (!referralLink) return;
     navigator.clipboard.writeText(referralLink);
     setCopied(true);
+    trackFunnelEvent("referral_shared", { method: "copy" });
     toast.success("Referral link copied to clipboard");
     setTimeout(() => setCopied(false), 2000);
   };

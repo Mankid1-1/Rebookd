@@ -55,11 +55,11 @@ function buildCsp(): string {
   // Base directives safe for production
   const directives: Record<string, string[]> = {
     "default-src": ["'self'"],
-    "script-src": ["'self'", "'unsafe-inline'", "https://www.redditstatic.com", "https://alb.reddit.com"],
+    "script-src": ["'self'", "'unsafe-inline'", "https://www.redditstatic.com", "https://alb.reddit.com", "https://cloud.umami.is"],
     "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-    "img-src": ["'self'", "data:", "https:"],
+    "img-src": ["'self'", "data:", "https:", "https://www.redditstatic.com"],
     "font-src": ["'self'", "data:", "https://fonts.gstatic.com"],
-    "connect-src": ["'self'", "https://api.stripe.com", "https://maps.googleapis.com", "https://alb.reddit.com", "https://www.redditstatic.com"],
+    "connect-src": ["'self'", "https://api.stripe.com", "https://maps.googleapis.com", "https://alb.reddit.com", "https://www.redditstatic.com", "https://cloud.umami.is"],
     "frame-src": ["https://js.stripe.com", "https://hooks.stripe.com"],
     "object-src": ["'none'"],
     "base-uri": ["'self'"],

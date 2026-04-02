@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
-import { 
+import {
   useDynamicAutomationTemplates,
   useDynamicAutomationRecommendations,
   useDynamicAutomationConfig,
@@ -28,6 +28,7 @@ import {
   trackFeatureUsage
 } from "@/hooks/useDynamicAutomation";
 import { useAuth } from "@/hooks/useAuth";
+import { trackFunnelEvent } from "@/lib/funnelEvents";
 
 // Dynamic automation catalogue based on user skill and business type
 const getDynamicAutomationCatalogue = (userSkill?: any, businessType?: string, isDarkMode?: boolean) => {
@@ -1072,6 +1073,7 @@ export default function Automations() {
           setOneClickPendingKey(null);
           toast.success(`${template.name} enabled`);
           trackFeatureUsage('automation_one_click_enabled');
+          trackFunnelEvent("first_automation_enabled", { automationKey: template.key });
         },
         onError: (err) => {
           setOneClickPendingKey(null);

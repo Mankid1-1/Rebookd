@@ -1,7 +1,14 @@
 import { Link } from "wouter";
 import { ArrowLeft, LifeBuoy, Mail, Clock, MessageSquare, BookOpen, HelpCircle } from "lucide-react";
+import { usePageMeta } from "@/hooks/usePageMeta";
 
 export default function Support() {
+  usePageMeta({
+    title: "Support — Rebooked",
+    description: "Get help with Rebooked. Contact support, browse FAQs, and find resources for the AI-powered SMS revenue recovery platform.",
+    ogUrl: "https://rebooked.org/support",
+  });
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border/50 py-4 px-6">

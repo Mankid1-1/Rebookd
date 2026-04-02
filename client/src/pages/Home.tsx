@@ -267,7 +267,7 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
-              <Button className="w-full mt-4 bg-primary hover:bg-primary/90 text-primary-foreground border-primary" onClick={() => setLocation(getLoginUrl())} disabled={founderSlotsRemaining <= 0}>
+              <Button className="w-full mt-4 bg-primary hover:bg-primary/90 text-primary-foreground border-primary" onClick={() => { trackFunnelEvent("cta_click_pricing", { plan: "founder" }); setLocation(getLoginUrl()); }} disabled={founderSlotsRemaining <= 0}>
                 {founderSlotsRemaining > 0 ? "Claim Founder Spot" : "Sold Out"}
               </Button>
             </motion.div>
@@ -308,7 +308,7 @@ export default function Home() {
                 ))}
               </ul>
               <ROICalculator planPrice={199} revenueShare={15} planName="Flex (after trial)" />
-              <Button className="w-full mt-4 bg-primary hover:bg-primary/90 text-primary-foreground border-primary" onClick={() => setLocation(getLoginUrl())} disabled={flexSlotsRemaining <= 0}>
+              <Button className="w-full mt-4 bg-primary hover:bg-primary/90 text-primary-foreground border-primary" onClick={() => { trackFunnelEvent("cta_click_pricing", { plan: "flex" }); setLocation(getLoginUrl()); }} disabled={flexSlotsRemaining <= 0}>
                 {flexSlotsRemaining > 0 ? "Claim Flex Spot" : "Sold Out"}
               </Button>
             </motion.div>
@@ -345,7 +345,7 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
-              <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground border-primary" onClick={() => window.location.href = "mailto:rebooked@rebooked.org"}>
+              <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground border-primary" onClick={() => { trackFunnelEvent("cta_click_pricing", { plan: "enterprise" }); window.location.href = "mailto:rebooked@rebooked.org"; }}>
                 Contact Us
               </Button>
             </motion.div>
@@ -424,7 +424,7 @@ export default function Home() {
             ))}
           </motion.div>
           <motion.div className="mt-8" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp}>
-            <Button variant="outline" size="lg" onClick={() => setLocation(getLoginUrl())}>
+            <Button variant="outline" size="lg" onClick={() => { trackFunnelEvent("cta_click_referral"); setLocation(getLoginUrl()); }}>
               Start referring <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           </motion.div>

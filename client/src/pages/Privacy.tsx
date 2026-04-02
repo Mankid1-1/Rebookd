@@ -1,7 +1,14 @@
 import { Link } from "wouter";
 import { ArrowLeft, Shield } from "lucide-react";
+import { usePageMeta } from "@/hooks/usePageMeta";
 
 export default function Privacy() {
+  usePageMeta({
+    title: "Privacy Policy — Rebooked",
+    description: "How Rebooked collects, uses, and protects your data. GDPR and TCPA compliant SMS revenue recovery platform.",
+    ogUrl: "https://rebooked.org/privacy",
+  });
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border/50 py-4 px-6">

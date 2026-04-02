@@ -2,8 +2,15 @@ import { Link } from "wouter";
 import { ArrowLeft, Phone } from "lucide-react";
 import { HelpTooltip, HelpIcon } from "@/components/ui/HelpTooltip";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { usePageMeta } from "@/hooks/usePageMeta";
 
 export default function TCPACompliance() {
+  usePageMeta({
+    title: "TCPA Compliance — Rebooked",
+    description: "How Rebooked ensures full TCPA compliance for automated SMS messaging. Consent management, opt-out handling, and regulatory adherence.",
+    ogUrl: "https://rebooked.org/tcpa",
+  });
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border/50 py-4 px-6">

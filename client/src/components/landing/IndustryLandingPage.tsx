@@ -6,20 +6,36 @@ import { IndustryROICalculator } from "./IndustryROICalculator";
 import { IndustryFeatures } from "./IndustryFeatures";
 import { IndustryTestimonials } from "./IndustryTestimonials";
 import { IndustryCTA } from "./IndustryCTA";
+import { usePageMeta } from "@/hooks/usePageMeta";
+import { JsonLd, REBOOKED_ORGANIZATION } from "@/components/seo/JsonLd";
+import { trackFunnelEvent } from "@/lib/funnelEvents";
 
 interface IndustryLandingPageProps {
   config: IndustryConfig;
 }
 
 export function IndustryLandingPage({ config }: IndustryLandingPageProps) {
+  usePageMeta({
+    title: config.metaTitle,
+    description: config.metaDescription,
+    ogUrl: `https://rebooked.org/for/${config.slug}`,
+  });
+
   useEffect(() => {
-    document.title = config.metaTitle;
-    const meta = document.querySelector('meta[name="description"]');
-    if (meta) meta.setAttribute("content", config.metaDescription);
-  }, [config]);
+    trackFunnelEvent("page_view_industry", { industry: config.slug });
+  }, [config.slug]);
 
   return (
     <div className="min-h-screen bg-background">
+      <JsonLd data={REBOOKED_ORGANIZATION} />
+      <JsonLd data={{
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": config.metaTitle,
+        "description": config.metaDescription,
+        "url": `https://rebooked.org/for/${config.slug}`,
+        "isPartOf": { "@type": "WebSite", "name": "Rebooked", "url": "https://rebooked.org" },
+      }} />
       <IndustryHero config={config} />
       <IndustryPainPoints config={config} />
       <IndustryROICalculator config={config} />
