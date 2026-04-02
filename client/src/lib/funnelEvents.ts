@@ -92,20 +92,35 @@ export function trackFunnelEvent(event: FunnelEvent, properties?: EventPropertie
   try {
     const rdt = (window as any).rdt;
     if (typeof rdt === "function") {
-      const redditMap: Partial<Record<FunnelEvent, string>> = {
-        signup_completed: "SignUp",
-        email_capture_submitted: "Lead",
-        onboarding_completed: "Lead",
-        roi_calculator_used: "ViewContent",
-        cta_click_hero: "AddToCart",
-        first_recovery_sent: "Purchase",
+      const redditMap: Partial<Record<FunnelEvent, [string, string?]>> = {
+        // Page views
+        page_view_landing:          ["PageVisit"],
+        page_view_industry:         ["PageVisit"],
+        // Interest signals
+        roi_calculator_used:        ["ViewContent"],
+        email_capture_shown:        ["ViewContent"],
+        cta_click_pricing:          ["AddToCart"],
+        cta_click_hero:             ["AddToCart"],
+        cta_click_referral:         ["AddToCart"],
+        // Lead capture
+        email_capture_submitted:    ["Lead"],
+        signup_started:             ["Lead"],
+        // Conversions
+        signup_completed:           ["SignUp"],
+        onboarding_started:         ["SignUp"],
+        onboarding_completed:       ["SignUp"],
+        first_automation_enabled:   ["SignUp"],
+        // Revenue
+        first_recovery_sent:        ["Purchase"],
+        // Referral
+        referral_prompt_shown:      ["ViewContent"],
+        referral_shared:            ["Lead"],
       };
-      const redditEvent = redditMap[event];
-      if (redditEvent) {
-        rdt("track", redditEvent, props);
-      } else {
-        rdt("track", "Custom", { customEventName: event, ...props });
+      const mapped = redditMap[event];
+      if (mapped) {
+        rdt("track", mapped[0], props);
       }
+      // No fallback Custom call — unmapped events are intentionally ignored
     }
   } catch {
     // ignore
