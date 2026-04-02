@@ -401,6 +401,28 @@ async function executeStep(db: Db, step: any, event: EventPayload, tenantId: num
             await recordResult(db, expId, tenantId, leadId, (msgRecord as any).id, variant, generationMethod === "ai" ? "llm" : "template_fallback");
           } catch { /* best effort */ }
         }
+
+        // Track first_recovery_sent in funnel_events (server-side)
+        if (res.success) {
+          try {
+            await db.execute(sql`INSERT INTO funnel_events
+              (sessionId, eventName, properties, userId, createdAt)
+              VALUES (
+                ${`server-t${tenantId}-l${leadId}`},
+                ${"first_recovery_sent"},
+                ${JSON.stringify({
+                  tenantId,
+                  leadId,
+                  automationKey: automation?.key || null,
+                  provider: res.provider,
+                })},
+                ${null},
+                DEFAULT
+              )`);
+          } catch {
+            // Non-fatal — don't block automation execution
+          }
+        }
       }
       return;
     }
