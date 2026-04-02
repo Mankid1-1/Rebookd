@@ -4,7 +4,7 @@
  * Generates /sitemap.xml with:
  * - Static public pages
  * - Industry-specific landing pages
- * - Blog posts (when blog infrastructure is built)
+ * - Blog listing + individual blog posts
  */
 
 import type { Express } from "express";
@@ -21,8 +21,17 @@ const INDUSTRY_SLUGS = [
   "therapy",
 ];
 
+// Blog post slugs + publish dates — keep in sync with client/src/data/blog.ts
+const BLOG_POSTS = [
+  { slug: "real-cost-of-no-shows", publishedAt: "2026-04-02" },
+  { slug: "sms-templates-that-rebook-no-shows", publishedAt: "2026-04-02" },
+  { slug: "why-cancellation-fees-dont-work", publishedAt: "2026-04-02" },
+  { slug: "salon-recovered-2400-month", publishedAt: "2026-04-02" },
+];
+
 const STATIC_PAGES = [
   { path: "/", changefreq: "weekly", priority: "1.0" },
+  { path: "/blog", changefreq: "weekly", priority: "0.8" },
   { path: "/login", changefreq: "monthly", priority: "0.6" },
   { path: "/privacy", changefreq: "monthly", priority: "0.3" },
   { path: "/terms", changefreq: "monthly", priority: "0.3" },
@@ -57,6 +66,17 @@ export function registerSitemapEndpoint(app: Express): void {
     <lastmod>${today}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
+  </url>`);
+    }
+
+    // Blog posts
+    for (const post of BLOG_POSTS) {
+      urls.push(`
+  <url>
+    <loc>${BASE_URL}/blog/${post.slug}</loc>
+    <lastmod>${post.publishedAt}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
   </url>`);
     }
 

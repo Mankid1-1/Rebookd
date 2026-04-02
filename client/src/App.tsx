@@ -63,6 +63,10 @@ const Setup = lazy(() => import("@/pages/Setup"));
 // Industry landing pages
 const IndustryLanding = lazy(() => import("@/pages/IndustryLanding"));
 
+// Blog pages - lazy loaded
+const Blog = lazy(() => import("@/pages/Blog"));
+const BlogPost = lazy(() => import("@/pages/BlogPost"));
+
 // Legal / Public pages - lazy loaded
 const Privacy = lazy(() => import("@/pages/Privacy"));
 const Terms = lazy(() => import("@/pages/Terms"));
@@ -128,6 +132,10 @@ function Router() {
 
       {/* Industry-specific landing pages */}
       <Route path="/for/:industry" component={IndustryLanding} />
+
+      {/* Blog */}
+      <Route path="/blog" component={Blog} />
+      <Route path="/blog/:slug" component={BlogPost} />
 
       {/* Public pages */}
       <Route path="/privacy" component={Privacy} />
