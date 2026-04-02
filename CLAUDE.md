@@ -16,8 +16,8 @@
 ## Terms
 | Term | Meaning |
 |------|---------|
-| Founder Client | 20-spot free-forever tier (crowdfundr reward) |
-| Flex Client | 10-spot free trial tier (crowdfundr reward) |
+| Founder Client | 10-spot free-forever tier — no fees, no revenue share, full platform in exchange for feedback |
+| Flex Client | 10-spot free trial tier — free for 35 days, then $199/mo + 15% if positive ROI |
 | ROI guarantee | Free unless positive ROI within 35 days — if ROI hit, pay in full |
 | Revenue share | 15% of recovered revenue on top of $199/month |
 

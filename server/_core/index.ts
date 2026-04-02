@@ -6,6 +6,7 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerInboundWebhooks } from "./inboundWebhook";
+import { registerCallWebhooks } from "../api/call-webhooks";
 import { registerStripeWebhook } from "./stripe";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -211,6 +212,8 @@ async function startServer() {
   registerCalendarCallbacks(app);
   // Inbound SMS webhooks (Telnyx + Twilio, STOP compliance)
   registerInboundWebhooks(app);
+  // Voice call webhooks (Twilio Voice, Telnyx Voice, generic VoIP)
+  registerCallWebhooks(app);
 
   // ─── Health check ─────────────────────────────────────────────────────────
   app.get("/health", async (_req, res) => {

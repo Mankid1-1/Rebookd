@@ -135,24 +135,34 @@ export function IndustryROICalculator({ config }: IndustryROICalculatorProps) {
             <div className="bg-card border border-border rounded-2xl p-6">
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Platform fee</span>
-                  <span>$199/mo</span>
+                  <span className="text-muted-foreground">Founder Spot cost</span>
+                  <span className="font-semibold text-green-600 dark:text-green-400">$0 forever</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">15% revenue share</span>
-                  <span>{fmtCurrency(revenueShare)}</span>
-                </div>
-                <div className="border-t border-border pt-3 flex justify-between">
-                  <span className="text-muted-foreground">Total cost</span>
-                  <span>{fmtCurrency(totalCost)}</span>
+                <div className="border-t border-border pt-3">
+                  <p className="text-xs text-muted-foreground mb-2">Flex Spot cost (after 35-day free trial):</p>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Platform fee</span>
+                    <span>$199/mo</span>
+                  </div>
+                  <div className="flex justify-between mt-1">
+                    <span className="text-muted-foreground">15% revenue share</span>
+                    <span>{fmtCurrency(revenueShare)}</span>
+                  </div>
+                  <div className="flex justify-between mt-1">
+                    <span className="text-muted-foreground">Total cost</span>
+                    <span>{fmtCurrency(totalCost)}</span>
+                  </div>
                 </div>
                 <div className="flex justify-between font-bold text-base pt-1">
-                  <span>Net profit</span>
+                  <span>Flex net profit</span>
                   <span className={netProfit >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500"}>
                     {fmtCurrency(netProfit)}
                   </span>
                 </div>
               </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                Founder Spots keep 100% of recovered revenue. Flex Spots are free for 35 days — only pay if you see positive ROI.
+              </p>
             </div>
 
             <div className="bg-primary rounded-2xl p-6 text-primary-foreground text-center">

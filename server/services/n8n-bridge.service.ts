@@ -126,23 +126,64 @@ export function verifySignature(payload: string, signature: string, secret: stri
 // ─── Event → webhook path mapping ───────────────────────────────────────────
 
 const EVENT_WEBHOOK_MAP: Record<string, string> = {
+  // Call tracking events (5 workflows)
   "call.missed": "missed-call-textback",
-  "lead.created": "welcome-new-lead",
-  "message.received": "inbound-auto-reply",
+  "call.missed_followup": "missed-call-followup",
+  "call.missed_final": "missed-call-final-offer",
+  "call.completed": "call-completed",
+  "call.voicemail": "call-voicemail",
+  // Appointment (4 workflows)
   "appointment.booked": "appointment-confirmation",
+  "appointment.confirmation_chase": "confirmation-chase",
   "appointment.reminder_24h": "appointment-reminder-24h",
   "appointment.reminder_2h": "appointment-reminder-2h",
+  // No-show (2 workflows)
   "appointment.no_show": "noshow-recovery",
+  "appointment.no_show_rebook": "noshow-rebook-offer",
+  // Cancellation (4 workflows)
   "appointment.cancelled": "cancellation-recovery",
-  "lead.win_back_due": "win-back-90d",
-  "lead.birthday": "birthday-promo",
-  "review.requested": "review-request",
+  "appointment.cancellation_rescue_7d": "cancellation-rescue-7d",
   "waitlist.slot_opened": "cancellation-flurry",
-  "lead.qualified": "qualified-followup",
   "appointment.rescheduled": "rescheduling-offer",
-  "lead.loyalty_milestone": "loyalty-milestone",
+  // Follow-up (5 workflows)
   "lead.feedback_due": "post-visit-feedback",
   "lead.upsell_due": "post-visit-upsell",
+  "lead.next_visit_due": "next-visit-prompt",
+  "lead.followup_due": "lead-followup-sequence",
+  "lead.qualified": "qualified-followup",
+  // Re-engagement (4 workflows)
+  "lead.win_back_30d": "win-back-30d",
+  "lead.win_back_due": "win-back-90d",
+  "lead.vip_winback_45d": "vip-winback-45d",
+  "lead.vip_winback_90d": "vip-winback-90d",
+  // Welcome & loyalty (3 workflows)
+  "lead.created": "welcome-new-lead",
+  "lead.birthday": "birthday-promo",
+  "lead.loyalty_milestone": "loyalty-milestone",
+  // Inbound & delivery (2 workflows)
+  "message.received": "inbound-auto-reply",
+  "message.delivery_failed": "delivery-failure-recovery",
+  // Review (1 workflow)
+  "review.requested": "review-request",
+  // Smart review routing events
+  "review.rating_received": "review-rating-received",
+  "review.positive_routed": "review-positive-routed",
+  "review.negative_captured": "review-negative-captured",
+  "review.feedback_submitted": "review-feedback-submitted",
+  // AI SMS events
+  "ai.sms_generated": "ai-sms-generated",
+  "ai.sms_fallback": "ai-sms-fallback",
+  // Booking page events
+  "booking.page_viewed": "booking-page-viewed",
+  "booking.slot_selected": "booking-slot-selected",
+  "booking.created": "booking-created",
+  "booking.cancelled": "booking-cancelled",
+  // Waitlist auto-fill events
+  "waitlist.offer_sent": "waitlist-offer-sent",
+  "waitlist.offer_accepted": "waitlist-offer-accepted",
+  "waitlist.offer_declined": "waitlist-offer-declined",
+  "waitlist.offer_expired": "waitlist-offer-expired",
+  "waitlist.slot_filled": "waitlist-slot-filled",
 };
 
 function getWebhookPath(eventType: string): string {

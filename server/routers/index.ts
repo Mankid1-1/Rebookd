@@ -14,6 +14,12 @@ import { contactImportRouter } from "./contact-import.router";
 import { segmentRouter } from "./segment.router";
 import { n8nRouter } from "./n8n.router";
 import { n8nAdminRouter } from "./n8n-admin.router";
+import { callTrackingRouter } from "./call-tracking.router";
+import { aiSmsRouter } from "./ai-sms.router";
+import { reviewRoutingRouter } from "./review-routing.router";
+import { bookingPageRouter } from "./booking-page.router";
+import { publicRouter } from "./public.router";
+import { waitlistRouter } from "./waitlist.router";
 import {
   locationsRouter,
   notificationsRouter,
@@ -48,6 +54,12 @@ export const appRouter = router({
   segment: segmentRouter,
   n8n: n8nRouter,
   n8nAdmin: n8nAdminRouter,
+  callTracking: callTrackingRouter,
+  aiSms: aiSmsRouter,
+  reviewRouting: reviewRoutingRouter,
+  bookingPage: bookingPageRouter,
+  public: publicRouter,
+  waitlist: waitlistRouter,
   // Stub routers for procedures expected by frontend components/hooks
   locations: locationsRouter,
   notifications: notificationsRouter,

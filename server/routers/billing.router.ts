@@ -30,8 +30,7 @@ export const billingRouter = router({
   createCheckoutSession: tenantProcedure
     .input(z.object({
       priceId: z.string().optional(),
-      planType: z.enum(['growth', 'flex']).default('growth'),
-      flexSliderValue: z.number().optional(),
+      planType: z.enum(['founder', 'flex']).default('flex'),
       referralCode: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -40,7 +39,6 @@ export const billingRouter = router({
         userId: ctx.user.id.toString(),
         tenantId: String(ctx.tenantId),
         planType: input.planType,
-        flexSliderValue: input.flexSliderValue,
         referralCode: input.referralCode,
       });
       return { url: checkoutUrl, id: null };

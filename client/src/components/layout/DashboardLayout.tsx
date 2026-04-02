@@ -66,6 +66,7 @@ import {
   Palette,
   Eye,
   Bug,
+  Phone,
 } from "lucide-react";
 import * as React from "react";
 import { useLocation } from "wouter";
@@ -277,6 +278,7 @@ const TOOLS_GROUP: NavGroup = {
     { icon: Star, labelKey: "sidebar.reviews", fallback: "Reviews", path: "/review-management" },
     { icon: RefreshCw, labelKey: "sidebar.rescheduling", fallback: "Rescheduling", path: "/rescheduling" },
     { icon: Users, labelKey: "sidebar.contactImport", fallback: "Import Contacts", path: "/contact-import" },
+    { icon: Phone, labelKey: "sidebar.callTracking", fallback: "Live Call Tracking", path: "/call-tracking" },
   ],
 };
 

@@ -89,6 +89,12 @@ services:
       TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      TEXTLINKSMS_API_KEY: ${TEXTLINKSMS_API_KEY:-}
+      TEXTLINKSMS_FROM_NUMBER: ${TEXTLINKSMS_FROM_NUMBER:-}
+      N8N_ENABLED: ${N8N_ENABLED:-false}
+      N8N_BASE_URL: ${N8N_BASE_URL:-http://n8n:5678}
+      N8N_API_KEY: ${N8N_API_KEY:-}
+      N8N_ADMIN_API_KEY: ${N8N_ADMIN_API_KEY:-}
     depends_on:
       migrate:
         condition: service_completed_successfully

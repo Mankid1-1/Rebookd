@@ -72,7 +72,7 @@ export const stripeCheckoutRouter = {
       return {
         success: true,
         usage,
-        // Note: actual rate is 15% for Growth plan, 20% for Flex plan — resolved server-side via billing.service
+        // Revenue share: 15% for Flex Spots, 0% for Founder Spots
         estimatedCharge: usage * 0.15,
         message: `Current usage: $${usage} recovered revenue`,
       };

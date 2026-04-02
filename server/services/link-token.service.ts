@@ -29,7 +29,7 @@ export async function createLinkToken(
   db: Db,
   tenantId: number,
   leadId: number,
-  type: "booking" | "review",
+  type: "booking" | "review" | "feedback" | "booking_page",
   expiryHours = DEFAULT_EXPIRY_HOURS,
 ): Promise<LinkTokenResult> {
   const token = crypto.randomBytes(32).toString("hex"); // 64-char hex
@@ -58,7 +58,7 @@ export async function createLinkToken(
 export async function validateLinkToken(
   db: Db,
   token: string,
-): Promise<{ tenantId: number; leadId: number; type: "booking" | "review" } | null> {
+): Promise<{ tenantId: number; leadId: number; type: "booking" | "review" | "feedback" | "booking_page" } | null> {
   const [row] = await db
     .select({
       tenantId: linkTokens.tenantId,
@@ -96,7 +96,7 @@ export async function validateLinkToken(
 export async function redeemLinkToken(
   db: Db,
   token: string,
-): Promise<{ tenantId: number; leadId: number; type: "booking" | "review" } | null> {
+): Promise<{ tenantId: number; leadId: number; type: "booking" | "review" | "feedback" | "booking_page" } | null> {
   const context = await validateLinkToken(db, token);
   if (!context) return null;
 

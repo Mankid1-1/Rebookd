@@ -493,6 +493,12 @@ export const phoneNumbers = mysqlTable("phone_numbers", {
   label: varchar("label", { length: 100 }),
   isDefault: boolean("isDefault").default(false).notNull(),
   isInbound: boolean("isInbound").default(false).notNull(),
+  forwardTo: varchar("forwardTo", { length: 20 }),
+  type: mysqlEnum("type", ["tracking", "business", "personal"]).default("business").notNull(),
+  provider: varchar("provider", { length: 50 }),
+  capabilities: json("capabilities").$type<{ voice?: boolean; sms?: boolean; mms?: boolean }>(),
+  monthlyFee: int("monthlyFee"),
+  status: mysqlEnum("status", ["active", "suspended", "released"]).default("active").notNull(),
   twilioSid: varchar("twilioSid", { length: 100 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   deletedAt: timestamp("deletedAt"),
@@ -578,6 +584,41 @@ export const messages = mysqlTable("messages", {
 
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = typeof messages.$inferInsert;
+
+// ─── Call Logs (Voice Call Tracking) ─────────────────────────────────────────
+
+export const callLogs = mysqlTable("call_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id),
+  leadId: int("leadId").references(() => leads.id),
+  direction: mysqlEnum("direction", ["inbound", "outbound"]).notNull(),
+  callerNumber: varchar("callerNumber", { length: 20 }).notNull(),
+  calledNumber: varchar("calledNumber", { length: 20 }).notNull(),
+  status: mysqlEnum("status", ["ringing", "in_progress", "completed", "missed", "voicemail", "failed", "busy", "no_answer"]).default("ringing").notNull(),
+  duration: int("duration").default(0).notNull(),
+  startedAt: timestamp("startedAt"),
+  answeredAt: timestamp("answeredAt"),
+  endedAt: timestamp("endedAt"),
+  provider: varchar("provider", { length: 50 }).notNull(),
+  providerCallSid: varchar("providerCallSid", { length: 100 }),
+  recordingUrl: text("recordingUrl"),
+  transcription: text("transcription"),
+  notes: text("notes"),
+  cost: int("cost"),
+  tags: json("tags").$type<string[]>(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  tenantIdx: index("idx_call_logs_tenant").on(t.tenantId),
+  tenantDirectionIdx: index("idx_call_logs_tenant_direction").on(t.tenantId, t.direction),
+  tenantStatusIdx: index("idx_call_logs_tenant_status").on(t.tenantId, t.status),
+  tenantCreatedIdx: index("idx_call_logs_tenant_created").on(t.tenantId, t.createdAt),
+  tenantLeadIdx: index("idx_call_logs_tenant_lead").on(t.tenantId, t.leadId),
+  providerSidIdx: uniqueIndex("idx_call_logs_provider_sid").on(t.tenantId, t.providerCallSid),
+}));
+
+export type CallLog = typeof callLogs.$inferSelect;
+export type InsertCallLog = typeof callLogs.$inferInsert;
 
 // ─── Templates ────────────────────────────────────────────────────────────────
 
@@ -1206,7 +1247,7 @@ export const linkTokens = mysqlTable("link_tokens", {
   tenantId: int("tenantId").notNull().references(() => tenants.id),
   leadId: int("leadId").notNull().references(() => leads.id),
   token: varchar("token", { length: 64 }).notNull().unique(),
-  type: mysqlEnum("type", ["booking", "review"]).notNull(),
+  type: mysqlEnum("type", ["booking", "review", "feedback", "booking_page"]).notNull(),
   expiresAt: timestamp("expiresAt").notNull(),
   usedAt: timestamp("usedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -1218,3 +1259,170 @@ export const linkTokens = mysqlTable("link_tokens", {
 
 export type LinkToken = typeof linkTokens.$inferSelect;
 export type InsertLinkToken = typeof linkTokens.$inferInsert;
+
+// ─── AI SMS Experiments (Feature 2) ─────────────────────────────────────────
+
+export const aiSmsExperiments = mysqlTable("ai_sms_experiments", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id),
+  name: varchar("name", { length: 255 }).notNull(),
+  automationKey: varchar("automationKey", { length: 100 }).notNull(),
+  trafficPercent: int("trafficPercent").default(50).notNull(),
+  status: mysqlEnum("status", ["draft", "running", "paused", "completed"]).default("draft").notNull(),
+  startedAt: timestamp("startedAt"),
+  endedAt: timestamp("endedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  tenantIdx: index("idx_aismsexp_tenant").on(t.tenantId),
+  tenantKeyIdx: index("idx_aismsexp_tenant_key").on(t.tenantId, t.automationKey),
+  statusIdx: index("idx_aismsexp_status").on(t.status),
+}));
+
+export type AiSmsExperiment = typeof aiSmsExperiments.$inferSelect;
+
+export const aiSmsResults = mysqlTable("ai_sms_results", {
+  id: int("id").autoincrement().primaryKey(),
+  experimentId: int("experimentId").notNull().references(() => aiSmsExperiments.id),
+  tenantId: int("tenantId").notNull().references(() => tenants.id),
+  leadId: int("leadId").notNull().references(() => leads.id),
+  messageId: int("messageId").notNull().references(() => messages.id),
+  variant: mysqlEnum("variant", ["template", "ai"]).notNull(),
+  generationMethod: mysqlEnum("generationMethod", ["llm", "template_fallback"]).default("llm").notNull(),
+  promptTokens: int("promptTokens"),
+  completionTokens: int("completionTokens"),
+  latencyMs: int("latencyMs"),
+  replied: boolean("replied").default(false).notNull(),
+  converted: boolean("converted").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => ({
+  experimentIdx: index("idx_aismsr_experiment").on(t.experimentId),
+  tenantVariantIdx: index("idx_aismsr_tenant_variant").on(t.tenantId, t.variant),
+}));
+
+export type AiSmsResult = typeof aiSmsResults.$inferSelect;
+
+// ─── Review Requests (Feature 1) ────────────────────────────────────────────
+
+export const reviewRequests = mysqlTable("review_requests", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id),
+  leadId: int("leadId").notNull().references(() => leads.id),
+  messageId: int("messageId").references(() => messages.id),
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  status: mysqlEnum("status", ["sent", "rated", "review_clicked", "feedback_submitted", "expired"]).default("sent").notNull(),
+  rating: int("rating"),
+  feedbackText: text("feedbackText"),
+  reviewPlatform: varchar("reviewPlatform", { length: 50 }),
+  reviewLinkClicked: boolean("reviewLinkClicked").default(false).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  ratedAt: timestamp("ratedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  tenantIdx: index("idx_revreq_tenant").on(t.tenantId),
+  tenantLeadIdx: index("idx_revreq_tenant_lead").on(t.tenantId, t.leadId),
+  tenantStatusIdx: index("idx_revreq_tenant_status").on(t.tenantId, t.status),
+  tokenIdx: uniqueIndex("idx_revreq_token").on(t.token),
+}));
+
+export type ReviewRequest = typeof reviewRequests.$inferSelect;
+
+// ─── Booking Pages (Feature 4) ──────────────────────────────────────────────
+
+export const bookingPages = mysqlTable("booking_pages", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  services: json("services").$type<Array<{ name: string; durationMinutes: number; price?: number }>>(),
+  businessHours: json("businessHours").$type<Record<string, { start: string; end: string } | null>>(),
+  slotDurationMinutes: int("slotDurationMinutes").default(30).notNull(),
+  bufferMinutes: int("bufferMinutes").default(0).notNull(),
+  maxAdvanceDays: int("maxAdvanceDays").default(30).notNull(),
+  brandColor: varchar("brandColor", { length: 7 }),
+  logoUrl: varchar("logoUrl", { length: 500 }),
+  confirmationMessage: text("confirmationMessage"),
+  calendarConnectionId: int("calendarConnectionId").references(() => calendarConnections.id),
+  enabled: boolean("enabled").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  tenantIdx: index("idx_bookpg_tenant").on(t.tenantId),
+  slugIdx: uniqueIndex("idx_bookpg_slug").on(t.slug),
+}));
+
+export type BookingPage = typeof bookingPages.$inferSelect;
+
+export const publicBookings = mysqlTable("public_bookings", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id),
+  bookingPageId: int("bookingPageId").notNull().references(() => bookingPages.id),
+  leadId: int("leadId").references(() => leads.id),
+  linkTokenId: int("linkTokenId"),
+  clientName: varchar("clientName", { length: 255 }),
+  clientPhone: varchar("clientPhone", { length: 20 }),
+  clientEmail: varchar("clientEmail", { length: 320 }),
+  serviceName: varchar("serviceName", { length: 255 }),
+  slotStart: timestamp("slotStart").notNull(),
+  slotEnd: timestamp("slotEnd").notNull(),
+  status: mysqlEnum("status", ["confirmed", "cancelled", "rescheduled", "no_show", "completed"]).default("confirmed").notNull(),
+  calendarEventId: int("calendarEventId"),
+  source: mysqlEnum("source", ["sms_link", "direct", "qr_code", "website"]).default("direct").notNull(),
+  confirmationSentAt: timestamp("confirmationSentAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  tenantStatusIdx: index("idx_pubbk_tenant_status").on(t.tenantId, t.status),
+  pageIdx: index("idx_pubbk_page").on(t.bookingPageId),
+  leadIdx: index("idx_pubbk_lead").on(t.leadId),
+  slotIdx: index("idx_pubbk_slot").on(t.slotStart),
+}));
+
+export type PublicBooking = typeof publicBookings.$inferSelect;
+
+// ─── Waiting List (Feature 3) ───────────────────────────────────────────────
+
+export const waitingListEntries = mysqlTable("waiting_list_entries", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id),
+  leadId: int("leadId").notNull().references(() => leads.id),
+  preferredDay: varchar("preferredDay", { length: 10 }),
+  preferredTimeStart: varchar("preferredTimeStart", { length: 5 }),
+  preferredTimeEnd: varchar("preferredTimeEnd", { length: 5 }),
+  serviceType: varchar("serviceType", { length: 100 }),
+  priority: int("priority").default(0).notNull(),
+  status: mysqlEnum("status", ["active", "offered", "booked", "expired", "removed"]).default("active").notNull(),
+  notes: text("notes"),
+  expiresAt: timestamp("expiresAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  tenantStatusIdx: index("idx_wle_tenant_status").on(t.tenantId, t.status),
+  tenantDayIdx: index("idx_wle_tenant_day").on(t.tenantId, t.preferredDay),
+  tenantPriorityIdx: index("idx_wle_tenant_priority").on(t.tenantId, t.priority),
+}));
+
+export type WaitingListEntry = typeof waitingListEntries.$inferSelect;
+
+export const waitlistOffers = mysqlTable("waitlist_offers", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id),
+  waitlistEntryId: int("waitlistEntryId").notNull().references(() => waitingListEntries.id),
+  leadId: int("leadId").notNull().references(() => leads.id),
+  cancelledEventId: int("cancelledEventId"),
+  slotStart: timestamp("slotStart").notNull(),
+  slotEnd: timestamp("slotEnd").notNull(),
+  messageId: int("messageId").references(() => messages.id),
+  status: mysqlEnum("status", ["sent", "accepted", "declined", "expired", "slot_filled"]).default("sent").notNull(),
+  responseDeadline: timestamp("responseDeadline").notNull(),
+  respondedAt: timestamp("respondedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => ({
+  tenantStatusIdx: index("idx_wlo_tenant_status").on(t.tenantId, t.status),
+  tenantEventIdx: index("idx_wlo_tenant_event").on(t.tenantId, t.cancelledEventId),
+  deadlineIdx: index("idx_wlo_deadline").on(t.responseDeadline),
+}));
+
+export type WaitlistOffer = typeof waitlistOffers.$inferSelect;

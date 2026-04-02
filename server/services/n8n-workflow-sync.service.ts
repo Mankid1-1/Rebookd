@@ -123,13 +123,25 @@ export async function getExecutionDetail(executionId: string): Promise<N8nExecut
 
 // Import the registry to compare against n8n
 const REBOOKED_WORKFLOW_KEYS = [
+  // Missed call sequence
   "missed_call_textback", "missed_call_followup", "missed_call_final_offer",
-  "appointment_confirmation", "appointment_reminder_24h", "appointment_reminder_2h",
-  "noshow_recovery", "cancellation_same_day", "cancellation_rescue_48h",
-  "cancellation_rescue_7d", "cancellation_flurry", "welcome_new_lead",
-  "win_back_90d", "vip_winback_45d", "birthday_promo",
-  "review_request", "inbound_auto_reply", "qualified_followup_1d",
-  "loyalty_milestone", "rescheduling_offer", "post_visit_feedback",
+  // Appointment reminders
+  "appointment_confirmation", "confirmation_chase", "appointment_reminder_24h", "appointment_reminder_2h",
+  // No-show recovery
+  "noshow_recovery", "noshow_rebook_offer",
+  // Cancellation recovery
+  "cancellation_same_day", "cancellation_rescue_7d", "cancellation_flurry", "rescheduling_offer",
+  // Follow-up
+  "post_visit_feedback", "post_visit_upsell", "next_visit_prompt",
+  "lead_followup_sequence", "qualified_followup_1d",
+  // Re-engagement
+  "win_back_30d", "win_back_90d", "vip_winback_45d", "vip_winback_90d",
+  // Welcome & loyalty
+  "welcome_new_lead", "birthday_promo", "loyalty_milestone",
+  // Inbound & delivery
+  "inbound_auto_reply", "delivery_failure_recovery",
+  // Review
+  "review_request",
 ];
 
 export interface WorkflowSyncResult {

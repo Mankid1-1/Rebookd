@@ -56,6 +56,7 @@ const ReviewManagement = lazy(() => import("@/pages/ReviewManagement"));
 const Rescheduling = lazy(() => import("@/pages/Rescheduling"));
 const AiTools = lazy(() => import("@/pages/AiTools"));
 const ContactImport = lazy(() => import("@/pages/ContactImport"));
+const LiveCallTracking = lazy(() => import("@/pages/LiveCallTracking"));
 const Setup = lazy(() => import("@/pages/Setup"));
 
 // Industry landing pages
@@ -335,6 +336,14 @@ function Router() {
         <ErrorBoundary>
           <AuthGuard tenantOnly>
             <ContactImport />
+          </AuthGuard>
+        </ErrorBoundary>
+      </Route>
+
+      <Route path="/call-tracking">
+        <ErrorBoundary>
+          <AuthGuard tenantOnly>
+            <LiveCallTracking />
           </AuthGuard>
         </ErrorBoundary>
       </Route>

@@ -476,7 +476,7 @@ export default function Billing() {
                           <p>
                             {monthlyFee > 0
                               ? `You pay $${monthlyFee.toFixed(0)}/mo plus ${revenueSharePercent}% of recovered revenue.`
-                              : `Flex plan: ${revenueSharePercent}% of recovered revenue only. No monthly fee.`}
+                              : `Flex plan: free for 35 days, then $199/mo + ${revenueSharePercent}% of recovered revenue if positive ROI.`}
                           </p>
                         </TooltipContent>
                       </Tooltip>

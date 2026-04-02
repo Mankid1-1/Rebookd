@@ -1,37 +1,16 @@
 import { desc, eq, and, ne, sql } from "drizzle-orm";
 import { referrals, referralPayouts } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
-import { randomUUID } from "crypto";
+import { getOrCreateReferralCode } from "../services/referral.service";
 
 function buildReferralLink(code: string): string {
   const appUrl = process.env.APP_URL || "http://localhost:3000";
   return `${appUrl}/signup?ref=${code}`;
 }
 
+// Use the canonical service function — crypto-secure, HMAC-signed, status-filtered
 async function getOrCreateCode(db: any, userId: number): Promise<string> {
-  const existing = await db
-    .select({ referralCode: referrals.referralCode })
-    .from(referrals)
-    .where(eq(referrals.referrerId, userId))
-    .limit(1);
-
-  if (existing.length > 0) return existing[0].referralCode;
-
-  const code = `RB-${randomUUID().slice(0, 8).toUpperCase()}`;
-  const expiresAt = new Date();
-  expiresAt.setFullYear(expiresAt.getFullYear() + 10);
-
-  await db.insert(referrals).values({
-    referrerId: userId,
-    referredUserId: userId,
-    referralCode: code,
-    status: "pending",
-    rewardAmount: 5000,
-    rewardCurrency: "USD",
-    expiresAt,
-  });
-
-  return code;
+  return getOrCreateReferralCode(db, userId);
 }
 
 async function computeStats(db: any, userId: number) {

@@ -108,7 +108,7 @@ export default function ROIGuaranteeTracker() {
             style={{ backgroundColor: GOLD_BG, color: GOLD }}
           >
             <Shield className="w-3 h-3 inline mr-1" />
-            Founder Client — free forever, revenue share only
+            Founder Client — free forever, no fees
           </div>
         )}
       </CardContent>

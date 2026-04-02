@@ -23,11 +23,18 @@ export type EnvConfig = {
   stripeSecretKey: string;
   stripePublishableKey: string;
   stripeWebhookSecret: string;
-  stripeFixedPriceId: string;
-  stripeMeteredPriceId: string;
-  stripeFlexMeteredPriceId: string;
-  stripeFullProductId: string;
+  // Flex Spots ($199/mo + 15% revenue share after 35-day trial)
   stripeFlexProductId: string;
+  stripeFlexPriceId: string;
+  stripeFlexMeteredPriceId: string;
+  // Founder Spots ($0/forever)
+  stripeFounderProductId: string;
+  stripeFounderPriceId: string;
+  // Referral Reward ($50/mo)
+  stripeReferralProductId: string;
+  stripeReferralPriceId: string;
+  // Enterprise (custom)
+  stripeEnterpriseProductId: string;
   frontendUrl: string;
   backendUrl: string;
   // Referral System
@@ -86,11 +93,18 @@ export const ENV: EnvConfig = {
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
   stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY ?? "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
-  stripeFixedPriceId: process.env.STRIPE_FIXED_PRICE_ID ?? "price_1TDqZtPC6Kl5W2cCTLQrYsKS",
-  stripeMeteredPriceId: process.env.STRIPE_METERED_PRICE_ID ?? "price_1TDx2sPC6Kl5W2cCGPQgHuXz",
-  stripeFlexMeteredPriceId: process.env.STRIPE_FLEX_METERED_PRICE_ID ?? "price_1TFgLpPC6Kl5W2cCdN22c86O",
-  stripeFullProductId: process.env.STRIPE_FULL_PRODUCT_ID ?? "prod_UCF4dvSJSzp8Hf",
-  stripeFlexProductId: process.env.STRIPE_FLEX_PRODUCT_ID ?? "prod_UDONY2mD0w5gHq",
+  // Flex Spots ($199/mo + 15% revenue share after 35-day trial)
+  stripeFlexProductId: process.env.STRIPE_FLEX_PRODUCT_ID ?? "prod_UE6MDIJfGfjOsv",
+  stripeFlexPriceId: process.env.STRIPE_FLEX_PRICE_ID ?? "price_1TFe9OPJnVwFKTtaW1lQQKrL",
+  stripeFlexMeteredPriceId: process.env.STRIPE_FLEX_METERED_PRICE_ID ?? "price_1TFe9NPJnVwFKTtavqUsUJFe",
+  // Founder Spots ($0/forever)
+  stripeFounderProductId: process.env.STRIPE_FOUNDER_PRODUCT_ID ?? "prod_UG06wDViOhpNlc",
+  stripeFounderPriceId: process.env.STRIPE_FOUNDER_PRICE_ID ?? "price_1THU69PJnVwFKTtaqluytnpJ",
+  // Referral Reward ($50/mo)
+  stripeReferralProductId: process.env.STRIPE_REFERRAL_PRODUCT_ID ?? "prod_UG06enW7Xbp1cb",
+  stripeReferralPriceId: process.env.STRIPE_REFERRAL_PRICE_ID ?? "price_1THU6APJnVwFKTtawj0st9pe",
+  // Enterprise (custom)
+  stripeEnterpriseProductId: process.env.STRIPE_ENTERPRISE_PRODUCT_ID ?? "prod_UG06w3LBqB1eFz",
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:3000",
   backendUrl: process.env.BACKEND_URL ?? "http://localhost:3001",
   // Referral System

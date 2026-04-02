@@ -13,44 +13,23 @@ import { subscriptions } from '../../drizzle/schema';
 // Use the centralized Stripe singleton — do NOT create a second instance
 import { stripe } from '../_core/stripe';
 
-// Price IDs from Stripe Dashboard — real IDs, synced 2026-03-28
-const FIXED_PRICE_ID = ENV.stripeFixedPriceId;           // Full Plan $199/mo
-const FULL_METERED_PRICE_ID = ENV.stripeMeteredPriceId;  // Full Plan 15% rev share
-const FLEX_METERED_PRICE_ID = ENV.stripeFlexMeteredPriceId; // Flex Plan 20% rev share
+// Price IDs from Stripe Dashboard — synced 2026-04-01
+// Flex Spots: $199/mo + 15% revenue share (after 35-day free trial)
+const FLEX_PRICE_ID = ENV.stripeFlexPriceId;             // $199/mo fixed
+const FLEX_METERED_PRICE_ID = ENV.stripeFlexMeteredPriceId; // 15% rev share metered
+// Founder Spots: $0/mo forever
+const FOUNDER_PRICE_ID = ENV.stripeFounderPriceId;       // $0/mo
 
-// ─── Soft Launch: 30-day free trial for all founding clients ──────────────
-const SOFT_LAUNCH_TRIAL_DAYS = 30;
-const SOFT_LAUNCH_ACTIVE = process.env.SOFT_LAUNCH_ACTIVE !== 'false'; // Controlled via env var
-
-// Flex Plan tiered pricing: subscription scales with estimated monthly recovery
-// Tiers ensure clients always keep the majority of recovered revenue
-// Revenue share (20%) is metered separately via METERED_PRICE_ID
-const FLEX_PRICE_MAP: Record<number, string> = {
-  29: 'price_1TFDQgPC6Kl5W2cCWAdbB1ne',   // $29/mo — recovery up to $300/mo
-  49: 'price_1TFDQhPC6Kl5W2cCLP4dsOdp',   // $49/mo — recovery $301-$500/mo
-  79: 'price_1TExaTPC6Kl5W2cCMh7LayCd',   // $79/mo — recovery $501-$800/mo
-  99: 'price_1TExaUPC6Kl5W2cC865JZHpr',   // $99/mo — recovery $801-$1200/mo
-  129: 'price_1TFDQiPC6Kl5W2cCFVVkGscB',  // $129/mo — recovery $1201-$1800/mo
-  149: 'price_1TExaWPC6Kl5W2cC5siHQ6qj',  // $149/mo — recovery $1800+/mo
-};
-
-function getFlexPriceId(sliderValue: number): string {
-  const targetPrice = sliderValue <= 300 ? 29
-    : sliderValue <= 500 ? 49
-    : sliderValue <= 800 ? 79
-    : sliderValue <= 1200 ? 99
-    : sliderValue <= 1800 ? 129
-    : 149;
-  return FLEX_PRICE_MAP[targetPrice] || FLEX_PRICE_MAP[49];
-}
+// ─── 35-day free trial for Flex clients (homepage source of truth) ────────
+const TRIAL_DAYS = 35;
+const SOFT_LAUNCH_ACTIVE = process.env.SOFT_LAUNCH_ACTIVE !== 'false';
 
 export interface CheckoutSessionData {
   customerEmail: string;
   userId: string;
   tenantId: string;
   referralCode?: string;
-  planType?: 'growth' | 'flex';
-  flexSliderValue?: number; // $200-$2500 estimated monthly recovery slider
+  planType?: 'founder' | 'flex';
 }
 
 export interface SubscriptionData {
@@ -87,41 +66,33 @@ export async function createCheckoutSession(data: CheckoutSessionData): Promise<
       customerId = customer.id;
     }
 
-    // Determine which price to use
-    const planType = data.planType || 'growth';
-    const basePriceId = planType === 'flex' && data.flexSliderValue
-      ? getFlexPriceId(data.flexSliderValue)
-      : FIXED_PRICE_ID;
+    const planType = data.planType || 'flex';
 
-    // Build line items
-    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
-      {
-        price: basePriceId,
-        quantity: 1,
-      },
-    ];
+    // Build line items based on plan type
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
 
-    // Each plan gets its own metered revenue share price
-    // Full Plan: 15% of recovered revenue, Flex Plan: 20% of recovered revenue
-    const meteredPriceId = planType === 'flex' ? FLEX_METERED_PRICE_ID : FULL_METERED_PRICE_ID;
-    lineItems.push({
-      price: meteredPriceId,
-    });
-
-    // Soft launch: 30-day free trial — no charge until positive ROI
-    const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {};
-    if (SOFT_LAUNCH_ACTIVE) {
-      subscriptionData.trial_period_days = SOFT_LAUNCH_TRIAL_DAYS;
-      subscriptionData.metadata = {
-        softLaunch: 'true',
-        foundingClient: 'true',
-        roiGuarantee: 'true',
-        planType,
-        flexSliderValue: String(data.flexSliderValue || ''),
-      };
+    if (planType === 'founder') {
+      // Founder Spots: $0/mo — no metered billing, no trial needed (already free)
+      lineItems.push({ price: FOUNDER_PRICE_ID, quantity: 1 });
+    } else {
+      // Flex Spots: $199/mo fixed + 15% revenue share metered
+      lineItems.push({ price: FLEX_PRICE_ID, quantity: 1 });
+      lineItems.push({ price: FLEX_METERED_PRICE_ID });
     }
 
-    // Create checkout session with trial
+    // Flex clients get a 35-day free trial — no charge until positive ROI
+    const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
+      metadata: {
+        planType,
+        foundingClient: 'true',
+        roiGuarantee: planType === 'flex' ? 'true' : 'false',
+      },
+    };
+    if (planType === 'flex' && SOFT_LAUNCH_ACTIVE) {
+      subscriptionData.trial_period_days = TRIAL_DAYS;
+    }
+
+    // Create checkout session
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
@@ -129,7 +100,7 @@ export async function createCheckoutSession(data: CheckoutSessionData): Promise<
       subscription_data: subscriptionData,
       success_url: `${ENV.frontendUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${ENV.frontendUrl}/pricing`,
-      payment_method_types: ['card', 'cashapp', 'link'],
+      payment_method_types: planType === 'founder' ? ['card'] : ['card', 'cashapp', 'link'],
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
       customer_update: {
@@ -141,7 +112,6 @@ export async function createCheckoutSession(data: CheckoutSessionData): Promise<
         tenantId,
         referralCode: referralCode || '',
         planType,
-        flexSliderValue: String(data.flexSliderValue || ''),
       },
     });
 
@@ -234,7 +204,7 @@ export async function reportRevenueUsage(customerId: string, recoveredAmount: nu
     
     // Find the metered price subscription item
     const meteredItem = subscription.items.data.find(item => 
-      item.price.id === FULL_METERED_PRICE_ID || item.price.id === FLEX_METERED_PRICE_ID ||
+      item.price.id === FLEX_METERED_PRICE_ID ||
       item.price.recurring?.usage_type === 'metered'
     );
 
@@ -279,7 +249,7 @@ export async function getCurrentUsage(customerId: string): Promise<number> {
     
     // Find the metered price subscription item
     const meteredItem = subscription.items.data.find(item => 
-      item.price.id === FULL_METERED_PRICE_ID || item.price.id === FLEX_METERED_PRICE_ID ||
+      item.price.id === FLEX_METERED_PRICE_ID ||
       item.price.recurring?.usage_type === 'metered'
     );
 

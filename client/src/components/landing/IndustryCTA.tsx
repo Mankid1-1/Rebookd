@@ -18,16 +18,27 @@ export function IndustryCTA({ config }: IndustryCTAProps) {
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="text-4xl font-bold text-sidebar-foreground mb-4"
               style={{ fontFamily: "Space Grotesk, sans-serif", letterSpacing: "-0.02em" }}>
-            Start recovering revenue today — risk free
+            Start recovering revenue today — completely free
           </h2>
-          <p className="text-lg text-sidebar-foreground/70 mb-8">
-            If Rebooked doesn't show you a positive ROI within 35 days, you don't pay a cent. No contracts, no setup fees, no risk.
+          <p className="text-lg text-sidebar-foreground/70 mb-4">
+            Two ways to get started, both completely free:
           </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 max-w-2xl mx-auto mb-8 text-left">
+            <div className="p-4 rounded-xl bg-sidebar-foreground/5 border border-sidebar-foreground/10">
+              <p className="font-bold text-sidebar-foreground text-sm mb-1">Founder Spots — 10 available</p>
+              <p className="text-xs text-sidebar-foreground/70">Free forever. No credit card, no fees, no expiry. Full platform in exchange for honest feedback.</p>
+            </div>
+            <div className="p-4 rounded-xl bg-sidebar-foreground/5 border border-sidebar-foreground/10">
+              <p className="font-bold text-sidebar-foreground text-sm mb-1">Flex Spots — 10 available</p>
+              <p className="text-xs text-sidebar-foreground/70">Free for 35 days. Only pay ($199/mo + 15%) if you see positive ROI. No ROI = no charge.</p>
+            </div>
+          </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
             <Link href={signupUrl}>
               <Button size="lg" className="font-semibold text-base px-10 w-full sm:w-auto">
-                Start Free Trial for {config.namePlural}
+                Claim Your Free Spot
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>

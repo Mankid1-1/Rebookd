@@ -270,9 +270,9 @@ class StripeConnectService {
    */
   async subscribeToPlatform(accountId: string): Promise<CheckoutSession> {
     try {
-      const priceId = process.env.PLATFORM_PRICE_ID;
+      const priceId = process.env.STRIPE_FLEX_PRICE_ID;
       if (!priceId) {
-        throw new Error('PLATFORM_PRICE_ID environment variable is required');
+        throw new Error('STRIPE_FLEX_PRICE_ID environment variable is required');
       }
 
       const session = await this.stripe.checkout.sessions.create({
