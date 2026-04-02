@@ -13,6 +13,7 @@
 
 import { sendEmail } from "../_core/email";
 import { logger } from "../_core/logger";
+import { sql } from "drizzle-orm";
 import type { MySql2Database } from "drizzle-orm/mysql2";
 
 // ─── Sequence Definitions ──────────────────────────────────────────────────
@@ -101,12 +102,10 @@ export async function enrollInSequence(
   for (let i = 0; i < sequence.length; i++) {
     const step = sequence[i];
     const scheduledAt = new Date(now.getTime() + step.delayDays * 24 * 60 * 60 * 1000);
+    const scheduledAtStr = scheduledAt.toISOString().slice(0, 19).replace("T", " ");
 
-    await db.execute({
-      sql: `INSERT INTO email_sequence_queue (subscriberId, sequenceName, stepIndex, scheduledAt, status)
-            VALUES (?, ?, ?, ?, 'pending')`,
-      params: [subscriberId, sequenceName, i, scheduledAt],
-    });
+    await db.execute(sql`INSERT INTO email_sequence_queue (subscriberId, sequenceName, stepIndex, scheduledAt, status)
+            VALUES (${subscriberId}, ${sequenceName}, ${i}, ${scheduledAtStr}, 'pending')`);
   }
 
   logger.info("Enrolled in email sequence", { subscriberId, sequenceName, steps: sequence.length });
@@ -118,38 +117,29 @@ export async function enrollInSequence(
  */
 export async function processEmailSequenceQueue(db: MySql2Database<any>): Promise<number> {
   // Fetch up to 20 pending items that are due
-  const [rows] = await db.execute({
-    sql: `SELECT q.id, q.subscriberId, q.sequenceName, q.stepIndex,
+  const rows = await db.execute(sql`SELECT q.id, q.subscriberId, q.sequenceName, q.stepIndex,
                  s.email, s.name, s.roiData, s.industry, s.status as subStatus
           FROM email_sequence_queue q
           JOIN email_subscribers s ON s.id = q.subscriberId
           WHERE q.status = 'pending' AND q.scheduledAt <= NOW()
           ORDER BY q.scheduledAt ASC
-          LIMIT 20`,
-    params: [],
-  });
+          LIMIT 20`);
 
-  const items = rows as any[];
-  if (!items.length) return 0;
+  const items = (Array.isArray(rows) ? rows[0] : rows) as any[];
+  if (!items?.length) return 0;
 
   let sent = 0;
 
   for (const item of items) {
     // Skip if subscriber unsubscribed
     if (item.subStatus !== "active") {
-      await db.execute({
-        sql: `UPDATE email_sequence_queue SET status = 'skipped', sentAt = NOW() WHERE id = ?`,
-        params: [item.id],
-      });
+      await db.execute(sql`UPDATE email_sequence_queue SET status = 'skipped', sentAt = NOW() WHERE id = ${item.id}`);
       continue;
     }
 
     const sequence = SEQUENCES[item.sequenceName];
     if (!sequence || !sequence[item.stepIndex]) {
-      await db.execute({
-        sql: `UPDATE email_sequence_queue SET status = 'skipped', sentAt = NOW() WHERE id = ?`,
-        params: [item.id],
-      });
+      await db.execute(sql`UPDATE email_sequence_queue SET status = 'skipped', sentAt = NOW() WHERE id = ${item.id}`);
       continue;
     }
 
@@ -165,18 +155,13 @@ export async function processEmailSequenceQueue(db: MySql2Database<any>): Promis
         html: step.buildHtml(ctx),
       });
 
-      await db.execute({
-        sql: `UPDATE email_sequence_queue SET status = ?, sentAt = NOW() WHERE id = ?`,
-        params: [result.success ? "sent" : "failed", item.id],
-      });
+      const status = result.success ? "sent" : "failed";
+      await db.execute(sql`UPDATE email_sequence_queue SET status = ${status}, sentAt = NOW() WHERE id = ${item.id}`);
 
       if (result.success) sent++;
     } catch (err) {
       logger.error("Failed to send sequence email", { id: item.id, error: String(err) });
-      await db.execute({
-        sql: `UPDATE email_sequence_queue SET status = 'failed', sentAt = NOW() WHERE id = ?`,
-        params: [item.id],
-      });
+      await db.execute(sql`UPDATE email_sequence_queue SET status = 'failed', sentAt = NOW() WHERE id = ${item.id}`);
     }
   }
 
@@ -191,18 +176,12 @@ export async function processEmailSequenceQueue(db: MySql2Database<any>): Promis
  * Unsubscribe an email address from all sequences.
  */
 export async function unsubscribe(db: MySql2Database<any>, email: string): Promise<void> {
-  await db.execute({
-    sql: `UPDATE email_subscribers SET status = 'unsubscribed', unsubscribedAt = NOW() WHERE email = ?`,
-    params: [email],
-  });
+  await db.execute(sql`UPDATE email_subscribers SET status = 'unsubscribed', unsubscribedAt = NOW() WHERE email = ${email}`);
 
   // Cancel all pending sequence items
-  await db.execute({
-    sql: `UPDATE email_sequence_queue SET status = 'skipped'
-          WHERE subscriberId IN (SELECT id FROM email_subscribers WHERE email = ?)
-            AND status = 'pending'`,
-    params: [email],
-  });
+  await db.execute(sql`UPDATE email_sequence_queue SET status = 'skipped'
+          WHERE subscriberId IN (SELECT id FROM email_subscribers WHERE email = ${email})
+            AND status = 'pending'`);
 }
 
 // ─── Email Templates ───────────────────────────────────────────────────────

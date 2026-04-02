@@ -6,6 +6,7 @@
  */
 
 import type { Express } from "express";
+import { sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { logger } from "../_core/logger";
 
@@ -31,23 +32,20 @@ export function registerFunnelTrackEndpoint(app: Express): void {
         return;
       }
 
-      await db.execute({
-        sql: `INSERT INTO funnel_events
+      await db.execute(sql`INSERT INTO funnel_events
           (sessionId, eventName, properties, utmSource, utmMedium, utmCampaign, utmContent, utmTerm, referrer, pageUrl)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        params: [
-          String(sessionId).slice(0, 64),
-          String(event).slice(0, 100),
-          properties ? JSON.stringify(properties) : null,
-          attribution?.utm_source || null,
-          attribution?.utm_medium || null,
-          attribution?.utm_campaign || null,
-          attribution?.utm_content || null,
-          attribution?.utm_term || null,
-          attribution?.referrer || null,
-          pageUrl ? String(pageUrl).slice(0, 2048) : null,
-        ],
-      });
+          VALUES (
+            ${String(sessionId).slice(0, 64)},
+            ${String(event).slice(0, 100)},
+            ${properties ? JSON.stringify(properties) : null},
+            ${attribution?.utm_source || null},
+            ${attribution?.utm_medium || null},
+            ${attribution?.utm_campaign || null},
+            ${attribution?.utm_content || null},
+            ${attribution?.utm_term || null},
+            ${attribution?.referrer || null},
+            ${pageUrl ? String(pageUrl).slice(0, 2048) : null}
+          )`);
 
       res.json({ ok: true });
     } catch (err) {

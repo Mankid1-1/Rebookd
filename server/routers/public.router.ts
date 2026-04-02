@@ -14,7 +14,7 @@
 import { z } from "zod";
 import { router, publicProcedure } from "../_core/trpc";
 import { reviewRequests, tenants } from "../../drizzle/schema";
-import { eq, and, gt } from "drizzle-orm";
+import { eq, and, gt, sql } from "drizzle-orm";
 import { logger } from "../_core/logger";
 import * as ReviewRoutingService from "../services/review-routing.service";
 import * as BookingPageService from "../services/booking-page.service";
@@ -131,33 +131,25 @@ export const publicRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        const nameVal = input.name || null;
+        const industryVal = input.industry || null;
+        const roiDataVal = input.roiData ? JSON.stringify(input.roiData) : null;
+        const attributionVal = input.attribution ? JSON.stringify(input.attribution) : null;
+
         // Upsert — if email already exists, just update source/attribution
-        await ctx.db.execute({
-          sql: `INSERT INTO email_subscribers (email, name, source, industry, roiData, attribution)
-                VALUES (?, ?, ?, ?, ?, ?)
+        await ctx.db.execute(sql`INSERT INTO email_subscribers (email, name, source, industry, roiData, attribution)
+                VALUES (${input.email}, ${nameVal}, ${input.source}, ${industryVal}, ${roiDataVal}, ${attributionVal})
                 ON DUPLICATE KEY UPDATE
                   name = COALESCE(VALUES(name), name),
                   source = VALUES(source),
                   industry = COALESCE(VALUES(industry), industry),
                   roiData = COALESCE(VALUES(roiData), roiData),
-                  attribution = COALESCE(VALUES(attribution), attribution)`,
-          params: [
-            input.email,
-            input.name || null,
-            input.source,
-            input.industry || null,
-            input.roiData ? JSON.stringify(input.roiData) : null,
-            input.attribution ? JSON.stringify(input.attribution) : null,
-          ],
-        });
+                  attribution = COALESCE(VALUES(attribution), attribution)`);
 
         // Enroll in welcome drip sequence (fire-and-forget)
         try {
-          const [sub] = await ctx.db.execute({
-            sql: `SELECT id FROM email_subscribers WHERE email = ? LIMIT 1`,
-            params: [input.email],
-          }) as any;
-          const rows = sub as any[];
+          const subResult = await ctx.db.execute(sql`SELECT id FROM email_subscribers WHERE email = ${input.email} LIMIT 1`);
+          const rows = (Array.isArray(subResult) ? subResult[0] : subResult) as any[];
           if (rows?.[0]?.id) {
             await enrollInSequence(ctx.db, rows[0].id, "welcome", {
               name: input.name,
