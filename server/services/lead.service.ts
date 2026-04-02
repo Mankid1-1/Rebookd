@@ -155,12 +155,20 @@ export async function updateLeadStatus(db: Db, tenantId: number, leadId: number,
     .where(and(eq(leads.id, leadId), eq(leads.tenantId, tenantId)));
 }
 
-export async function getMessagesByLeadId(db: Db, tenantId: number, leadId: number) {
+export async function getMessagesByLeadId(
+  db: Db,
+  tenantId: number,
+  leadId: number,
+  limit = 100,
+  offset = 0,
+) {
   const rows = await db
     .select()
     .from(messages)
     .where(and(eq(messages.leadId, leadId), eq(messages.tenantId, tenantId)))
-    .orderBy(messages.createdAt);
+    .orderBy(messages.createdAt)
+    .limit(limit)
+    .offset(offset);
   return rows.map((message) => ({
     ...message,
     fromNumber: message.fromNumber ? decrypt(message.fromNumber) : message.fromNumber,

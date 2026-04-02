@@ -54,7 +54,7 @@ export const securityHeaders = (req: Request, res: Response, next: NextFunction)
   // Content Security Policy
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net",
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://alb.reddit.com https://www.redditstatic.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https:",

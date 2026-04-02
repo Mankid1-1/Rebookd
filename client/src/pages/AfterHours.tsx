@@ -65,8 +65,13 @@ export default function AfterHours() {
     onError: (err) => toast.error(err.message),
   });
 
+  const testResponse = trpc.analytics.testAfterHoursResponse.useMutation({
+    onSuccess: () => toast.success("Test after-hours response sent to your business phone!"),
+    onError: (err) => toast.error(err.message || "Failed to send test response"),
+  });
+
   const handleTestResponse = () => {
-    toast.info("After-hours auto-responses trigger automatically when leads message outside business hours.");
+    testResponse.mutate();
   };
 
   const handleProcessQueue = () => {
@@ -128,9 +133,9 @@ export default function AfterHours() {
                 {isAfterHours() ? 'After Hours' : 'Business Hours'}
               </span>
             </div>
-            <Button onClick={handleTestResponse} variant="outline" disabled>
+            <Button onClick={handleTestResponse} variant="outline" disabled={testResponse.isPending}>
               <MessageSquare className="h-4 w-4 mr-2" />
-              Test Response (Coming Soon)
+              {testResponse.isPending ? "Sending..." : "Test Response"}
             </Button>
             <Button onClick={handleProcessQueue} variant="outline" disabled={processQueue.isPending}>
               <Bell className="h-4 w-4 mr-2" />

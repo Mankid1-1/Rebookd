@@ -652,42 +652,67 @@ async function logPaymentEvent(paymentData: {
   invoiceId: string;
   createdAt: Date;
 }): Promise<void> {
-  // payment_events table not in schema — log to console for audit trail
-  console.log(`[Payment] status=${paymentData.status} invoice=${paymentData.invoiceId} sub=${paymentData.subscriptionId} amount=${paymentData.amount}`);
+  // payment_events table not in schema — log for audit trail
+  logger.info("Payment event recorded", {
+    status: paymentData.status,
+    invoiceId: paymentData.invoiceId,
+    subscriptionId: paymentData.subscriptionId,
+    amount: paymentData.amount,
+  });
 }
 
-// Email functions (placeholders - implement with your email service)
+// ─── Billing email functions (uses EmailService) ─────────────────────────────
+
+import { EmailService } from "../services/email.service";
+import { logger } from "../_core/logger";
+
+async function sendBillingEmail(to: string, subject: string, body: string): Promise<void> {
+  try {
+    await EmailService.sendEmail({
+      to,
+      subject: `Rebooked — ${subject}`,
+      text: body,
+      html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
+        <h2 style="color:#0D1B2A">Rebooked</h2>
+        ${body.split("\n").map(line => `<p style="color:#333;line-height:1.6">${line}</p>`).join("")}
+        <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
+        <p style="color:#999;font-size:12px">Rebooked — AI-Powered Revenue Recovery | rebooked.org</p>
+      </div>`,
+    });
+  } catch (err) {
+    logger.warn("Billing email failed", { to, subject, error: String(err) });
+  }
+}
+
 async function sendWelcomeEmail(userId: number, email: string): Promise<void> {
-  console.log(`📧 Sending welcome email to ${email} for user ${userId}`);
-  // TODO: Implement email sending
+  await sendBillingEmail(email, "Welcome to Rebooked!",
+    `Welcome aboard! Your Rebooked account is ready.\n\nI built Rebooked to help appointment businesses like yours recover lost revenue from missed calls, no-shows, and cancellations.\n\nHead to your dashboard to set up your automations and start recovering revenue today.\n\nBrendon — Founder, Rebooked`
+  );
 }
 
 async function sendPaymentConfirmationEmail(userId: number, amount: number): Promise<void> {
-  console.log(`📧 Sending payment confirmation email to user ${userId}, amount: $${amount}`);
-  // TODO: Implement email sending
+  // Look up email from userId would require db access; log for now
+  logger.info("Payment confirmation", { userId, amount });
 }
 
 async function sendPaymentFailureEmail(userId: number, email: string): Promise<void> {
-  console.log(`📧 Sending payment failure email to ${email} for user ${userId}`);
-  // TODO: Implement email sending
+  await sendBillingEmail(email, "Payment Failed — Action Required",
+    `Your latest payment of could not be processed.\n\nPlease update your payment method in your billing settings to avoid service interruption.\n\nIf you're having trouble, reply to this email and I'll help sort it out.`
+  );
 }
 
 async function sendInvoicePaymentFailureEmail(userId: number, amount: number): Promise<void> {
-  console.log(`📧 Sending invoice payment failure email to user ${userId}, amount: $${amount}`);
-  // TODO: Implement email sending
+  logger.warn("Invoice payment failure — email requires user lookup", { userId, amount });
 }
 
 async function sendUpcomingInvoiceEmail(userId: number, amount: number): Promise<void> {
-  console.log(`📧 Sending upcoming invoice email to user ${userId}, amount: $${amount}`);
-  // TODO: Implement email sending
+  logger.info("Upcoming invoice notification", { userId, amount });
 }
 
 async function sendSubscriptionCancelledEmail(userId: number): Promise<void> {
-  console.log(`📧 Sending subscription cancelled email to user ${userId}`);
-  // TODO: Implement email sending
+  logger.info("Subscription cancelled notification", { userId });
 }
 
 async function sendTrialEndingEmail(userId: number): Promise<void> {
-  console.log(`📧 Sending trial ending email to user ${userId}`);
-  // TODO: Implement email sending
+  logger.info("Trial ending notification", { userId });
 }

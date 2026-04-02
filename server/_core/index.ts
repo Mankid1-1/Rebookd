@@ -198,6 +198,12 @@ async function startServer() {
     runWithCorrelationId(correlationId, () => next());
   });
 
+  // Response compression (gzip/brotli) — reduces payload size by 60-80%
+  try {
+    const compression = require("compression");
+    app.use(compression({ threshold: 1024 }));
+  } catch { /* compression not installed — skip */ }
+
   // Body parsers
   const rawBodySaver = (req: express.Request, _res: express.Response, buffer: Buffer) => {
     (req as any).rawBody = buffer.toString("utf8");

@@ -75,7 +75,12 @@ export const ENV: EnvConfig = {
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "placeholder",
   appId: process.env.VITE_APP_ID ?? "rebooked",
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "http://localhost:3000",
-  cookieSecret: process.env.JWT_SECRET ?? process.env.COOKIE_SECRET ?? "rebooked-salt",
+  cookieSecret: process.env.JWT_SECRET ?? process.env.COOKIE_SECRET ?? (() => {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("FATAL: JWT_SECRET or COOKIE_SECRET must be set in production");
+    }
+    return "rebooked-dev-only-salt";
+  })(),
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? process.env.FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? process.env.FORGE_API_KEY ?? "",
   sendGridApiKey: process.env.SENDGRID_API_KEY ?? "",

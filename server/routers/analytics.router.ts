@@ -306,6 +306,19 @@ export const analyticsRouter = router({
     return result;
   }),
 
+  // ─── After-Hours Test Response ──────────────────────────────────
+  testAfterHoursResponse: tenantProcedure.mutation(async ({ ctx }) => {
+    const TenantService = await import("../services/tenant.service");
+    const { sendSMS } = await import("../_core/sms");
+    const tenant = await TenantService.getTenantById(ctx.db, ctx.tenantId);
+    if (!tenant?.phone) {
+      throw new Error("No business phone number configured. Add one in Settings.");
+    }
+    const message = `[TEST] Hi! Thanks for reaching out to ${tenant.name}. We're currently closed but will get back to you first thing tomorrow. To book now, visit our website!`;
+    await sendSMS(tenant.phone, message, undefined, ctx.tenantId);
+    return { success: true };
+  }),
+
   // ─── Stage 12: Revenue Attribution by Automation ─────────────────
   revenueByAutomation: tenantProcedure
     .input(z.object({
