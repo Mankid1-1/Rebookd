@@ -326,21 +326,59 @@ async function executeStep(db: Db, step: any, event: EventPayload, tenantId: num
         }
       }
 
-      // Look up custom template from DB, fall back to hardcoded workflow body
-      let templateBody = String(step.message || step.body || "");
-      if (step.messageKey) {
-        try {
-          const customTemplate = await TemplateService.getTemplateByKey(db, tenantId, step.messageKey);
-          if (customTemplate?.body) {
-            templateBody = customTemplate.body;
+      // ── AI SMS Generation (Feature 2) ──────────────────────────────────
+      // Check if AI SMS is enabled for this automation and generate accordingly.
+      // Falls back to template-based generation if AI is unavailable.
+      let body: string;
+      let generationMethod: "template" | "ai" | "manual" = "template";
+      const automationKey = step.automationKey || step.messageKey || "";
+
+      try {
+        const { getVariantForLead, recordResult, getActiveExperimentId } = await import("./ab-testing.service");
+        const { generateAiMessage } = await import("./ai-sms-generator.service");
+        const variant = await getVariantForLead(db, tenantId, automationKey, leadId || 0);
+
+        if (variant === "ai" && leadId) {
+          // AI variant — generate with LLM
+          const messageType = step.messageType || step.type || "generic";
+          const tone = step.tone || "friendly";
+          const aiResult = await generateAiMessage(db, tenantId, leadId, messageType, tone, templateVars);
+          body = aiResult.body;
+          generationMethod = aiResult.method === "llm" ? "ai" : "template";
+        } else {
+          // Template variant — use existing template resolution
+          let templateBody = String(step.message || step.body || "");
+          if (step.messageKey) {
+            try {
+              const customTemplate = await TemplateService.getTemplateByKey(db, tenantId, step.messageKey);
+              if (customTemplate?.body) templateBody = customTemplate.body;
+            } catch { /* use default */ }
           }
-        } catch { /* use default */ }
+          body = resolveTemplate(templateBody, templateVars);
+        }
+
+        // Record A/B result if experiment is active
+        const experimentId = await getActiveExperimentId(db, tenantId, automationKey);
+        if (experimentId && leadId) {
+          // We'll record after message is sent (need messageId)
+          (templateVars as any).__experimentId = experimentId;
+          (templateVars as any).__variant = variant;
+        }
+      } catch {
+        // AI SMS not available — fall back to pure template
+        let templateBody = String(step.message || step.body || "");
+        if (step.messageKey) {
+          try {
+            const customTemplate = await TemplateService.getTemplateByKey(db, tenantId, step.messageKey);
+            if (customTemplate?.body) templateBody = customTemplate.body;
+          } catch { /* use default */ }
+        }
+        body = resolveTemplate(templateBody, templateVars);
       }
 
-      const body = resolveTemplate(templateBody, templateVars);
       const res = await sendWithRetry(normalized, body, undefined, tenantId);
       if (leadId) {
-        await LeadService.createMessage(db, {
+        const msgRecord = await LeadService.createMessage(db, {
           tenantId,
           leadId,
           direction: "outbound",
@@ -353,6 +391,16 @@ async function executeStep(db: Db, step: any, event: EventPayload, tenantId: num
           deliveredAt: res.success ? new Date() : undefined,
           failedAt: res.success ? undefined : new Date(),
         });
+
+        // Record A/B test result if applicable
+        const expId = (templateVars as any).__experimentId;
+        const variant = (templateVars as any).__variant;
+        if (expId && msgRecord && (msgRecord as any).id) {
+          try {
+            const { recordResult } = await import("./ab-testing.service");
+            await recordResult(db, expId, tenantId, leadId, (msgRecord as any).id, variant, generationMethod === "ai" ? "llm" : "template_fallback");
+          } catch { /* best effort */ }
+        }
       }
       return;
     }
