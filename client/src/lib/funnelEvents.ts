@@ -5,7 +5,8 @@
  * 1. Umami (cookie-free analytics — always on)
  * 2. Meta Pixel (if loaded and consent given)
  * 3. Google Ads / GA4 (if loaded and consent given)
- * 4. Internal beacon API (for funnel analytics dashboard)
+ * 4. Reddit Pixel (if loaded)
+ * 5. Internal beacon API (for funnel analytics dashboard)
  */
 
 import { getAttribution } from "./attribution";
@@ -87,7 +88,30 @@ export function trackFunnelEvent(event: FunnelEvent, properties?: EventPropertie
     // ignore
   }
 
-  // 4. Internal beacon — fire-and-forget to server
+  // 4. Reddit Pixel — only if loaded
+  try {
+    const rdt = (window as any).rdt;
+    if (typeof rdt === "function") {
+      const redditMap: Partial<Record<FunnelEvent, string>> = {
+        signup_completed: "SignUp",
+        email_capture_submitted: "Lead",
+        onboarding_completed: "Lead",
+        roi_calculator_used: "ViewContent",
+        cta_click_hero: "AddToCart",
+        first_recovery_sent: "Purchase",
+      };
+      const redditEvent = redditMap[event];
+      if (redditEvent) {
+        rdt("track", redditEvent, props);
+      } else {
+        rdt("track", "Custom", { customEventName: event, ...props });
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // 5. Internal beacon — fire-and-forget to server
   try {
     const attribution = getAttribution();
     const payload = {
