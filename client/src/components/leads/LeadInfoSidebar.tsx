@@ -4,11 +4,36 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Phone, User, Mail, Calendar } from "lucide-react";
+import { Phone, User, Mail, Calendar, MessageSquare, CalendarCheck, Clock, Activity } from "lucide-react";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import type { Lead } from "../../../../shared/interfaces";
+
+const tierConfig = {
+  cold: { label: "Cold", color: "bg-gray-500/10 text-gray-400 border-gray-500/20" },
+  warm: { label: "Warm", color: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" },
+  hot: { label: "Hot", color: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
+  vip: { label: "VIP", color: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
+} as const;
+
+function ScoreRing({ score, size = 56 }: { score: number; size?: number }) {
+  const strokeWidth = 5;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (score / 100) * circumference;
+  const color = score >= 76 ? "#a855f7" : score >= 51 ? "#f97316" : score >= 26 ? "#eab308" : "#6b7280";
+
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="currentColor" strokeWidth={strokeWidth} className="text-muted/30" />
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={color} strokeWidth={strokeWidth} strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" className="transition-all duration-700" />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{score}</span>
+    </div>
+  );
+}
 
 interface LeadInfoSidebarProps {
   lead: Lead;
@@ -230,12 +255,77 @@ export function LeadInfoSidebar({ lead, outboundCount, inboundCount }: LeadInfoS
           {lead.status === "unsubscribed" && (
             <div className="mt-2 pt-2 border-t border-border">
               <p className="text-xs text-muted-foreground bg-destructive/10 text-destructive rounded p-2 leading-relaxed">
-                ⛔ This contact replied STOP and has been unsubscribed.
+                This contact replied STOP and has been unsubscribed.
               </p>
             </div>
           )}
         </CardContent>
       </Card>
+
+      <LeadScoreCard leadId={lead.id} />
     </div>
+  );
+}
+
+function LeadScoreCard({ leadId }: { leadId: number }) {
+  const { data: score, isLoading } = trpc.leads.getScore.useQuery({ leadId });
+
+  if (isLoading) {
+    return (
+      <Card className="border-border bg-card">
+        <CardHeader className="pb-3 border-b border-border">
+          <CardTitle className="text-sm font-semibold">Lead Score</CardTitle>
+        </CardHeader>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-full bg-muted animate-pulse" />
+            <div className="space-y-2 flex-1">
+              <div className="h-4 bg-muted rounded animate-pulse w-1/2" />
+              <div className="h-3 bg-muted rounded animate-pulse w-3/4" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!score) return null;
+
+  const tier = tierConfig[score.tier];
+  const signals = [
+    { label: "Response rate", value: `${score.signals.responseRate}%`, icon: <MessageSquare className="w-3 h-3" /> },
+    { label: "Bookings", value: score.signals.bookingCount, icon: <CalendarCheck className="w-3 h-3" /> },
+    { label: "Days since last msg", value: score.signals.daysSinceLastMessage >= 999 ? "N/A" : score.signals.daysSinceLastMessage, icon: <Clock className="w-3 h-3" /> },
+    { label: "Total messages", value: score.signals.totalMessages, icon: <Activity className="w-3 h-3" /> },
+  ];
+
+  return (
+    <Card className="border-border bg-card">
+      <CardHeader className="pb-3 border-b border-border">
+        <CardTitle className="text-sm font-semibold">Lead Score</CardTitle>
+      </CardHeader>
+      <CardContent className="p-4">
+        <div className="flex items-center gap-4 mb-3">
+          <ScoreRing score={score.score} />
+          <div>
+            <Badge variant="outline" className={`text-xs ${tier.color}`}>
+              {tier.label}
+            </Badge>
+            <p className="text-xs text-muted-foreground mt-1">{score.score}/100 engagement</p>
+          </div>
+        </div>
+        <div className="space-y-2 pt-2 border-t border-border">
+          {signals.map(({ label, value, icon }) => (
+            <div key={label} className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                {icon}
+                {label}
+              </span>
+              <span className="font-medium">{value}</span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

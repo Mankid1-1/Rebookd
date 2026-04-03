@@ -83,6 +83,28 @@ export const aiSmsRouter = router({
     }),
 
   /**
+   * Suggest an AI-generated reply for the Inbox compose area.
+   */
+  suggestReply: tenantProcedure
+    .input(
+      z.object({
+        leadId: z.number().int().positive(),
+        context: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const result = await generateAiMessage(
+        ctx.db,
+        ctx.tenantId,
+        input.leadId,
+        "follow_up" as MessageType,
+        "friendly" as Tone,
+        {},
+      );
+      return { body: result.body };
+    }),
+
+  /**
    * List all experiments for the current tenant.
    */
   listExperiments: tenantProcedure.query(async ({ ctx }) => {

@@ -4,6 +4,8 @@ import { createLeadSchema, updateLeadSchema, updateLeadStatusSchema, sendMessage
 import { tenantProcedure, router } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
 import * as LeadService from "../services/lead.service";
+import * as BroadcastService from "../services/broadcast.service";
+import { scoreLead } from "../services/lead-scoring.service";
 import { emitEvent } from "../services/event-bus.service";
 import { isAppError } from "../_core/appErrors";
 
@@ -36,6 +38,12 @@ export const leadsRouter = router({
       const lead = await LeadService.getLeadById(ctx.db, ctx.tenantId, input.leadId);
       if (!lead) throw new TRPCError({ code: "NOT_FOUND" });
       return lead;
+    }),
+
+  getScore: tenantProcedure
+    .input(z.object({ leadId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      return scoreLead(ctx.db, ctx.tenantId, input.leadId);
     }),
 
   create: tenantProcedure
@@ -176,4 +184,76 @@ export const leadsRouter = router({
       const { importLeadsFromCSV } = await import("../services/csv-import.service");
       return importLeadsFromCSV(ctx.db, ctx.tenantId, input.csvContent, input.platform);
     }),
+
+  // ─── Broadcast / Segment Messaging ──────────────────────────────────────────
+
+  broadcastPreview: tenantProcedure
+    .input(
+      z.object({
+        message: z.string().min(1).max(1600),
+        segmentId: z.number().int().optional(),
+        filter: z
+          .object({
+            status: z.array(z.enum(["new", "contacted", "qualified", "booked", "lost"])).optional(),
+            inactiveDays: z.number().int().min(1).max(365).optional(),
+            minVisits: z.number().int().min(0).optional(),
+            maxVisits: z.number().int().min(0).optional(),
+            tags: z.array(z.string().max(50)).max(20).optional(),
+          })
+          .optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      return BroadcastService.previewBroadcast(ctx.db, {
+        tenantId: ctx.tenantId,
+        message: input.message,
+        segmentId: input.segmentId,
+        filter: input.filter,
+        dryRun: true,
+      });
+    }),
+
+  broadcastSend: tenantProcedure
+    .input(
+      z.object({
+        message: z.string().min(1).max(1600),
+        segmentId: z.number().int().optional(),
+        filter: z
+          .object({
+            status: z.array(z.enum(["new", "contacted", "qualified", "booked", "lost"])).optional(),
+            inactiveDays: z.number().int().min(1).max(365).optional(),
+            minVisits: z.number().int().min(0).optional(),
+            maxVisits: z.number().int().min(0).optional(),
+            tags: z.array(z.string().max(50)).max(20).optional(),
+          })
+          .optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const result = await BroadcastService.sendBroadcast(ctx.db, {
+        tenantId: ctx.tenantId,
+        message: input.message,
+        segmentId: input.segmentId,
+        filter: input.filter,
+      });
+
+      await emitEvent({
+        type: "message.sent",
+        tenantId: ctx.tenantId,
+        data: {
+          broadcastSent: result.sent,
+          broadcastFailed: result.failed,
+          broadcastBlocked: result.blocked,
+          totalRecipients: result.totalRecipients,
+        },
+        userId: ctx.user.id,
+        timestamp: new Date(),
+      });
+
+      return result;
+    }),
+
+  recentBroadcasts: tenantProcedure.query(async ({ ctx }) => {
+    return BroadcastService.getRecentBroadcasts(ctx.db, ctx.tenantId);
+  }),
 });

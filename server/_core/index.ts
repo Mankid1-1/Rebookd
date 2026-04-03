@@ -20,6 +20,7 @@ import { initSentry, captureException } from "./sentry";
 import { ensureCorrelationId, runWithCorrelationId } from "./requestContext";
 import { registerSecurityMiddleware } from "./security";
 import { registerCalendarCallbacks } from "./calendarCallback";
+import { widgetRouter } from "../api/widget";
 import { readFileSync } from "fs";
 import { trafficGateMiddleware, setShutdownRef } from "./traffic-gate";
 import { validateEnv } from "./env";
@@ -182,6 +183,17 @@ async function startServer() {
   app.use(trafficGateMiddleware);
 
   const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
+  // Canonical domain redirect: www → bare domain (consolidates link equity)
+  if (IS_PRODUCTION) {
+    app.use((req, res, next) => {
+      if (req.hostname?.startsWith("www.")) {
+        return res.redirect(301, `https://rebooked.org${req.originalUrl}`);
+      }
+      next();
+    });
+  }
+
   app.use(
     cors({
       // In production, only allow explicitly configured origins.
@@ -224,6 +236,8 @@ async function startServer() {
   registerFunnelTrackEndpoint(app);
   // Dynamic sitemap.xml
   registerSitemapEndpoint(app);
+  // Embeddable booking widget (/widget.js — public, CORS-open)
+  app.use(widgetRouter);
 
   // ─── Health check ─────────────────────────────────────────────────────────
   app.get("/health", async (_req, res) => {

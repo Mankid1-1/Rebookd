@@ -651,4 +651,40 @@ export const analyticsRouter = router({
       const from = new Date(Date.now() - (input?.days ?? 30) * 24 * 60 * 60 * 1000);
       return await getPerWorkflowRoi(ctx.db, ctx.tenantId, { from, to: new Date() });
     }),
+
+  getOptimalSendTime: tenantProcedure.query(async ({ ctx }) => {
+    const { getOptimalSendTime } = await import("../services/send-time-optimization.service");
+    return getOptimalSendTime(ctx.db, ctx.tenantId);
+  }),
+
+  // ─── No-Show Prediction ─────────────────────────────────────────────────────
+
+  predictNoShow: tenantProcedure
+    .input(z.object({
+      leadId: z.number().int().positive(),
+      appointmentAt: z.coerce.date(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const NoShowService = await import("../services/noshow-prediction.service");
+      return NoShowService.predictNoShow(ctx.db, ctx.tenantId, input.leadId, input.appointmentAt);
+    }),
+
+  getUpcomingRisks: tenantProcedure
+    .input(z.object({
+      days: z.number().int().min(1).max(30).default(7),
+      minRisk: z.number().int().min(0).max(100).default(0),
+    }).optional())
+    .query(async ({ ctx, input }) => {
+      const NoShowService = await import("../services/noshow-prediction.service");
+      return NoShowService.getUpcomingRiskyAppointments(ctx.db, ctx.tenantId, {
+        days: input?.days ?? 7,
+        minRisk: input?.minRisk ?? 0,
+      });
+    }),
+
+  getNoShowRiskStats: tenantProcedure
+    .query(async ({ ctx }) => {
+      const NoShowService = await import("../services/noshow-prediction.service");
+      return NoShowService.getNoShowRiskStats(ctx.db, ctx.tenantId);
+    }),
 });

@@ -19,8 +19,10 @@ import {
   Clock,
   Phone,
   Zap,
+  Send,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { trpc } from "@/lib/trpc";
 
 interface StatCardProps {
   title: string;
@@ -291,6 +293,83 @@ export function MobileQuickActions({ onAddLead, onSendMessage, onViewAnalytics, 
             <span className="text-sm font-medium">Settings</span>
           </button>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function formatHourRange(hour: number): string {
+  const startHour = hour % 12 || 12;
+  const endRaw = (hour + 1) % 24;
+  const endHour = endRaw % 12 || 12;
+  const startAmPm = hour < 12 ? "am" : "pm";
+  const endAmPm = endRaw < 12 ? "am" : "pm";
+  return `${startHour}${startAmPm} - ${endHour}${endAmPm}`;
+}
+
+const confidenceBadge = {
+  low: { label: "Low confidence", className: "bg-gray-500/10 text-gray-400" },
+  medium: { label: "Medium confidence", className: "bg-yellow-500/10 text-yellow-400" },
+  high: { label: "High confidence", className: "bg-green-500/10 text-green-400" },
+} as const;
+
+export function BestSendTimeCard() {
+  const { data, isLoading } = trpc.analytics.getOptimalSendTime.useQuery();
+
+  // Don't render if low confidence (not enough data)
+  if (!isLoading && (!data || data.confidence === "low")) return null;
+
+  if (isLoading) {
+    return (
+      <Card className="relative overflow-hidden">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Best Send Time</CardTitle>
+          <div className="text-muted-foreground"><Send className="h-4 w-4" /></div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <div className="h-8 bg-muted rounded animate-pulse"></div>
+            <div className="h-4 bg-muted rounded animate-pulse w-3/4"></div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!data) return null;
+
+  const badge = confidenceBadge[data.confidence];
+
+  return (
+    <Card className="relative overflow-hidden">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">
+          <HelpTooltip content="AI-analyzed optimal time window for sending SMS messages based on your response rate history" variant="info">
+            Best Send Time
+          </HelpTooltip>
+        </CardTitle>
+        <div className="text-muted-foreground"><Send className="h-4 w-4" /></div>
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{formatHourRange(data.bestHourUtc)}</div>
+        <div className="flex items-center gap-2 mt-1">
+          <Badge variant="outline" className={`text-xs ${badge.className}`}>
+            {badge.label}
+          </Badge>
+          <span className="text-xs text-muted-foreground">
+            {data.sampleSize} messages analyzed
+          </span>
+        </div>
+        {data.optimalWindows.length > 1 && (
+          <div className="mt-3 pt-2 border-t border-border space-y-1">
+            {data.optimalWindows.slice(1).map((w) => (
+              <div key={w.hour} className="flex justify-between text-xs text-muted-foreground">
+                <span>{formatHourRange(w.hour)}</span>
+                <span>{w.responseRate}% response rate</span>
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

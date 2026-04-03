@@ -6,6 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { useMemo, useState, useRef, useEffect } from "react";
 import { HelpTooltip, HelpIcon } from "@/components/ui/HelpTooltip";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Loader2, Sparkles } from "lucide-react";
 
 export default function Inbox() {
   const [activeLeadId, setActiveLeadId] = useState<number | null>(null);
@@ -16,6 +17,11 @@ export default function Inbox() {
   const { data: leads } = trpc.leads.list.useQuery({ page: 1, limit: 50 });
   const { data: messages, isLoading: messagesLoading } = trpc.leads.messages.useQuery({ leadId: activeLeadId ?? 0 }, { enabled: !!activeLeadId });
   const sendMessageMutation = trpc.leads.sendMessage.useMutation();
+  const aiSuggestMutation = trpc.aiSms.suggestReply.useMutation({
+    onSuccess: (data) => {
+      setDraft(data.body);
+    },
+  });
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -95,6 +101,30 @@ export default function Inbox() {
                   <HelpTooltip content="Type a manual reply to send to this lead via SMS. This is logged in the conversation history and counts toward your monthly message allowance." variant="info">
                     <Input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a reply..." className="flex-1" />
                   </HelpTooltip>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={aiSuggestMutation.isPending}
+                          onClick={() => {
+                            if (activeLeadId) {
+                              aiSuggestMutation.mutate({ leadId: activeLeadId });
+                            }
+                          }}
+                        >
+                          {aiSuggestMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-4 w-4" />
+                          )}
+                          <span className="ml-1 hidden sm:inline">AI Suggest</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Generate an AI-suggested reply for this lead</p></TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>

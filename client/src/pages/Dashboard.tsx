@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { useTheme } from "@/contexts/ThemeContext";
 import ROIGuaranteeTracker from "@/components/dashboard/ROIGuaranteeTracker";
+import { BestSendTimeCard } from "@/components/dashboard/DashboardStats";
 import TechLevelGuide, { isGuideSuppressed } from "@/components/TechLevelGuide";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { useSkillLevel } from "@/contexts/SkillLevelContext";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { HelpTooltip, HelpIcon } from "@/components/ui/HelpTooltip";
+import { ReferralPrompt, shouldShowReferralPrompt } from "@/components/referral/ReferralPrompt";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -222,6 +224,7 @@ export default function Dashboard() {
   const [newLead, setNewLead] = useState({ phone: "", name: "" });
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [referralDismissed, setReferralDismissed] = useState(false);
 
   // Show guide after first onboarding if not suppressed
   useEffect(() => {
@@ -767,6 +770,11 @@ export default function Dashboard() {
           </Card>
         )}
 
+        {/* ── Referral Prompt (milestone-based) ─────────────────────────── */}
+        {!referralDismissed && data && shouldShowReferralPrompt("revenue_milestone") && recoveredRevenue >= 500 && (
+          <ReferralPrompt trigger="revenue_milestone" onDismiss={() => setReferralDismissed(true)} />
+        )}
+
         {/* ── Onboarding Checklist (dismissible, only for new users) ────── */}
         {showOnboarding && (
           <Card className="border-border/50 bg-card relative overflow-hidden">
@@ -993,6 +1001,11 @@ export default function Dashboard() {
         </div>
         </>
         )} {/* end !isBasic */}
+
+        {/* ── Best Send Time ───────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <BestSendTimeCard />
+        </div>
 
         {/* ── Calendar & Booking Status ──────────────────────────────────── */}
         <CalendarSyncWidget />
