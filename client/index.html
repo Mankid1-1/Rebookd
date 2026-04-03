@@ -24,6 +24,7 @@
     <meta name="twitter:description" content="Reduce no-shows, recover cancellations, and win back lapsed clients automatically. 35-day ROI guarantee." />
     <meta name="twitter:image" content="https://rebooked.org/og-image.png" />
 
+    <link rel="canonical" href="https://rebooked.org/" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/logo.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -53,7 +54,6 @@
     fbq('init', 'YOUR_PIXEL_ID');
     fbq('track', 'PageView');
     </script>
-    <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=YOUR_PIXEL_ID&ev=PageView&noscript=1"/></noscript>
 
     <!-- Google Ads / GA4 — replace YOUR_MEASUREMENT_ID with your actual GA4 ID -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=YOUR_MEASUREMENT_ID"></script>
@@ -66,6 +66,8 @@
   </head>
 
   <body>
+    <!-- Meta Pixel noscript fallback (must be in body, not head) -->
+    <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=YOUR_PIXEL_ID&ev=PageView&noscript=1"/></noscript>
     <script>
       (function(){
         var t = localStorage.getItem('rebooked-theme') || 'abyss';

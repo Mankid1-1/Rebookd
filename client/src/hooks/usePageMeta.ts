@@ -44,9 +44,6 @@ export function usePageMeta(meta: PageMeta): void {
     if (meta.ogImage) {
       setMeta("og:image", meta.ogImage);
     }
-    if (meta.ogUrl) {
-      setMeta("og:url", meta.ogUrl);
-    }
 
     // Twitter Card
     setMeta("twitter:title", meta.ogTitle || meta.title, "name");
@@ -54,15 +51,17 @@ export function usePageMeta(meta: PageMeta): void {
       setMeta("twitter:description", meta.ogDescription || meta.description || "", "name");
     }
 
-    // Canonical
-    if (meta.canonical) {
-      let link = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
-      if (!link) {
-        link = document.createElement("link");
-        link.setAttribute("rel", "canonical");
-        document.head.appendChild(link);
-      }
-      link.setAttribute("href", meta.canonical);
+    // Canonical — always set to avoid stale canonical from previous page
+    const canonicalHref = meta.canonical || `${window.location.origin}${window.location.pathname}`;
+    let link = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!link) {
+      link = document.createElement("link");
+      link.setAttribute("rel", "canonical");
+      document.head.appendChild(link);
     }
+    link.setAttribute("href", canonicalHref);
+
+    // og:url should also always reflect the canonical
+    setMeta("og:url", meta.ogUrl || canonicalHref);
   }, [meta.title, meta.description, meta.ogTitle, meta.ogDescription, meta.ogImage, meta.ogUrl, meta.canonical]);
 }

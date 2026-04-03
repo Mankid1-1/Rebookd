@@ -6,6 +6,7 @@ import { ArrowLeft, Eye, EyeOff, Gift, Loader2, Mail, Palette } from "lucide-rea
 import { RebookedLogo } from "@/components/RebookedLogo";
 import { useTheme, THEME_META, type ThemeName } from "@/contexts/ThemeContext";
 import { trackFunnelEvent } from "@/lib/funnelEvents";
+import { usePageMeta } from "@/hooks/usePageMeta";
 
 type Tab = "signin" | "signup" | "forgot";
 
@@ -99,6 +100,11 @@ function VerifyStatusBanner() {
 }
 
 export default function Login() {
+  usePageMeta({
+    title: "Sign In — Rebooked",
+    description: "Sign in to your Rebooked account or create a new one. AI-powered SMS revenue recovery for appointment businesses.",
+    canonical: "https://rebooked.org/login",
+  });
   const [, setLocation] = useLocation();
   const [tab, setTab] = useState<Tab>(() => {
     const params = new URLSearchParams(window.location.search);
