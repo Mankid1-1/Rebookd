@@ -32,6 +32,7 @@ export default function BlogPost() {
     description: post?.metaDescription || "This blog post could not be found.",
     ogUrl: post ? `https://rebooked.org/blog/${post.slug}` : "https://rebooked.org/blog",
     ogImage: "https://rebooked.org/og-image.png",
+    canonical: post ? `https://rebooked.org/blog/${post.slug}` : "https://rebooked.org/blog",
   });
 
   useEffect(() => {

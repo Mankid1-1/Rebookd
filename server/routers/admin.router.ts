@@ -423,4 +423,66 @@ export const adminRouter = router({
         return SentinelService.getRepairEffectiveness(ctx.db, { days: input?.days });
       }),
   }),
+
+  // ─── Funnel Analytics Dashboard ──────────────────────────────────────────
+  funnel: router({
+    overview: adminProcedure
+      .input(z.object({ days: z.number().min(1).max(365).default(30).optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        await auditAdminRead(ctx, "admin.funnel.overview", input ?? {});
+        const days = input?.days ?? 30;
+        const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 19).replace("T", " ");
+
+        // Funnel step counts
+        const [funnelSteps] = await ctx.db.execute(sql`
+          SELECT eventName, COUNT(*) as count
+          FROM funnel_events
+          WHERE createdAt >= ${since}
+          GROUP BY eventName
+          ORDER BY count DESC
+        `);
+
+        // Traffic sources
+        const [sources] = await ctx.db.execute(sql`
+          SELECT
+            COALESCE(utmSource, 'direct') as source,
+            COALESCE(utmMedium, 'none') as medium,
+            COUNT(*) as count
+          FROM funnel_events
+          WHERE createdAt >= ${since}
+          GROUP BY utmSource, utmMedium
+          ORDER BY count DESC
+          LIMIT 20
+        `);
+
+        // Email subscribers
+        const [emailStats] = await ctx.db.execute(sql`
+          SELECT
+            source,
+            status,
+            COUNT(*) as count
+          FROM email_subscribers
+          WHERE createdAt >= ${since}
+          GROUP BY source, status
+        `);
+
+        // Daily event trend
+        const [dailyTrend] = await ctx.db.execute(sql`
+          SELECT
+            DATE(createdAt) as date,
+            COUNT(*) as count
+          FROM funnel_events
+          WHERE createdAt >= ${since}
+          GROUP BY DATE(createdAt)
+          ORDER BY date ASC
+        `);
+
+        return {
+          funnelSteps: Array.isArray(funnelSteps) ? funnelSteps : [],
+          sources: Array.isArray(sources) ? sources : [],
+          emailStats: Array.isArray(emailStats) ? emailStats : [],
+          dailyTrend: Array.isArray(dailyTrend) ? dailyTrend : [],
+        };
+      }),
+  }),
 });

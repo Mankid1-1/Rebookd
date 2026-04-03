@@ -3,13 +3,14 @@ import { Shield, X, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const COOKIE_KEY = "rebooked_cookie_consent";
-const COOKIE_VERSION = "2"; // bumped to re-trigger consent for granular categories
+const COOKIE_VERSION = "3"; // bumped to re-trigger consent for marketing category
 
 export interface CookiePreferences {
   version: string;
   essential: boolean; // always true, cannot be toggled off
   analytics: boolean;
   functional: boolean;
+  marketing: boolean;
   timestamp: string;
 }
 
@@ -31,6 +32,7 @@ function setConsent(prefs: Omit<CookiePreferences, "version" | "timestamp" | "es
     essential: true,
     analytics: prefs.analytics,
     functional: prefs.functional,
+    marketing: prefs.marketing,
     timestamp: new Date().toISOString(),
   };
   localStorage.setItem(COOKIE_KEY, JSON.stringify(full));
@@ -74,6 +76,7 @@ export function CookieConsent() {
   const [showManagePreferences, setShowManagePreferences] = useState(false);
   const [analyticsEnabled, setAnalyticsEnabled] = useState(true);
   const [functionalEnabled, setFunctionalEnabled] = useState(true);
+  const [marketingEnabled, setMarketingEnabled] = useState(true);
 
   const openBanner = useCallback(() => {
     // Pre-fill toggles from existing consent if present
@@ -81,6 +84,7 @@ export function CookieConsent() {
     if (existing) {
       setAnalyticsEnabled(existing.analytics);
       setFunctionalEnabled(existing.functional);
+      setMarketingEnabled(existing.marketing);
       setShowManagePreferences(true);
     } else {
       setShowManagePreferences(false);
@@ -108,19 +112,19 @@ export function CookieConsent() {
   if (!visible) return null;
 
   const acceptAll = () => {
-    setConsent({ analytics: true, functional: true });
+    setConsent({ analytics: true, functional: true, marketing: true });
     window.dispatchEvent(new Event("cookie-consent-updated"));
     setVisible(false);
   };
 
   const acceptEssentialOnly = () => {
-    setConsent({ analytics: false, functional: false });
+    setConsent({ analytics: false, functional: false, marketing: false });
     window.dispatchEvent(new Event("cookie-consent-updated"));
     setVisible(false);
   };
 
   const savePreferences = () => {
-    setConsent({ analytics: analyticsEnabled, functional: functionalEnabled });
+    setConsent({ analytics: analyticsEnabled, functional: functionalEnabled, marketing: marketingEnabled });
     window.dispatchEvent(new Event("cookie-consent-updated"));
     setVisible(false);
   };
@@ -151,9 +155,9 @@ export function CookieConsent() {
                 </button>
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed mb-4">
-                We use essential cookies for authentication and session management.
-                We do not use advertising or third-party tracking cookies.
+                We use essential, analytics, and marketing cookies to run and improve Rebooked.
                 Analytics are collected in aggregate without personally identifiable information.
+                Marketing cookies enable conversion tracking for our advertising partners.
                 By continuing to use Rebooked, you agree to our{" "}
                 <a href="/privacy" className="text-primary hover:underline">Privacy Policy</a>{" "}
                 and{" "}
@@ -224,6 +228,31 @@ export function CookieConsent() {
                         <div
                           className={`w-4 h-4 rounded-full bg-white shadow-sm transition-all ${
                             functionalEnabled ? "ml-auto mr-0.5" : "ml-0.5"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Marketing - optional */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="font-medium text-foreground mb-0.5">Marketing</p>
+                      <p>Enables conversion tracking for Meta (Facebook), Google Ads, and Reddit to measure ad performance. No personal data is shared beyond anonymous conversion signals.</p>
+                    </div>
+                    <div className="ml-4 shrink-0">
+                      <button
+                        role="switch"
+                        aria-checked={marketingEnabled}
+                        aria-label="Toggle marketing cookies"
+                        onClick={() => setMarketingEnabled(!marketingEnabled)}
+                        className={`w-9 h-5 rounded-full flex items-center transition-colors ${
+                          marketingEnabled ? "bg-primary" : "bg-muted-foreground/30"
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 rounded-full bg-white shadow-sm transition-all ${
+                            marketingEnabled ? "ml-auto mr-0.5" : "ml-0.5"
                           }`}
                         />
                       </button>

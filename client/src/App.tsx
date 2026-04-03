@@ -38,6 +38,7 @@ const AdminRepairs = lazy(() => import("@/pages/admin/AdminRepairs"));
 const AdminSentinelDashboard = lazy(() => import("@/pages/admin/AdminSentinelDashboard"));
 const N8nStatus = lazy(() => import("@/pages/admin/N8nStatus"));
 const N8nAnalytics = lazy(() => import("@/pages/admin/N8nAnalytics"));
+const AdminFunnelDashboard = lazy(() => import("@/pages/admin/AdminFunnelDashboard"));
 
 // High-impact feature pages - lazy loaded
 const LeadCapture = lazy(() => import("@/pages/LeadCapture"));
@@ -425,6 +426,13 @@ function Router() {
         <ErrorBoundary>
           <AuthGuard adminOnly>
             <N8nAnalytics />
+          </AuthGuard>
+        </ErrorBoundary>
+      </Route>
+      <Route path="/admin/funnel">
+        <ErrorBoundary>
+          <AuthGuard adminOnly>
+            <AdminFunnelDashboard />
           </AuthGuard>
         </ErrorBoundary>
       </Route>

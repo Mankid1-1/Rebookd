@@ -55,11 +55,11 @@ function buildCsp(): string {
   // Base directives safe for production
   const directives: Record<string, string[]> = {
     "default-src": ["'self'"],
-    "script-src": ["'self'", "'unsafe-inline'", "https://www.redditstatic.com", "https://alb.reddit.com", "https://cloud.umami.is"],
+    "script-src": ["'self'", "'unsafe-inline'", "https://www.redditstatic.com", "https://alb.reddit.com", "https://cloud.umami.is", "https://connect.facebook.net", "https://www.googletagmanager.com", "https://www.google-analytics.com"],
     "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-    "img-src": ["'self'", "data:", "https:", "https://www.redditstatic.com"],
+    "img-src": ["'self'", "data:", "https:", "https://www.redditstatic.com", "https://www.facebook.com", "https://www.google-analytics.com", "https://www.googletagmanager.com"],
     "font-src": ["'self'", "data:", "https://fonts.gstatic.com"],
-    "connect-src": ["'self'", "https://api.stripe.com", "https://maps.googleapis.com", "https://alb.reddit.com", "https://www.redditstatic.com", "https://cloud.umami.is"],
+    "connect-src": ["'self'", "https://api.stripe.com", "https://maps.googleapis.com", "https://alb.reddit.com", "https://www.redditstatic.com", "https://cloud.umami.is", "https://www.facebook.com", "https://connect.facebook.net", "https://www.google-analytics.com", "https://www.googletagmanager.com", "https://analytics.google.com"],
     "frame-src": ["https://js.stripe.com", "https://hooks.stripe.com"],
     "object-src": ["'none'"],
     "base-uri": ["'self'"],

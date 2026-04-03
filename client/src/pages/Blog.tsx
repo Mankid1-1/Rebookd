@@ -71,6 +71,7 @@ export default function Blog() {
       "Tips, case studies, and industry insights on reducing no-shows, recovering cancellations, and growing your appointment-based business with SMS automation.",
     ogUrl: "https://rebooked.org/blog",
     ogImage: "https://rebooked.org/og-image.png",
+    canonical: "https://rebooked.org/blog",
   });
 
   useEffect(() => {

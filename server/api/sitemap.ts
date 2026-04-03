@@ -13,12 +13,16 @@ import type { Express } from "express";
 const INDUSTRY_SLUGS = [
   "salons",
   "dental",
-  "clinics",
-  "consultants",
-  "fitness",
   "spa",
-  "veterinary",
+  "fitness",
+  "tattoo",
+  "pet-grooming",
   "therapy",
+  "chiropractic",
+  "photography",
+  "auto-detailing",
+  "tutoring",
+  "nail-salons",
 ];
 
 // Blog post slugs + publish dates — keep in sync with client/src/data/blog.ts
@@ -27,6 +31,14 @@ const BLOG_POSTS = [
   { slug: "sms-templates-that-rebook-no-shows", publishedAt: "2026-04-02" },
   { slug: "why-cancellation-fees-dont-work", publishedAt: "2026-04-02" },
   { slug: "salon-recovered-2400-month", publishedAt: "2026-04-02" },
+  { slug: "dentists-guide-reducing-dna-rates", publishedAt: "2026-04-02" },
+  { slug: "reasons-reminder-texts-get-ignored", publishedAt: "2026-04-02" },
+  { slug: "appointment-sms-vs-email-response-rates", publishedAt: "2026-04-02" },
+  { slug: "fitness-studio-filled-cancellations-30-days", publishedAt: "2026-04-02" },
+  { slug: "psychology-behind-no-shows", publishedAt: "2026-04-02" },
+  { slug: "first-sms-automation-under-10-minutes", publishedAt: "2026-04-02" },
+  { slug: "spa-wellness-revenue-recovery-guide", publishedAt: "2026-04-02" },
+  { slug: "best-businesses-automate-not-chase", publishedAt: "2026-04-02" },
 ];
 
 const STATIC_PAGES = [

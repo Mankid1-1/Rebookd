@@ -6,8 +6,10 @@ import { IndustryROICalculator } from "./IndustryROICalculator";
 import { IndustryFeatures } from "./IndustryFeatures";
 import { IndustryTestimonials } from "./IndustryTestimonials";
 import { IndustryCTA } from "./IndustryCTA";
+import { IndustryFAQ } from "./IndustryFAQ";
+import { RelatedIndustries } from "./RelatedIndustries";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import { JsonLd, REBOOKED_ORGANIZATION } from "@/components/seo/JsonLd";
+import { JsonLd, REBOOKED_ORGANIZATION, buildBreadcrumbJsonLd } from "@/components/seo/JsonLd";
 import { trackFunnelEvent } from "@/lib/funnelEvents";
 
 interface IndustryLandingPageProps {
@@ -19,6 +21,7 @@ export function IndustryLandingPage({ config }: IndustryLandingPageProps) {
     title: config.metaTitle,
     description: config.metaDescription,
     ogUrl: `https://rebooked.org/for/${config.slug}`,
+    canonical: `https://rebooked.org/for/${config.slug}`,
   });
 
   useEffect(() => {
@@ -36,11 +39,17 @@ export function IndustryLandingPage({ config }: IndustryLandingPageProps) {
         "url": `https://rebooked.org/for/${config.slug}`,
         "isPartOf": { "@type": "WebSite", "name": "Rebooked", "url": "https://rebooked.org" },
       }} />
+      <JsonLd data={buildBreadcrumbJsonLd([
+        { name: "Rebooked", url: "https://rebooked.org/" },
+        { name: config.namePlural, url: `https://rebooked.org/for/${config.slug}` },
+      ])} />
       <IndustryHero config={config} />
       <IndustryPainPoints config={config} />
       <IndustryROICalculator config={config} />
       <IndustryFeatures config={config} />
       <IndustryTestimonials config={config} />
+      {config.faq && config.faq.length > 0 && <IndustryFAQ config={config} />}
+      <RelatedIndustries currentSlug={config.slug} />
       <IndustryCTA config={config} />
     </div>
   );

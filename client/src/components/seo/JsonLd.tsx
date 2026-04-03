@@ -27,7 +27,10 @@ export const REBOOKED_ORGANIZATION = {
     email: "rebooked@rebooked.org",
     contactType: "customer support",
   },
-  sameAs: [],
+  sameAs: [
+    "https://www.reddit.com/user/rebookd/",
+    "https://www.instagram.com/rebookeddotorg/",
+  ],
 };
 
 /** Pre-built JSON-LD for the Rebooked software product */
@@ -62,6 +65,45 @@ export const REBOOKED_SOFTWARE = {
     bestRating: "5",
   },
 };
+
+/** Build BreadcrumbList JSON-LD from ordered path items */
+export function buildBreadcrumbJsonLd(
+  items: { name: string; url: string }[]
+): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: item.name,
+      item: item.url,
+    })),
+  };
+}
+
+/** Build Article JSON-LD for blog posts */
+export function buildArticleJsonLd(opts: {
+  title: string;
+  description: string;
+  url: string;
+  datePublished: string;
+  dateModified?: string;
+  image?: string;
+}): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: opts.title,
+    description: opts.description,
+    url: opts.url,
+    datePublished: opts.datePublished,
+    dateModified: opts.dateModified ?? opts.datePublished,
+    image: opts.image ?? "https://rebooked.org/og-image.png",
+    author: { "@type": "Organization", name: "Rebooked", url: "https://rebooked.org" },
+    publisher: REBOOKED_ORGANIZATION,
+  };
+}
 
 /** Build FAQ JSON-LD from question/answer pairs */
 export function buildFaqJsonLd(
