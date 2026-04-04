@@ -5,7 +5,7 @@ import { getLoginUrl } from "@/const";
 import { ArrowRight, CheckCircle, Star, Shield, Share2, Users, DollarSign, Zap, TrendingUp } from "lucide-react";
 import { RebookedLogo } from "@/components/RebookedLogo";
 import { useLocation } from "wouter";
-import { useEffect, useState, useMemo } from "react";
+import { lazy, Suspense, useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { useProgressiveDisclosureContext } from "@/components/ui/ProgressiveDisclosure";
@@ -17,11 +17,13 @@ import { fadeInUp, staggerContainer } from "@/lib/animations";
 // ─── Landing sections ──────────────────────────────────────────────────────
 import { HeroSection } from "@/components/landing/HeroSection";
 import { SocialProofBar } from "@/components/landing/SocialProofBar";
-import { HowItWorks } from "@/components/landing/HowItWorks";
-import { PlatformCapabilities } from "@/components/landing/PlatformCapabilities";
-import { AutomationsExplorer } from "@/components/landing/AutomationsExplorer";
-import { TestimonialsSection } from "@/components/landing/TestimonialsSection";
 import { JsonLd, REBOOKED_ORGANIZATION, REBOOKED_SOFTWARE } from "@/components/seo/JsonLd";
+
+// Below-fold sections — lazy loaded to reduce initial JS and speed up hero paint
+const HowItWorks = lazy(() => import("@/components/landing/HowItWorks").then(m => ({ default: m.HowItWorks })));
+const PlatformCapabilities = lazy(() => import("@/components/landing/PlatformCapabilities").then(m => ({ default: m.PlatformCapabilities })));
+const AutomationsExplorer = lazy(() => import("@/components/landing/AutomationsExplorer").then(m => ({ default: m.AutomationsExplorer })));
+const TestimonialsSection = lazy(() => import("@/components/landing/TestimonialsSection").then(m => ({ default: m.TestimonialsSection })));
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { trackFunnelEvent } from "@/lib/funnelEvents";
 
@@ -117,6 +119,7 @@ export default function Home() {
     title: "Rebooked — AI-Powered SMS Revenue Recovery",
     description: "Reduce no-shows, recover cancellations, and win back lapsed clients automatically. 35-day ROI guarantee for appointment businesses.",
     ogUrl: "https://rebooked.org",
+    canonical: "https://rebooked.org/",
   });
 
   useEffect(() => {
@@ -138,7 +141,8 @@ export default function Home() {
       {/* ── Social Proof ── */}
       <SocialProofBar />
 
-      {/* ── How It Works ── */}
+      {/* ── Below-fold sections (lazy-loaded to defer JS) ── */}
+      <Suspense fallback={null}>
       <HowItWorks />
 
       {/* ── Industry Selector ── */}
@@ -460,6 +464,8 @@ export default function Home() {
           <p className="text-xs text-muted-foreground mt-4">No credit card required · ROI guaranteed within 35 days or it's free</p>
         </motion.div>
       </section>
+
+      </Suspense>
 
       {/* ── Footer ── */}
       <footer className="border-t border-border/30 py-10 px-6">

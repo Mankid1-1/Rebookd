@@ -293,7 +293,7 @@ class SDKServer {
             openId: userInfo.openId,
             name: userInfo.name || null,
             email: userInfo.email ?? null,
-            loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
+            loginMethod: (userInfo.loginMethod ?? userInfo.platform ?? null) as any,
             lastSignedIn: signedInAt,
           });
           user = await UserService.getUserByOpenId(database, userInfo.openId);

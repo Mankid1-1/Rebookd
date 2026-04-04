@@ -2,7 +2,8 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createLeadSchema, updateLeadSchema, updateLeadStatusSchema, sendMessageSchema } from "../../shared/schemas/leads";
 import { tenantProcedure, router } from "../_core/trpc";
-import { invokeLLM } from "../_core/llm";
+import { rewriteInTone } from "../_core/messageRewriter";
+import type { Tone } from "../_core/messageTemplates";
 import * as LeadService from "../services/lead.service";
 import * as BroadcastService from "../services/broadcast.service";
 import { scoreLead } from "../services/lead-scoring.service";
@@ -82,16 +83,9 @@ export const leadsRouter = router({
       let finalBody = input.body;
       if (input.tone) {
         try {
-          const result = await invokeLLM({ messages: [
-            { role: "system", content: `Rewrite in ${input.tone} tone. Under 160 chars. Return only text.` },
-            { role: "user", content: input.body },
-          ]});
-          const content = (typeof result.choices?.[0]?.message?.content === "string" ? result.choices[0].message.content : "") || "";
-          finalBody = content.trim() || finalBody;
+          finalBody = rewriteInTone(input.body, input.tone as Tone) || finalBody;
         } catch (err) {
-          if (!isAppError(err)) {
-            console.error("AI rewrite failed:", err);
-          }
+          console.error("In-house tone rewrite failed:", err);
         }
       }
       const res = await LeadService.sendMessage(

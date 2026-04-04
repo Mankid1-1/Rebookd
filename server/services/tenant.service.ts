@@ -117,7 +117,7 @@ export async function getTenantPlanLimits(db: Db, tenantId: number) {
   return {
     maxAutomations: plan.maxAutomations,
     maxMessages: plan.maxMessages,
-    maxSeats: plan.maxSeats,
+    maxSeats: plan.maxUsers ?? 1,
     planSlug: plan.slug,
     planName: plan.name,
     hasAiRewrite: isFullPlan,

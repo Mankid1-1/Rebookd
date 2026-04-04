@@ -159,7 +159,7 @@ export function registerCallWebhooks(app: Express) {
       // Only forward on initial call event (ringing/initiated), not status callbacks
       if (!isOutbound && forwardTo && (CallStatus === "ringing" || CallStatus === "initiated" || !CallStatus)) {
         return res.status(200).type("text/xml").send(
-          `<Response><Dial callerId="${To}" timeout="30" action="${ENV.backendUrl || ""}/api/webhooks/voice/twilio">${forwardTo}</Dial></Response>`
+          `<Response><Dial callerId="${To}" timeout="30" action="${(process.env.BACKEND_URL || "")}/api/webhooks/voice/twilio">${forwardTo}</Dial></Response>`
         );
       }
 

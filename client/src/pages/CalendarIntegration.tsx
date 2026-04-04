@@ -27,12 +27,12 @@ import { EncryptionBadge } from "@/components/ui/EncryptionBadge";
 
 type Provider = "google" | "outlook" | "caldav" | "calendly" | "acuity";
 
-const PROVIDER_INFO: Record<Provider, { name: string; color: string; description: string; authType: "oauth" | "credentials" }> = {
+const PROVIDER_INFO: Record<Provider, { name: string; color: string; description: string; authType: "oauth" | "credentials"; comingSoon?: boolean; comingSoonReason?: string }> = {
   google: { name: "Google Calendar", color: "text-destructive bg-destructive/10", description: "Sync with Google Calendar via OAuth", authType: "oauth" },
-  outlook: { name: "Outlook / Microsoft 365", color: "text-primary bg-primary/10", description: "Connect your Outlook calendar", authType: "oauth" },
-  caldav: { name: "Apple Calendar (iCloud)", color: "text-muted-foreground bg-muted", description: "Sync via CalDAV with app-specific password", authType: "credentials" },
+  outlook: { name: "Outlook / Microsoft 365", color: "text-primary bg-primary/10", description: "Connect your Outlook calendar", authType: "oauth", comingSoon: true, comingSoonReason: "Requires Microsoft Azure developer registration. Funding is limited — this integration is coming soon." },
+  caldav: { name: "Apple Calendar (iCloud)", color: "text-muted-foreground bg-muted", description: "Sync via CalDAV with app-specific password", authType: "credentials", comingSoon: true, comingSoonReason: "Requires Apple developer setup and testing. Funding is limited — this integration is coming soon." },
   calendly: { name: "Calendly", color: "text-info bg-info/10", description: "Import events from Calendly", authType: "oauth" },
-  acuity: { name: "Acuity Scheduling", color: "text-success bg-success/10", description: "Sync appointments from Acuity", authType: "credentials" },
+  acuity: { name: "Acuity Scheduling", color: "text-success bg-success/10", description: "Sync appointments from Acuity", authType: "credentials", comingSoon: true, comingSoonReason: "Requires Acuity Powerhouse plan for API access. Funding is limited — this integration is coming soon." },
 };
 
 export default function CalendarIntegration() {
@@ -223,8 +223,9 @@ export default function CalendarIntegration() {
                 ([key, info]) => {
                   const conn = connections?.find((c) => c.provider === key);
                   const isConnected = !!conn;
+                  const isSoon = info.comingSoon;
                   return (
-                    <Card key={key} className={`border transition-colors ${isConnected ? "border-success/30" : "hover:border-muted-foreground/30"}`}>
+                    <Card key={key} className={`border transition-colors ${isConnected ? "border-success/30" : isSoon ? "opacity-75" : "hover:border-muted-foreground/30"}`}>
                       <CardHeader className="pb-3">
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-base flex items-center gap-2">
@@ -234,7 +235,9 @@ export default function CalendarIntegration() {
                             {info.name}
                             <HelpIcon content={{ basic: "Pick which calendar app you use", intermediate: "Supported providers: Google Calendar, Microsoft Outlook/365, Calendly, Acuity Scheduling, Apple iCloud", advanced: "OAuth2 flow via calendar.router.ts initiateConnect. State stored in oauthStates map with 10-minute expiry" }} />
                           </CardTitle>
-                          {isConnected ? (
+                          {isSoon ? (
+                            <Badge variant="outline" className="text-[10px] border-warning/50 text-warning">Coming Soon</Badge>
+                          ) : isConnected ? (
                             <Badge className="bg-success text-success-foreground text-[10px]">Connected</Badge>
                           ) : (
                             <Badge variant="secondary" className="text-[10px]">Not Connected</Badge>
@@ -243,6 +246,12 @@ export default function CalendarIntegration() {
                       </CardHeader>
                       <CardContent className="space-y-3">
                         <p className="text-xs text-muted-foreground">{info.description}</p>
+                        {isSoon && (
+                          <div className="flex items-start gap-2 p-2.5 rounded-lg bg-warning/5 border border-warning/20">
+                            <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" />
+                            <p className="text-xs text-muted-foreground">{info.comingSoonReason}</p>
+                          </div>
+                        )}
                         {isConnected && conn && (
                           <div className="text-xs space-y-1">
                             <p className="text-muted-foreground">
@@ -261,7 +270,17 @@ export default function CalendarIntegration() {
                           </div>
                         )}
                         <div className="flex gap-2">
-                          {isConnected ? (
+                          {isSoon ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full"
+                              disabled
+                            >
+                              <Clock className="h-3 w-3 mr-1" />
+                              Coming Soon
+                            </Button>
+                          ) : isConnected ? (
                             <>
                               <Button
                                 size="sm"

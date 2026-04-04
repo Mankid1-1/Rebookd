@@ -7,6 +7,7 @@ export default function Terms() {
     title: "Terms of Service — Rebooked",
     description: "Terms of service for the Rebooked AI-powered SMS revenue recovery platform. $199/mo + 15% revenue share with 35-day ROI guarantee.",
     ogUrl: "https://rebooked.org/terms",
+    canonical: "https://rebooked.org/terms",
   });
 
   return (

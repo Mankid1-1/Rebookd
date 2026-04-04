@@ -55,11 +55,11 @@ function buildCsp(): string {
   // Base directives safe for production
   const directives: Record<string, string[]> = {
     "default-src": ["'self'"],
-    "script-src": ["'self'", "'unsafe-inline'", "https://www.redditstatic.com", "https://alb.reddit.com", "https://cloud.umami.is", "https://connect.facebook.net", "https://www.googletagmanager.com", "https://www.google-analytics.com"],
+    "script-src": ["'self'", "'unsafe-inline'", "https://www.redditstatic.com", "https://alb.reddit.com", "https://cloud.umami.is", "https://connect.facebook.net", "https://www.googletagmanager.com", "https://www.google-analytics.com", "https://static.cloudflareinsights.com"],
     "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
     "img-src": ["'self'", "data:", "https:", "https://www.redditstatic.com", "https://www.facebook.com", "https://www.google-analytics.com", "https://www.googletagmanager.com"],
     "font-src": ["'self'", "data:", "https://fonts.gstatic.com"],
-    "connect-src": ["'self'", "https://api.stripe.com", "https://maps.googleapis.com", "https://alb.reddit.com", "https://www.redditstatic.com", "https://cloud.umami.is", "https://www.facebook.com", "https://connect.facebook.net", "https://www.google-analytics.com", "https://www.googletagmanager.com", "https://analytics.google.com"],
+    "connect-src": ["'self'", "https://api.stripe.com", "https://maps.googleapis.com", "https://alb.reddit.com", "https://www.redditstatic.com", "https://cloud.umami.is", "https://api-gateway.umami.dev", "https://pixel-config.reddit.com", "https://www.facebook.com", "https://connect.facebook.net", "https://www.google-analytics.com", "https://www.googletagmanager.com", "https://analytics.google.com", "https://cloudflareinsights.com"],
     "frame-src": ["https://js.stripe.com", "https://hooks.stripe.com"],
     "object-src": ["'none'"],
     "base-uri": ["'self'"],
@@ -530,7 +530,8 @@ export function corsHardening(
       // (allows server-to-server via webhook skip paths)
       // Also allow same-origin requests where browser sends Referer but not Origin (GET requests)
       const referer = req.headers.referer || req.headers.referrer;
-      const isSameOriginReferer = referer && ALL_ALLOWED_ORIGINS.some((o) => referer.startsWith(o));
+      const refererStr = Array.isArray(referer) ? referer[0] : referer;
+      const isSameOriginReferer = refererStr && ALL_ALLOWED_ORIGINS.some((o) => refererStr.startsWith(o));
       const isSkipPath = SANITIZATION_SKIP_PATHS.some((p) => req.path.startsWith(p));
       if (!isSkipPath && !isSameOriginReferer) {
         logger.warn("Blocked request with no Origin header in production", {

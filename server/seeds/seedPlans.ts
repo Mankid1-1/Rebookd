@@ -82,14 +82,14 @@ async function seed() {
     try {
       await db
         .insert(plans)
-        .values(p)
+        .values({ ...p, maxUsers: (p as any).maxSeats } as any)
         .onDuplicateKeyUpdate({
           set: {
             name: p.name,
             priceMonthly: p.priceMonthly,
             maxAutomations: p.maxAutomations,
             maxMessages: p.maxMessages,
-            maxSeats: p.maxSeats,
+            maxUsers: (p as any).maxSeats,
             revenueSharePercent: p.revenueSharePercent,
             features: p.features,
             stripePriceId: p.stripePriceId,

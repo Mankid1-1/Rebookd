@@ -2,7 +2,6 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { phoneSchema } from "../../shared/schemas/leads";
 import { protectedProcedure, tenantProcedure, router } from "../_core/trpc";
-import { invokeLLM } from "../_core/llm";
 import * as AutomationService from "../services/automation.service";
 import * as TenantService from "../services/tenant.service";
 import { runAutomationsForEvent } from "../services/automation-runner.service";
@@ -11,7 +10,6 @@ import { automationTemplates } from "../../shared/templates";
 import { generateMessage, generateMessageVariations } from "../_core/messageGenerator";
 import type { Tone } from "../_core/messageTemplates";
 import { rewriteInTone } from "../_core/messageRewriter";
-import { isAppError } from "../_core/appErrors";
 
 // ─── Automation Config Validation Schemas ────────────────────────────────────
 // Ensures triggerConfig, conditions, and actions are well-formed before DB write.
@@ -127,7 +125,7 @@ export const automationsRouter = router({
 
       const template = automationTemplates.find(t => t.key === input.templateKey);
       if (!template) throw new TRPCError({ code: "NOT_FOUND" });
-      type AutoTriggerType = "new_lead" | "inbound_message" | "status_change" | "time_delay" | "appointment_reminder" | "custom";
+      type AutoTriggerType = "new_lead" | "inbound_message" | "status_change" | "time_delay" | "appointment_reminder" | "missed_call" | "cancellation_flurry" | "win_back" | "birthday" | "loyalty_milestone" | "review_request" | "waitlist_slot_opened" | "rescheduling";
       const triggerMapping: Record<string, AutoTriggerType> = {
         "lead.created": "new_lead",
         "appointment.booked": "appointment_reminder",
@@ -135,7 +133,7 @@ export const automationsRouter = router({
         "appointment.cancelled": "appointment_reminder",
         "message.received": "inbound_message",
       };
-      type AutoCategory = "follow_up" | "reactivation" | "appointment" | "welcome" | "custom" | "no_show" | "cancellation" | "loyalty";
+      type AutoCategory = "follow_up" | "reactivation" | "appointment" | "welcome" | "custom" | "no_show" | "cancellation" | "loyalty" | "review" | "rescheduling" | "waiting_list" | "lead_capture";
       await AutomationService.upsertAutomationByKey(ctx.db, ctx.tenantId, template.key, {
         name: template.name,
         category: template.category as AutoCategory,
@@ -175,7 +173,7 @@ export const automationsRouter = router({
       const template = automationTemplates.find((t) => t.key === input.key);
       if (!template) throw new TRPCError({ code: "NOT_FOUND", message: `Unknown automation: ${input.key}` });
 
-      type AutoTriggerType = "new_lead" | "inbound_message" | "status_change" | "time_delay" | "appointment_reminder" | "custom";
+      type AutoTriggerType = "new_lead" | "inbound_message" | "status_change" | "time_delay" | "appointment_reminder" | "missed_call" | "cancellation_flurry" | "win_back" | "birthday" | "loyalty_milestone" | "review_request" | "waitlist_slot_opened" | "rescheduling";
       const triggerMapping: Record<string, AutoTriggerType> = {
         "lead.created": "new_lead",
         "appointment.booked": "appointment_reminder",
@@ -183,7 +181,7 @@ export const automationsRouter = router({
         "appointment.cancelled": "appointment_reminder",
         "message.received": "inbound_message",
       };
-      type AutoCategory = "follow_up" | "reactivation" | "appointment" | "welcome" | "custom" | "no_show" | "cancellation" | "loyalty";
+      type AutoCategory = "follow_up" | "reactivation" | "appointment" | "welcome" | "custom" | "no_show" | "cancellation" | "loyalty" | "review" | "rescheduling" | "waiting_list" | "lead_capture";
 
       await AutomationService.upsertAutomationByKey(ctx.db, ctx.tenantId, template.key, {
         name: template.name,
@@ -202,25 +200,10 @@ export const automationsRouter = router({
 export const aiRouter = router({
   rewrite: tenantProcedure
     .input(z.object({ message: z.string().min(1), tone: z.enum(["friendly", "professional", "casual", "urgent", "empathetic"]) }))
-    .mutation(async ({ ctx, input }) => {
-      try {
-        const limits = await TenantService.getTenantPlanLimits(ctx.db, ctx.tenantId);
-        if (!limits.hasAiRewrite) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "AI rewrite is available on the Rebooked plan. Upgrade to access this feature." });
-        }
-        const result = await invokeLLM({ messages: [
-          { role: "system", content: `Expert SMS copywriter. Rewrite in ${input.tone} tone. Under 160 chars. Return ONLY the message.` },
-          { role: "user", content: input.message },
-        ]});
-        const content = (typeof result.choices?.[0]?.message?.content === "string" ? result.choices[0].message.content : "") || "";
-        return { rewritten: content.trim() };
-      } catch (err) {
-        console.error("AI rewrite error:", err);
-        if (isAppError(err)) {
-          throw new TRPCError({ code: err.statusCode === 503 ? "SERVICE_UNAVAILABLE" : "INTERNAL_SERVER_ERROR", message: err.message });
-        }
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI rewrite failed" });
-      }
+    .mutation(({ input }) => {
+      // Fully in-house rewrite — zero external API cost
+      const rewritten = rewriteInTone(input.message, input.tone as Tone);
+      return { rewritten };
     }),
 
   // Optimizes a message for the given context (used by MessageOptimizer component)
@@ -235,44 +218,49 @@ export const aiRouter = router({
       businessType: z.string().optional(),
       context: z.record(z.string(), z.unknown()).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(({ input }) => {
       const raw = input.originalMessage ?? input.message ?? "";
-      // Delegate to AI rewrite if tone is provided
-      if (input.tone) {
-        try {
-          const { invokeLLM } = await import("../_core/llm");
-          const result = await invokeLLM({ messages: [
-            { role: "system", content: `Expert SMS copywriter. Rewrite in ${input.tone} tone. Under 160 chars. Return ONLY the message.` },
-            { role: "user", content: raw },
-          ]});
-          const content = (typeof result.choices?.[0]?.message?.content === "string" ? result.choices[0].message.content : "") || "";
-          const optimized = content.trim() || raw;
-          return {
-            success: true,
-            optimized,
-            optimizedMessage: optimized,
-            suggestions: [],
-            optimization: {
-              optimizedMessage: optimized,
-              score: 85,
-              improvements: [],
-              variants: [],
-            },
-          };
-        } catch {
-          // Fall through to default
-        }
+      const tone = (input.tone ?? "friendly") as Tone;
+      const msgType = (input.messageType ?? "generic") as any;
+
+      // In-house optimization: rewrite in tone + generate alternatives
+      const optimized = rewriteInTone(raw, tone);
+      const improvements: string[] = [];
+      const variants: string[] = [];
+
+      // Score the message based on SMS best practices
+      let score = 60;
+      if (optimized.length <= 160) { score += 10; improvements.push("Message fits in a single SMS segment"); }
+      if (optimized.length > 0 && optimized.length <= 120) { score += 5; improvements.push("Short and punchy — great for mobile"); }
+      if (/\{[a-zA-Z]+\}/.test(optimized)) { score += 5; improvements.push("Uses personalization variables"); }
+      if (/[!?]/.test(optimized)) { score += 3; improvements.push("Has a clear call to action"); }
+      if (optimized.length > 160) { score -= 10; improvements.push("Consider shortening to fit 1 SMS segment (160 chars)"); }
+
+      // Generate 2 tone variants
+      const tones: Tone[] = ["friendly", "professional", "casual", "urgent", "empathetic"];
+      const otherTones = tones.filter((t) => t !== tone).slice(0, 2);
+      for (const t of otherTones) {
+        variants.push(rewriteInTone(raw, t));
       }
+
+      // Generate a fresh template-based alternative if messageType is known
+      if (msgType !== "generic") {
+        try {
+          const fresh = generateMessage({ type: msgType, tone, variables: {} });
+          if (fresh && fresh !== optimized) variants.push(fresh);
+        } catch { /* type not found — fine */ }
+      }
+
       return {
         success: true,
-        optimized: raw,
-        optimizedMessage: raw,
-        suggestions: [],
+        optimized,
+        optimizedMessage: optimized,
+        suggestions: improvements,
         optimization: {
-          optimizedMessage: raw,
-          score: 70,
-          improvements: [],
-          variants: [],
+          optimizedMessage: optimized,
+          score: Math.min(score, 100),
+          improvements,
+          variants: variants.slice(0, 3),
         },
       };
     }),
@@ -511,9 +499,9 @@ export const aiRouter = router({
           }
         } catch { /* non-fatal */ }
 
-        // If KB confidence is low, use LLM with full platform context
+        // If KB confidence is low, use smart context engine (in-house, no external API)
         if (kbResult.confidence < 0.4) {
-          console.log("[RebookedAI] KB confidence low (" + kbResult.confidence.toFixed(2) + "), routing to LLM");
+          console.log("[RebookedAI] KB confidence low (" + kbResult.confidence.toFixed(2) + "), routing to context engine");
           const llmResult = await chatWithContext(input.message, profile, input.history);
           return {
             answer: llmResult.answer,

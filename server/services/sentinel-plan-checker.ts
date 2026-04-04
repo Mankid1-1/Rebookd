@@ -181,8 +181,8 @@ async function checkRoiGuarantees(db: Db): Promise<PlanViolation[]> {
       // Skip admin/system/internal accounts — they don't need ROI guarantees
       const isInternalAccount =
         !row.billingType                                       // not yet onboarded (internal/admin)
-        || row.billingType === "admin"
-        || row.billingType === "system"
+        || (row.billingType as string) === "admin"
+        || (row.billingType as string) === "system"
         || row.billingType === "founder"
         || row.tenantName?.toLowerCase().includes("admin");
       if (SOFT_LAUNCH_ACTIVE && !row.guaranteeStatus && !isInternalAccount) {

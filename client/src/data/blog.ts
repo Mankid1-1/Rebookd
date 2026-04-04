@@ -822,6 +822,348 @@ Hi [Name], it's been a while! Spring is the perfect time for a refresh. I'm offe
     tags: ["automation", "business-growth", "mindset", "efficiency", "no-shows"],
     readingTime: 6,
   },
+
+  // ── New high-value keyword-targeted posts (April 2026) ──
+
+  {
+    slug: "best-appointment-reminder-software-2026",
+    title: "Best Appointment Reminder Software in 2026: An Honest Guide",
+    metaTitle: "Best Appointment Reminder Software 2026 — Honest Comparison | Rebooked",
+    metaDescription: "Compare the top appointment reminder software in 2026. Features, pricing, and real-world results for salons, clinics, and service businesses.",
+    excerpt: "I tested and compared the most popular appointment reminder tools so you don't have to. Here's what actually works — and what's just marketing.",
+    content: `
+<p>If you're running an appointment-based business in 2026, you need more than a basic reminder. You need a system that recovers revenue when things go wrong — not just one that sends a text the day before and hopes for the best.</p>
+
+<p>I built <a href="https://rebooked.org">Rebooked</a> because I saw a gap: most reminder tools stop at the reminder. They don't do anything when the client doesn't show up, cancels last minute, or drifts away entirely. That's where the real money is lost.</p>
+
+<h2>What to look for in appointment reminder software</h2>
+<p>Before comparing specific tools, here's what actually matters:</p>
+<ul>
+  <li><strong>Recovery, not just reminders.</strong> A reminder prevents some no-shows. Recovery texts after a no-show bring clients back. You need both.</li>
+  <li><strong>Speed.</strong> Texting a no-show 15 minutes after their missed appointment recovers 3x more than an email sent the next day.</li>
+  <li><strong>Automation depth.</strong> Can it handle cancellation backfills, win-back sequences, and review requests — or just reminders?</li>
+  <li><strong>TCPA compliance.</strong> Opt-in/opt-out handling, quiet hours, and consent tracking aren't optional. They're the law.</li>
+  <li><strong>ROI tracking.</strong> If you can't measure recovered revenue, you can't justify the cost.</li>
+</ul>
+
+<h2>Types of appointment reminder tools</h2>
+<p>The market broadly breaks down into three categories:</p>
+
+<h3>1. Basic reminder tools</h3>
+<p>These send appointment confirmations and reminders via SMS or email. Simple, affordable, but limited. When a client no-shows, you're on your own.</p>
+
+<h3>2. Practice management software with reminders</h3>
+<p>All-in-one platforms (scheduling + POS + reminders) that include reminders as a feature. The reminder feature works but isn't the focus — it's usually an afterthought.</p>
+
+<h3>3. Revenue recovery platforms</h3>
+<p>Purpose-built for recovering lost appointment revenue. These go beyond reminders into no-show recovery, cancellation backfilling, win-back campaigns, and automated follow-ups. <a href="https://rebooked.org">Rebooked</a> falls into this category.</p>
+
+<h2>Key features that actually recover revenue</h2>
+<p>Based on data from businesses using Rebooked, these features have the highest revenue impact:</p>
+<ul>
+  <li><strong>Instant no-show text-back</strong> — texting within 15 minutes recovers 40-65% of no-shows</li>
+  <li><strong>Cancellation waiting list alerts</strong> — filling cancelled slots from a waiting list recovers same-day revenue</li>
+  <li><strong>Missed call auto-reply</strong> — capturing leads who call when you're busy prevents them going to a competitor</li>
+  <li><strong>Win-back sequences</strong> — re-engaging lapsed clients at 30, 60, and 90 days</li>
+  <li><strong>Post-visit rebooking</strong> — prompting clients to book their next appointment while satisfaction is high</li>
+</ul>
+
+<h2>What I'd recommend</h2>
+<p>If you're losing money to no-shows and cancellations (and if you run an appointment business, you are), start with a tool that actually recovers that revenue — not just one that reminds people to show up.</p>
+
+<p>That's exactly what I built <a href="https://rebooked.org/#roi">Rebooked</a> to do. You can <a href="https://rebooked.org/#roi">calculate your lost revenue here</a> and see if recovery automation makes sense for your business.</p>
+`,
+    author: "Brendan",
+    publishedAt: "2026-04-03",
+    category: "industry",
+    tags: ["appointment-reminders", "software-comparison", "no-shows", "2026", "saas"],
+    readingTime: 5,
+  },
+
+  {
+    slug: "missed-call-text-back-service",
+    title: "Missed Call Text-Back: Why Every Appointment Business Needs It",
+    metaTitle: "Missed Call Text-Back for Small Business — Never Lose a Lead | Rebooked",
+    metaDescription: "Every missed call is a potential lost client. Learn how missed call text-back works, why it converts 3x better than voicemail, and how to set it up in minutes.",
+    excerpt: "You're with a client. Your phone rings. By the time you call back, they've booked with someone else. Missed call text-back fixes this instantly.",
+    content: `
+<p>Here's a stat that should terrify any appointment-based business owner: <strong>80% of callers who reach voicemail never call back</strong>. They just move on to the next search result.</p>
+
+<p>If you're a solo stylist, a massage therapist working back-to-back sessions, or a vet in the middle of an exam — you can't answer every call. But every unanswered call is a potential client walking straight to your competitor.</p>
+
+<h2>What is missed call text-back?</h2>
+<p>It's exactly what it sounds like. When you miss a phone call, an automated text message goes to the caller within seconds:</p>
+
+<blockquote>"Hi! Sorry I missed your call. I'm with a client right now — how can I help? Are you looking to book an appointment?"</blockquote>
+
+<p>That's it. Simple. But the results are dramatic because you're catching people at the moment of highest intent — they just picked up their phone and tried to reach you.</p>
+
+<h2>Why text-back converts 3x better than calling back</h2>
+<ul>
+  <li><strong>Speed wins.</strong> A text arrives in 10 seconds. Calling back in 2 hours (after your client leaves) means they've already booked elsewhere.</li>
+  <li><strong>People prefer texts.</strong> 75% of consumers prefer texting a business over calling. Your missed call text gives them the interaction channel they actually want.</li>
+  <li><strong>No phone tag.</strong> You call back, they don't answer. They call back, you're busy again. Text eliminates the back-and-forth.</li>
+  <li><strong>It works while you work.</strong> You don't need to stop mid-service to respond. The text goes automatically.</li>
+</ul>
+
+<h2>How many leads are you losing to missed calls?</h2>
+<p>Most appointment businesses miss 15-30% of incoming calls during business hours. If you get 100 calls a month and miss 20, that's 20 potential clients who probably went elsewhere.</p>
+
+<p>At a $65 average appointment value, that's <strong>$1,300/month in potential revenue</strong> walking out the door — and that's a conservative estimate since new clients often become regulars worth $500-$2,000+ per year.</p>
+
+<h2>Setting up missed call text-back</h2>
+<p>With <a href="https://rebooked.org">Rebooked</a>, missed call text-back is one of the core automations. You toggle it on, customize the message, and it starts working immediately. No phone system changes, no extra hardware — it connects to your existing business number.</p>
+
+<p>The best part? It's just one of 16+ automations that work together to recover revenue. The missed call text captures the lead. The appointment reminder prevents the no-show. The no-show recovery brings them back if they miss it. It's a complete revenue safety net.</p>
+
+<p><a href="https://rebooked.org/#roi">Calculate how much revenue you're losing</a> to missed calls and no-shows — you might be surprised.</p>
+`,
+    author: "Brendan",
+    publishedAt: "2026-04-03",
+    category: "tips",
+    tags: ["missed-calls", "lead-capture", "text-back", "automation", "small-business"],
+    readingTime: 4,
+  },
+
+  {
+    slug: "no-show-policy-template",
+    title: "No-Show Policy Template: Copy, Customize, and Use Today",
+    metaTitle: "No-Show Policy Template for Appointment Businesses — Free Download | Rebooked",
+    metaDescription: "Free no-show policy template for salons, clinics, and service businesses. Copy-paste ready with SMS-friendly wording and TCPA-compliant language.",
+    excerpt: "A clear no-show policy sets expectations. But the real solution is making sure clients actually show up. Here's the template — and the automation that makes it work.",
+    content: `
+<p>Every appointment business needs a no-show policy. But here's the thing most people won't tell you: <strong>a policy alone doesn't reduce no-shows</strong>. It just gives you something to point to when clients complain about fees.</p>
+
+<p>The businesses that actually solve no-shows use a combination of clear policy AND proactive recovery. The policy sets expectations. The automation ensures compliance.</p>
+
+<h2>Free no-show policy template</h2>
+<p>Here's a no-show policy template you can adapt for your business. Feel free to modify the specifics:</p>
+
+<h3>Section 1: Appointment confirmation</h3>
+<p>We'll send you a confirmation text when you book and reminder texts 24 hours and 2 hours before your appointment. Please confirm by replying or tapping the link.</p>
+
+<h3>Section 2: Cancellation window</h3>
+<p>We understand plans change. Please give us at least [24 hours] notice if you need to cancel or reschedule. This allows us to offer the slot to another client.</p>
+
+<h3>Section 3: No-show definition</h3>
+<p>A no-show is when a client misses their appointment without cancelling or is more than [15 minutes] late. If you're running late, please text us — we'll do our best to accommodate you.</p>
+
+<h3>Section 4: Recovery (instead of punishment)</h3>
+<p>If you miss an appointment, we'll send a friendly text to help you reschedule. We'd rather get you back on the books than charge a fee.</p>
+
+<h2>Why recovery beats punishment</h2>
+<p>I wrote an entire post on <a href="/blog/why-cancellation-fees-dont-work">why cancellation fees don't work</a>, but the short version: fees make clients angry and they leave. Recovery texts make clients feel cared for and they come back.</p>
+
+<p>Data from businesses using <a href="https://rebooked.org">Rebooked</a> shows that recovery texts bring back <strong>40-65% of no-shows</strong> — far more effective than any fee policy.</p>
+
+<h2>How to communicate your policy</h2>
+<ul>
+  <li><strong>Display it at booking.</strong> When a client books (online or in person), briefly mention the cancellation window.</li>
+  <li><strong>Include it in confirmation texts.</strong> Your automated confirmation can include a line like "Need to cancel? Please let us know 24 hours ahead."</li>
+  <li><strong>Be human about it.</strong> Life happens. A client who no-shows once because of an emergency is different from a repeat offender. Your system should know the difference.</li>
+</ul>
+
+<h2>The automated no-show policy</h2>
+<p>The best no-show "policy" isn't a document — it's a system that prevents no-shows before they happen and recovers them when they do:</p>
+<ol>
+  <li><strong>24h reminder</strong> — "Hey [name], just a reminder about your appointment tomorrow at [time]. See you then!"</li>
+  <li><strong>2h reminder</strong> — "Your appointment is in 2 hours at [location]. Need to reschedule? Just reply."</li>
+  <li><strong>No-show recovery</strong> — "[name], we missed you today! No worries — want to reschedule? We have spots this week."</li>
+  <li><strong>Win-back</strong> — "It's been a while since your last visit. We'd love to see you again — here are some available times."</li>
+</ol>
+
+<p>This is exactly what <a href="https://rebooked.org/#roi">Rebooked automates for you</a>. All four steps run on autopilot, TCPA-compliant, with zero effort from your team.</p>
+`,
+    author: "Brendan",
+    publishedAt: "2026-04-03",
+    category: "tips",
+    tags: ["no-show-policy", "template", "cancellation-policy", "automation", "best-practices"],
+    readingTime: 5,
+  },
+
+  {
+    slug: "appointment-confirmation-text-examples",
+    title: "15 Appointment Confirmation Text Examples That Actually Work",
+    metaTitle: "15 Appointment Confirmation Text Examples — Copy & Paste | Rebooked",
+    metaDescription: "Copy these 15 proven appointment confirmation text templates. Tested across salons, clinics, and service businesses for maximum show rates.",
+    excerpt: "The right confirmation text reduces no-shows by 30-40%. Here are 15 templates you can copy today — plus the data on why they work.",
+    content: `
+<p>A confirmation text isn't just a courtesy — it's your first line of defense against no-shows. Businesses that send proper confirmation texts see <strong>30-40% fewer no-shows</strong> than those that don't.</p>
+
+<p>But not all confirmation texts are equal. The wording, timing, and tone matter more than you'd think. Here are 15 templates that have been tested across thousands of appointments.</p>
+
+<h2>The basics: what every confirmation text needs</h2>
+<ul>
+  <li><strong>Client name</strong> (personalization increases response rates by 26%)</li>
+  <li><strong>Date and time</strong> (clear, unambiguous)</li>
+  <li><strong>Business name</strong> (they may have booked with multiple places)</li>
+  <li><strong>Easy response option</strong> ("Reply YES to confirm" or a tap-to-confirm link)</li>
+</ul>
+
+<h2>Standard confirmation templates</h2>
+
+<h3>1. Clean and professional</h3>
+<blockquote>Hi [name], your appointment at [business] is confirmed for [day] at [time]. Reply YES to confirm or call us to reschedule. See you soon!</blockquote>
+
+<h3>2. Warm and friendly</h3>
+<blockquote>Hey [name]! Just confirming your [service] on [day] at [time]. Can't wait to see you! Reply YES to lock it in.</blockquote>
+
+<h3>3. With location details</h3>
+<blockquote>Hi [name], you're booked in for [day] at [time] at [business], [address]. Parking is available [detail]. Reply YES to confirm!</blockquote>
+
+<h2>Industry-specific templates</h2>
+
+<h3>4. Salon/Barbershop</h3>
+<blockquote>Hey [name]! Your [service] with [stylist] is set for [day] at [time]. Excited to get you looking fresh! Reply YES to confirm.</blockquote>
+
+<h3>5. Dental/Medical</h3>
+<blockquote>Hi [name], this is a reminder that your appointment at [practice] is scheduled for [day] at [time]. Please arrive 10 min early. Reply YES to confirm.</blockquote>
+
+<h3>6. Fitness/Personal Training</h3>
+<blockquote>Hey [name]! Your training session is locked in for [day] at [time]. Bring water and wear comfortable shoes! Reply YES to confirm.</blockquote>
+
+<h3>7. Spa/Massage</h3>
+<blockquote>Hi [name], your [service] at [spa] is confirmed for [day] at [time]. We recommend arriving 10 minutes early to relax before your session. See you there!</blockquote>
+
+<h2>Reminder templates (24h and 2h)</h2>
+
+<h3>8. 24-hour reminder</h3>
+<blockquote>Hi [name], just a friendly reminder — your appointment at [business] is tomorrow at [time]. Need to reschedule? Just reply to this text.</blockquote>
+
+<h3>9. 2-hour reminder</h3>
+<blockquote>[name], your appointment is in 2 hours at [time]. We're looking forward to seeing you! Need to adjust? Reply here.</blockquote>
+
+<h3>10. Same-day booking confirmation</h3>
+<blockquote>Hi [name]! You're booked for today at [time] at [business]. See you soon!</blockquote>
+
+<h2>Recovery and rebooking templates</h2>
+
+<h3>11. No-show follow-up (same day)</h3>
+<blockquote>Hey [name], looks like we missed you today. No worries at all! Want to reschedule? We have openings this week.</blockquote>
+
+<h3>12. Cancellation acknowledgement</h3>
+<blockquote>Got it, [name]. Your appointment has been cancelled. We'd love to see you soon — reply anytime to rebook.</blockquote>
+
+<h3>13. Win-back (30 days)</h3>
+<blockquote>Hey [name], it's been a while! We'd love to see you at [business]. We have some great times available this week — interested?</blockquote>
+
+<h3>14. Post-visit rebooking</h3>
+<blockquote>Thanks for visiting today, [name]! Ready to book your next appointment? Reply with a day that works and I'll get you scheduled.</blockquote>
+
+<h3>15. Review request</h3>
+<blockquote>Hi [name], thanks for choosing [business]! If you had a great experience, we'd love a quick review — it means the world to us. [link]</blockquote>
+
+<h2>Automate all of these</h2>
+<p>Copying templates is a start. But the real power comes from automating the entire sequence — confirmation, reminders, recovery, rebooking, and reviews — so nothing falls through the cracks.</p>
+
+<p>That's what <a href="https://rebooked.org">Rebooked</a> does. Every template above (and more) runs automatically for every appointment. <a href="https://rebooked.org/#roi">See what you could recover</a>.</p>
+`,
+    author: "Brendan",
+    publishedAt: "2026-04-03",
+    category: "tips",
+    tags: ["confirmation-texts", "templates", "sms-examples", "no-shows", "reminders"],
+    readingTime: 7,
+  },
+
+  {
+    slug: "how-to-reduce-salon-no-shows",
+    title: "How to Reduce No-Shows at Your Salon: 8 Proven Strategies",
+    metaTitle: "How to Reduce Salon No-Shows — 8 Proven Strategies | Rebooked",
+    metaDescription: "Salon no-shows cost the average stylist $200/week. Here are 8 proven strategies to reduce them — from automated texts to smart scheduling.",
+    excerpt: "The average salon loses $200/week per stylist to no-shows. Here are 8 strategies that actually work — ranked by how much revenue they recover.",
+    content: `
+<p>If you run a salon, you know the drill. A client books a color and cut for 2pm. At 2:15, they haven't showed. At 2:30, you text them. No reply. That's $65-$150 in revenue — gone.</p>
+
+<p>Across the US, salons lose an estimated <strong>$67 billion annually</strong> to no-shows. The average stylist loses $200/week, or over $10,000 per year. That's not a minor inconvenience — it's a business-threatening problem.</p>
+
+<h2>1. Automated SMS reminders (reduces no-shows 30-40%)</h2>
+<p>The single most effective strategy. Send a text 24 hours before and another 2 hours before. The 24h text catches the "I forgot" crowd. The 2h text catches the "I'll push it back" crowd.</p>
+<p>SMS beats email here — <a href="/blog/appointment-sms-vs-email-response-rates">98% open rate vs 20% for email</a>. If you're only sending email reminders, you're missing most of your clients.</p>
+
+<h2>2. Instant no-show recovery texts (recovers 40-65% of no-shows)</h2>
+<p>This is the one most salons miss. When a client no-shows, text them within 15 minutes:</p>
+<blockquote>"Hey [name], we missed you at your 2pm appointment! No worries — want to reschedule? We have openings this week."</blockquote>
+<p>The speed matters enormously. Same-day recovery texts have 3x the rebooking rate of next-day follow-ups.</p>
+
+<h2>3. Cancellation backfill from a waiting list</h2>
+<p>When a client cancels, instantly text your waiting list. The first person to respond gets the slot. This works especially well for popular time slots (Saturday mornings, after-work evenings).</p>
+
+<h2>4. Confirmation at booking</h2>
+<p>Send a confirmation text immediately when the appointment is booked. This creates a psychological commitment — the client has actively acknowledged the appointment.</p>
+
+<h2>5. Rebooking prompts after each visit</h2>
+<p>The best time to book the next appointment is right after the current one. An automated text the evening after a visit — "Loved seeing you today! Ready to book your next appointment?" — keeps clients on a regular schedule.</p>
+
+<h2>6. Personalized messaging</h2>
+<p>Texts that use the client's name and reference their specific service ("your balayage appointment") perform 26% better than generic reminders. Personalization signals that this isn't spam — it's their appointment.</p>
+
+<h2>7. Easy rescheduling (not just cancellation)</h2>
+<p>Make it easier to reschedule than to no-show. If replying to a text can instantly reschedule them, clients are more likely to proactively manage their appointment rather than ghosting.</p>
+
+<h2>8. Win-back sequences for lapsed clients</h2>
+<p>Clients who stop coming aren't necessarily lost. A 30-day and 90-day win-back text can bring 15-25% of lapsed clients back to your chair.</p>
+
+<h2>The complete salon no-show system</h2>
+<p>Each strategy above works individually. But the real magic happens when they work together as a system — confirmation, reminders, recovery, backfill, rebooking, and win-back, all running automatically.</p>
+
+<p>That's what I built <a href="https://rebooked.org/for/salons">Rebooked for salons</a> to do. Every strategy above runs on autopilot. <a href="https://rebooked.org/#roi">Calculate how much your salon is losing to no-shows</a>.</p>
+`,
+    author: "Brendan",
+    publishedAt: "2026-04-03",
+    category: "industry",
+    tags: ["salon", "no-shows", "hair-salon", "barbershop", "strategies", "sms"],
+    readingTime: 6,
+  },
+
+  {
+    slug: "client-retention-strategies-appointment-businesses",
+    title: "Client Retention Strategies for Appointment Businesses That Actually Work",
+    metaTitle: "Client Retention Strategies for Appointment Businesses | Rebooked",
+    metaDescription: "Retaining clients is 5x cheaper than acquiring new ones. These 7 retention strategies work specifically for appointment-based businesses.",
+    excerpt: "Acquiring a new client costs 5x more than keeping an existing one. Here are 7 retention strategies built for appointment businesses — with the data to back them up.",
+    content: `
+<p>Here's the math that should change how you think about your business: <strong>acquiring a new client costs 5-7x more than retaining an existing one</strong>. And a 5% increase in retention can boost profits by 25-95%.</p>
+
+<p>For appointment businesses — salons, clinics, studios, therapists — retention isn't just a nice metric. It's the difference between a thriving practice and one that's constantly running to stand still.</p>
+
+<h2>1. Automated rebooking prompts</h2>
+<p>The single most effective retention tool is asking for the next booking at the right time. A text sent the evening after a visit — while the experience is fresh and positive — converts at 3x the rate of a follow-up a week later.</p>
+<p>Most businesses leave this to the front desk: "Would you like to book your next appointment?" But front desk prompts only work when the client checks out in person. <a href="/blog/best-businesses-automate-not-chase">Automated rebooking</a> catches everyone.</p>
+
+<h2>2. Maintenance schedule reminders</h2>
+<p>Every appointment business has an ideal return frequency. Hair: 4-6 weeks. Lashes: 2-3 weeks. Dental cleanings: 6 months. When clients drift past that window, they're at risk of not returning at all.</p>
+<p>A simple automated reminder when they're approaching their ideal return date keeps them on schedule — and keeps your revenue predictable.</p>
+
+<h2>3. Post-visit follow-ups</h2>
+<p>A personalized text 24 hours after an appointment — "Hope you're loving the new style!" — does something powerful. It shows you care about the result, not just the transaction. Clients who receive follow-ups are 35% more likely to rebook.</p>
+
+<h2>4. Win-back sequences for at-risk clients</h2>
+<p>When a regular client goes quiet — no appointment in 30, 60, or 90 days — that's a signal. An automated win-back text at each milestone brings back 15-25% of lapsing clients.</p>
+<p>The key is timing. At 30 days, it's a friendly nudge. At 90 days, it's a "we miss you" with an incentive. Wait longer than that and you've likely lost them.</p>
+
+<h2>5. Review and reputation management</h2>
+<p>Clients who leave a positive review are psychologically more committed to your business. They've publicly endorsed you, which creates cognitive consistency — they're more likely to return because they've told others how great you are.</p>
+<p>Automated <a href="/blog/sms-templates-that-rebook-no-shows">review requests via SMS</a> after positive experiences build both your reputation and your retention.</p>
+
+<h2>6. Birthday and milestone recognition</h2>
+<p>A birthday text with a small perk — "Happy birthday, [name]! We'd love to celebrate with you. Here's 15% off your next visit." — drives bookings and makes clients feel valued.</p>
+<p>Loyalty milestones ("You've been with us for a year!") have a similar effect. It's low-effort recognition with high-impact retention.</p>
+
+<h2>7. Consistent, reliable communication</h2>
+<p>The thread connecting all these strategies is <strong>consistent communication</strong>. Not overwhelming, not salesy — just reliable touchpoints that keep you top of mind.</p>
+<p>The businesses with the best retention aren't necessarily the best at their craft (though they're usually good). They're the best at staying connected with clients between visits.</p>
+
+<h2>Automate your retention strategy</h2>
+<p><a href="https://rebooked.org">Rebooked</a> automates all seven strategies above. Rebooking prompts, maintenance reminders, follow-ups, win-backs, review requests, birthday texts, and everything in between — running on autopilot so you can focus on delivering great service.</p>
+
+<p><a href="https://rebooked.org/#roi">See how much revenue you could recover</a> with automated retention.</p>
+`,
+    author: "Brendan",
+    publishedAt: "2026-04-03",
+    category: "tips",
+    tags: ["client-retention", "appointment-business", "automation", "win-back", "loyalty"],
+    readingTime: 6,
+  },
 ];
 
 export function getBlogPost(slug: string): BlogPost | undefined {

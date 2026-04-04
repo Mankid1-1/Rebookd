@@ -13,7 +13,7 @@ export interface KBEntry {
   relatedIds?: string[];
   priority?: number;
   /** Which skill levels should see this entry prioritized */
-  skillLevels?: Array<"beginner" | "intermediate" | "advanced" | "expert">;
+  skillLevels?: Array<"basic" | "beginner" | "intermediate" | "advanced" | "expert">;
   /** Extra tip appended for beginners */
   beginnerTip?: string;
   /** Extra note appended for advanced/expert users */

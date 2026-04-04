@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import { format, subDays } from "date-fns";
 import { TrendingUp, TrendingDown, DollarSign, Users, MessageSquare } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { useLocale } from "@/contexts/LocaleContext";
 import { useChartColors } from "@/hooks/useChartColors";
 
 interface RevenueChartProps {
@@ -25,6 +25,7 @@ interface RevenueChartProps {
 }
 
 export function RevenueChart({ data, loading }: RevenueChartProps) {
+  const { formatCurrency } = useLocale();
   const cc = useChartColors();
   
   if (loading) {

@@ -125,8 +125,8 @@ export const publicRouter = router({
         name: z.string().max(255).optional(),
         source: z.enum(["roi_calculator", "industry_page", "blog", "waitlist", "footer"]).default("roi_calculator"),
         industry: z.string().max(100).optional(),
-        roiData: z.record(z.unknown()).optional(),
-        attribution: z.record(z.unknown()).optional(),
+        roiData: z.record(z.string(), z.unknown()).optional(),
+        attribution: z.record(z.string(), z.unknown()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -149,7 +149,7 @@ export const publicRouter = router({
         // Enroll in welcome drip sequence (fire-and-forget)
         try {
           const subResult = await ctx.db.execute(sql`SELECT id FROM email_subscribers WHERE email = ${input.email} LIMIT 1`);
-          const rows = (Array.isArray(subResult) ? subResult[0] : subResult) as any[];
+          const rows = (Array.isArray(subResult) ? subResult[0] : subResult) as unknown as any[];
           if (rows?.[0]?.id) {
             await enrollInSequence(ctx.db, rows[0].id, "welcome", {
               name: input.name,

@@ -8,8 +8,9 @@ import { eq } from 'drizzle-orm';
 import { getDb } from '../db';
 import { TRPCError } from '@trpc/server';
 import * as UserService from '../services/user.service';
-import * as EmailService from '../services/email.service';
-import { subscriptions, users, systemErrorLogs, webhookEvents, recoveryEvents } from '../../drizzle/schema';
+import { EmailService } from '../services/email.service';
+import { logger } from '../_core/logger';
+import { subscriptions, users, systemErrorLogs, webhookEvents, recoveryEvents, plans } from '../../drizzle/schema';
 
 // Use centralized Stripe singleton from _core/stripe.ts
 import { stripe } from '../_core/stripe';
@@ -219,6 +220,13 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
   // Store subscription in database using Drizzle ORM
   const tenantIdInt = parseInt(tenantId || '0');
   const existing = await db.select().from(subscriptions).where(eq(subscriptions.tenantId, tenantIdInt)).limit(1);
+  // Resolve planId from Stripe price or fall back to the first plan
+  const stripePriceId = subscription.items.data[0]?.price?.id;
+  let resolvedPlanId = existing[0]?.planId ?? 1;
+  if (stripePriceId) {
+    const [matchedPlan] = await db.select({ id: plans.id }).from(plans).where(eq(plans.stripePriceId, stripePriceId)).limit(1);
+    if (matchedPlan) resolvedPlanId = matchedPlan.id;
+  }
   const subPayload = {
     stripeId: subscription.id,
     stripeSubscriptionId: subscription.id,
@@ -233,7 +241,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
   if (existing[0]) {
     await db.update(subscriptions).set(subPayload).where(eq(subscriptions.tenantId, tenantIdInt));
   } else {
-    await db.insert(subscriptions).values({ tenantId: tenantIdInt, ...subPayload });
+    await db.insert(subscriptions).values({ tenantId: tenantIdInt, planId: resolvedPlanId, ...subPayload });
   }
 
   // Update user with Stripe customer ID
@@ -541,8 +549,8 @@ async function handleDisputeCreated(dispute: Stripe.Dispute): Promise<void> {
     await db
       .update(recoveryEvents)
       .set({
-        commissionStatus: "disputed",
-        notes: `Dispute ${dispute.id}: ${dispute.reason}`,
+        commissionStatus: "pending",
+        notes: `DISPUTED — Dispute ${dispute.id}: ${dispute.reason}`,
         updatedAt: new Date(),
       })
       .where(eq(recoveryEvents.stripePaymentIntentId, paymentIntentId));
@@ -573,8 +581,8 @@ async function handleDisputeClosed(dispute: Stripe.Dispute): Promise<void> {
         .set({
           realizedRevenue: 0,
           commissionAmount: 0,
-          commissionStatus: "reversed",
-          notes: `Dispute ${dispute.id} lost — revenue reversed`,
+          commissionStatus: "pending",
+          notes: `REVERSED — Dispute ${dispute.id} lost — revenue reversed`,
           updatedAt: new Date(),
         })
         .where(eq(recoveryEvents.stripePaymentIntentId, paymentIntentId));
@@ -614,7 +622,7 @@ async function activateUserAccount(userId: number): Promise<void> {
   if (!userId) return;
   const db = await getDb();
   await db.update(users)
-    .set({ isActive: true, updatedAt: new Date() })
+    .set({ active: true, updatedAt: new Date() })
     .where(eq(users.id, userId));
 }
 
@@ -622,7 +630,7 @@ async function deactivateUserAccount(userId?: string): Promise<void> {
   if (!userId) return;
   const db = await getDb();
   await db.update(users)
-    .set({ isActive: false, updatedAt: new Date() })
+    .set({ active: false, updatedAt: new Date() })
     .where(eq(users.id, parseInt(userId)));
 }
 
@@ -662,9 +670,6 @@ async function logPaymentEvent(paymentData: {
 }
 
 // ─── Billing email functions (uses EmailService) ─────────────────────────────
-
-import { EmailService } from "../services/email.service";
-import { logger } from "../_core/logger";
 
 async function sendBillingEmail(to: string, subject: string, body: string): Promise<void> {
   try {

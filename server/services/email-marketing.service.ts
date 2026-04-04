@@ -125,7 +125,7 @@ export async function processEmailSequenceQueue(db: MySql2Database<any>): Promis
           ORDER BY q.scheduledAt ASC
           LIMIT 20`);
 
-  const items = (Array.isArray(rows) ? rows[0] : rows) as any[];
+  const items = (Array.isArray(rows) ? rows[0] : rows) as unknown as any[];
   if (!items?.length) return 0;
 
   let sent = 0;

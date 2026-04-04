@@ -1,10 +1,33 @@
 import { Link, useParams } from "wouter";
-import { ArrowLeft, Clock, Tag, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clock, Tag, ChevronLeft, ChevronRight } from "lucide-react";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { JsonLd, REBOOKED_ORGANIZATION } from "@/components/seo/JsonLd";
 import { getBlogPost, BLOG_POSTS, BLOG_CATEGORIES, type BlogPost as BlogPostType } from "@/data/blog";
+import { INDUSTRIES } from "@/data/industries";
 import { trackFunnelEvent } from "@/lib/funnelEvents";
 import { useEffect } from "react";
+
+/** Map blog post slugs to relevant industry slugs for cross-linking */
+const BLOG_INDUSTRY_MAP: Record<string, string[]> = {
+  "real-cost-of-no-shows": ["salons", "dental", "fitness"],
+  "sms-templates-that-rebook-no-shows": ["salons", "nail-salons", "spa"],
+  "why-cancellation-fees-dont-work": ["dental", "fitness", "therapy"],
+  "salon-recovered-2400-month": ["salons", "nail-salons"],
+  "dentists-guide-reducing-dna-rates": ["dental", "chiropractic"],
+  "reasons-reminder-texts-get-ignored": ["pet-grooming", "tutoring", "chiropractic"],
+  "appointment-sms-vs-email-response-rates": ["therapy", "tutoring", "dental"],
+  "fitness-studio-filled-cancellations-30-days": ["fitness", "spa"],
+  "psychology-behind-no-shows": ["therapy", "tattoo", "spa"],
+  "first-sms-automation-under-10-minutes": ["photography", "auto-detailing", "pet-grooming"],
+  "spa-wellness-revenue-recovery-guide": ["spa", "nail-salons"],
+  "best-businesses-automate-not-chase": ["fitness", "auto-detailing", "chiropractic"],
+  "best-appointment-reminder-software-2026": ["dental", "salons", "med-spa"],
+  "missed-call-text-back-service": ["salons", "barber", "auto-detailing"],
+  "no-show-policy-template": ["dental", "counseling", "therapy"],
+  "appointment-confirmation-text-examples": ["veterinary", "salons", "fitness"],
+  "how-to-reduce-salon-no-shows": ["salons", "nail-salons", "barber"],
+  "client-retention-strategies-appointment-businesses": ["massage-therapy", "aesthetics", "med-spa"],
+};
 
 const categoryColors: Record<string, string> = {
   tips: "bg-teal-500/10 text-teal-400 border-teal-500/20",
@@ -271,6 +294,37 @@ export default function BlogPost() {
             </Link>
           </div>
         </div>
+
+        {/* Related industry pages for cross-linking SEO */}
+        {(() => {
+          const slugs = BLOG_INDUSTRY_MAP[post.slug] || [];
+          const industries = slugs
+            .map((s) => INDUSTRIES[s])
+            .filter(Boolean);
+          if (!industries.length) return null;
+          return (
+            <div className="mt-10 pt-6 border-t border-border/50">
+              <h3 className="text-base font-semibold mb-4">
+                See how Rebooked works for your industry
+              </h3>
+              <div className="flex flex-wrap gap-3">
+                {industries.map((ind) => (
+                  <Link
+                    key={ind.slug}
+                    href={`/for/${ind.slug}`}
+                    className="group inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border/50 bg-card hover:border-primary/30 transition-colors text-sm"
+                  >
+                    <span>{ind.emoji}</span>
+                    <span className="font-medium text-foreground group-hover:text-primary transition-colors">
+                      {ind.namePlural}
+                    </span>
+                    <ArrowRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </main>
 
       <footer className="border-t border-border/50 py-6 px-6">

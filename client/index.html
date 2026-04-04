@@ -6,30 +6,39 @@
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>Rebooked — AI-Powered SMS Re-engagement</title>
-    <meta name="description" content="Rebooked — AI-powered SMS re-engagement for appointment businesses. Reduce no-shows, recover cancellations, and win back lapsed clients automatically." />
+    <title>__SEO_TITLE__</title>
+    <meta name="description" content="__SEO_DESC__" />
     <meta name="theme-color" content="#0D1B2A" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Rebooked" />
-    <meta property="og:title" content="Rebooked — AI-Powered SMS Revenue Recovery" />
-    <meta property="og:description" content="Reduce no-shows, recover cancellations, and win back lapsed clients automatically. 35-day ROI guarantee for appointment businesses." />
-    <meta property="og:image" content="https://rebooked.org/og-image.png" />
-    <meta property="og:url" content="https://rebooked.org" />
+    <meta property="og:title" content="__SEO_OG_TITLE__" />
+    <meta property="og:description" content="__SEO_OG_DESC__" />
+    <meta property="og:image" content="__SEO_OG_IMAGE__" />
+    <meta property="og:url" content="__SEO_OG_URL__" />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Rebooked — AI-Powered SMS Revenue Recovery" />
-    <meta name="twitter:description" content="Reduce no-shows, recover cancellations, and win back lapsed clients automatically. 35-day ROI guarantee." />
-    <meta name="twitter:image" content="https://rebooked.org/og-image.png" />
+    <meta name="twitter:title" content="__SEO_OG_TITLE__" />
+    <meta name="twitter:description" content="__SEO_OG_DESC__" />
+    <meta name="twitter:image" content="__SEO_OG_IMAGE__" />
 
-    <link rel="canonical" href="https://rebooked.org/" />
+    <link rel="canonical" href="__SEO_CANONICAL__" />
+    <!-- __SEO_JSONLD__ -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/logo.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- Load fonts asynchronously to avoid render-blocking (LCP improvement).
+         The onload swap trick is the Google-recommended non-blocking pattern. -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800&family=Space+Grotesk:wght@400;500;600;700&display=swap" />
+    <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800&family=Space+Grotesk:wght@400;500;600;700&display=swap" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800&family=Space+Grotesk:wght@400;500;600;700&display=swap" /></noscript>
+    <!-- DNS prefetch for key third-party origins -->
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+    <link rel="dns-prefetch" href="https://www.redditstatic.com" />
+    <link rel="dns-prefetch" href="https://connect.facebook.net" />
     <!-- Umami Analytics — free, cookie-free, GDPR-compliant -->
     <!-- Sign up at https://cloud.umami.is, add your site, and replace YOUR_WEBSITE_ID below -->
     <script defer src="https://cloud.umami.is/script.js" data-website-id="57500d62-29f5-4761-87be-e96cb4b1174f"></script>
@@ -41,7 +50,7 @@
     rdt('track', 'PageVisit');
     </script>
 
-    <!-- Meta Pixel (Facebook) — replace YOUR_PIXEL_ID with your actual Pixel ID -->
+    <!-- Meta Pixel (Facebook) — replace YOUR_PIXEL_ID with your actual numeric Pixel ID -->
     <script>
     !function(f,b,e,v,n,t,s)
     {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -51,23 +60,23 @@
     t.src=v;s=b.getElementsByTagName(e)[0];
     s.parentNode.insertBefore(t,s)}(window, document,'script',
     'https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init', 'YOUR_PIXEL_ID');
-    fbq('track', 'PageView');
+    var _metaPixelId = 'YOUR_PIXEL_ID';
+    if (_metaPixelId && /^\d+$/.test(_metaPixelId)) {
+      fbq('init', _metaPixelId);
+      fbq('track', 'PageView');
+    }
     </script>
 
-    <!-- Google Ads / GA4 — replace YOUR_MEASUREMENT_ID with your actual GA4 ID -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=YOUR_MEASUREMENT_ID"></script>
+    <!-- Google Ads / GA4 -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-VN080MDS1J"></script>
     <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
-    gtag('config', 'YOUR_MEASUREMENT_ID');
+    gtag('config', 'G-VN080MDS1J');
     </script>
-  </head>
-
-  <body>
-    <!-- Meta Pixel noscript fallback (must be in body, not head) -->
-    <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=YOUR_PIXEL_ID&ev=PageView&noscript=1"/></noscript>
+    <!-- Theme detection: runs synchronously before any CSS is parsed — eliminates
+         flash of wrong theme. Must stay in <head> to fire before first paint. -->
     <script>
       (function(){
         var t = localStorage.getItem('rebooked-theme') || 'abyss';
@@ -76,6 +85,12 @@
         if (t === 'abyss') document.documentElement.classList.add('dark');
       })();
     </script>
+  </head>
+
+  <body>
+    <!-- Meta Pixel noscript fallback (must be in body, not head) -->
+    <!-- Meta Pixel noscript fallback: only renders once YOUR_PIXEL_ID is replaced with a real numeric ID -->
+    <!-- <noscript><img height="1" width="1" style="display:none" alt="" src="https://www.facebook.com/tr?id=YOUR_PIXEL_ID&ev=PageView&noscript=1"/></noscript> -->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
 

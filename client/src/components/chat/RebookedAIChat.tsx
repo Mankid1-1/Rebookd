@@ -278,7 +278,7 @@ export function RebookedAIChat() {
     retry: false,
     refetchOnWindowFocus: false,
   });
-  const skillLevel = skillData?.level || skillData || "beginner";
+  const skillLevel = (skillData as any)?.level || (skillData as any)?.skillLevel || skillData || "beginner";
   const effectiveSkill = typeof skillLevel === "string" ? skillLevel : "beginner";
 
   const [isOpen, setIsOpen] = useState(false);

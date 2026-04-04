@@ -7,6 +7,7 @@ export default function Privacy() {
     title: "Privacy Policy — Rebooked",
     description: "How Rebooked collects, uses, and protects your data. GDPR and TCPA compliant SMS revenue recovery platform.",
     ogUrl: "https://rebooked.org/privacy",
+    canonical: "https://rebooked.org/privacy",
   });
 
   return (

@@ -448,7 +448,10 @@ export const billingInvoices = mysqlTable("billing_invoices", {
   periodEnd: timestamp("periodEnd"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => [
+  index("idx_invoices_tenant").on(table.tenantId),
+  index("idx_invoices_status_created").on(table.status, table.createdAt),
+]);
 
 export type BillingInvoice = typeof billingInvoices.$inferSelect;
 
@@ -633,7 +636,10 @@ export const templates = mysqlTable("templates", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   deletedAt: timestamp("deletedAt"),
-});
+}, (table) => [
+  index("idx_templates_tenant").on(table.tenantId),
+  index("idx_templates_tenant_key").on(table.tenantId, table.key),
+]);
 
 export type Template = typeof templates.$inferSelect;
 export type InsertTemplate = typeof templates.$inferInsert;
@@ -831,7 +837,12 @@ export const adminAuditLogs = mysqlTable("admin_audit_logs", {
   route: varchar("route", { length: 255 }),
   metadata: json("metadata").$type<Record<string, unknown>>(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_audit_admin_user").on(table.adminUserId),
+  index("idx_audit_action").on(table.action),
+  index("idx_audit_target_tenant").on(table.targetTenantId),
+  index("idx_audit_created").on(table.createdAt),
+]);
 
 export type AdminAuditLog = typeof adminAuditLogs.$inferSelect;
 

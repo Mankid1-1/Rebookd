@@ -26,7 +26,19 @@ export async function initSentry() {
 }
 
 export async function captureException(err: unknown, context?: Record<string, unknown>) {
-  if (!_initialized) return;
+  if (!_initialized) {
+    // Fallback: structured console error when Sentry is unavailable
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error(JSON.stringify({
+      level: "error",
+      timestamp: new Date().toISOString(),
+      message: errMsg,
+      ...(stack ? { stack } : {}),
+      ...(context ? { context } : {}),
+    }));
+    return;
+  }
   try {
     const Sentry = await import("@sentry/node");
     Sentry.withScope((scope) => {
@@ -34,6 +46,14 @@ export async function captureException(err: unknown, context?: Record<string, un
       Sentry.captureException(err);
     });
   } catch {
-    // Sentry unavailable — already warned at init
+    // Sentry call failed — fallback to structured console
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error(JSON.stringify({
+      level: "error",
+      timestamp: new Date().toISOString(),
+      message: errMsg,
+      source: "sentry_fallback",
+      ...(context ? { context } : {}),
+    }));
   }
 }

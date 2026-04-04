@@ -23,6 +23,12 @@ const INDUSTRY_SLUGS = [
   "auto-detailing",
   "tutoring",
   "nail-salons",
+  "veterinary",
+  "massage-therapy",
+  "aesthetics",
+  "counseling",
+  "med-spa",
+  "barber",
 ];
 
 // Blog post slugs + publish dates — keep in sync with client/src/data/blog.ts
@@ -39,6 +45,12 @@ const BLOG_POSTS = [
   { slug: "first-sms-automation-under-10-minutes", publishedAt: "2026-04-02" },
   { slug: "spa-wellness-revenue-recovery-guide", publishedAt: "2026-04-02" },
   { slug: "best-businesses-automate-not-chase", publishedAt: "2026-04-02" },
+  { slug: "best-appointment-reminder-software-2026", publishedAt: "2026-04-03" },
+  { slug: "missed-call-text-back-service", publishedAt: "2026-04-03" },
+  { slug: "no-show-policy-template", publishedAt: "2026-04-03" },
+  { slug: "appointment-confirmation-text-examples", publishedAt: "2026-04-03" },
+  { slug: "how-to-reduce-salon-no-shows", publishedAt: "2026-04-03" },
+  { slug: "client-retention-strategies-appointment-businesses", publishedAt: "2026-04-03" },
 ];
 
 const STATIC_PAGES = [

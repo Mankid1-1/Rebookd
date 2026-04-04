@@ -23,14 +23,26 @@ const config = {
       output: {
         manualChunks(id) {
           if (id.includes("node_modules")) {
-            // Keep React + Radix UI together to avoid circular chunk deps
-            if (
-              id.includes("react-dom") || id.includes("react/jsx") || id.includes("/react/") ||
-              id.includes("@radix-ui") || id.includes("class-variance-authority") || id.includes("clsx") || id.includes("tailwind-merge")
-            ) return "vendor-react";
-            if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
+            // ── Specific libs first (before broad React patterns) ──
+            if (id.includes("@sentry")) return "vendor-sentry";
+            if (id.includes("@tanstack") || id.includes("@trpc") || id.includes("superjson")) return "vendor-query";
+            if (id.includes("lucide-react")) return "vendor-icons";
+            if (id.includes("date-fns") || id.includes("react-day-picker")) return "vendor-date";
+            if (id.includes("recharts") || id.includes("d3-") || id.includes("react-smooth") || id.includes("lodash")) return "vendor-charts";
             if (id.includes("@stripe") || id.includes("stripe")) return "vendor-stripe";
             if (id.includes("framer-motion")) return "vendor-motion";
+            // ── UI framework — Radix primitives + small utils shared across pages ──
+            if (
+              id.includes("@radix-ui") || id.includes("@floating-ui") ||
+              id.includes("class-variance-authority") || id.includes("clsx") ||
+              id.includes("tailwind-merge") || id.includes("node_modules/sonner/")
+            ) return "vendor-ui";
+            // ── React core last — precise paths to avoid catching @sentry/react, @floating-ui/react-dom, etc. ──
+            if (
+              id.includes("node_modules/react-dom/") ||
+              id.includes("node_modules/react/") ||
+              id.includes("node_modules/scheduler/")
+            ) return "vendor-react";
           }
         },
       },

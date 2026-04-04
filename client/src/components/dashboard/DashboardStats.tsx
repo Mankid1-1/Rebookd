@@ -21,7 +21,7 @@ import {
   Zap,
   Send,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { useLocale } from "@/contexts/LocaleContext";
 import { trpc } from "@/lib/trpc";
 
 interface StatCardProps {
@@ -96,6 +96,7 @@ interface QuickStatsProps {
 }
 
 export function QuickStats({ stats, loading }: QuickStatsProps) {
+  const { formatCurrency } = useLocale();
   const calculatePercentage = (value: number, total: number) => {
     return total > 0 ? Math.round((value / total) * 100) : 0;
   };
@@ -205,6 +206,7 @@ interface PerformanceMetricsProps {
 }
 
 export function PerformanceMetrics({ metrics, loading }: PerformanceMetricsProps) {
+  const { formatCurrency } = useLocale();
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <StatCard

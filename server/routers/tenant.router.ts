@@ -112,7 +112,7 @@ export const tenantRouter = router({
       // Rate limit: max 5 tokens per tenant per hour (checked via simple timestamp tracking)
       const result = await PhoneserviceService.createSetupToken(ctx.tenantId);
       if (!result) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create setup token. Is Phoneservice configured?" });
-      logger.info({ tenantId: ctx.tenantId, userId: ctx.user.id }, "Device setup token generated");
+      logger.info("Device setup token generated", { tenantId: ctx.tenantId, userId: ctx.user.id });
       return result;
     }),
 
@@ -134,7 +134,7 @@ export const tenantRouter = router({
               // Only ignore duplicate entry errors — log everything else
               const isDuplicate = error?.code === "SQLITE_CONSTRAINT" || error?.message?.includes("UNIQUE") || error?.message?.includes("duplicate");
               if (!isDuplicate) {
-                logger.warn({ tenantId: ctx.tenantId, phoneNumber: device.phoneNumber, error: String(error) }, "Failed to sync device phone number");
+                logger.warn("Failed to sync device phone number", { tenantId: ctx.tenantId, phoneNumber: device.phoneNumber, error: String(error) });
               }
             }
           }
@@ -149,7 +149,7 @@ export const tenantRouter = router({
       // Pass tenantId for ownership verification on the Phoneservice server
       const success = await PhoneserviceService.deactivateDevice(input.deviceId, ctx.tenantId);
       if (!success) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to deactivate device" });
-      logger.info({ tenantId: ctx.tenantId, userId: ctx.user.id, deviceId: input.deviceId }, "Device deactivated");
+      logger.info("Device deactivated", { tenantId: ctx.tenantId, userId: ctx.user.id, deviceId: input.deviceId });
       return { success: true };
     }),
 
@@ -469,7 +469,7 @@ export const onboardingRouter = router({
       name: input.businessName,
       slug,
       timezone: input.timezone || "America/New_York",
-      industry: input.industry || null,
+      industry: (input.industry || null) as any,
       country: input.country || null,
       settings: {
         city: input.city || null,

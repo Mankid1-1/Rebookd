@@ -21,6 +21,7 @@ import { ensureCorrelationId, runWithCorrelationId } from "./requestContext";
 import { registerSecurityMiddleware } from "./security";
 import { registerCalendarCallbacks } from "./calendarCallback";
 import { widgetRouter } from "../api/widget";
+import { registerSupportTicketEndpoint } from "../api/support-ticket";
 import { readFileSync } from "fs";
 import { trafficGateMiddleware, setShutdownRef } from "./traffic-gate";
 import { validateEnv } from "./env";
@@ -236,6 +237,8 @@ async function startServer() {
   registerFunnelTrackEndpoint(app);
   // Dynamic sitemap.xml
   registerSitemapEndpoint(app);
+  // Support contact form (public, rate-limited)
+  registerSupportTicketEndpoint(app);
   // Embeddable booking widget (/widget.js — public, CORS-open)
   app.use(widgetRouter);
 

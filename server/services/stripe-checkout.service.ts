@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm';
 import { getDb } from '../db';
 import { TRPCError } from '@trpc/server';
 import { ENV } from '../_core/env';
-import { subscriptions } from '../../drizzle/schema';
+import { subscriptions, plans } from '../../drizzle/schema';
 
 // Use the centralized Stripe singleton — do NOT create a second instance
 import { stripe } from '../_core/stripe';
@@ -154,10 +154,17 @@ export async function processSuccessfulCheckout(sessionId: string): Promise<Subs
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
         updatedAt: new Date(),
       };
+      // Resolve planId from Stripe price or fall back to existing/default
+      const priceId = subscription.items.data[0]?.price?.id;
+      let resolvedPlanId = existing[0]?.planId ?? 1;
+      if (priceId) {
+        const [matchedPlan] = await db.select({ id: plans.id }).from(plans).where(eq(plans.stripePriceId, priceId)).limit(1);
+        if (matchedPlan) resolvedPlanId = matchedPlan.id;
+      }
       if (existing[0]) {
         await db.update(subscriptions).set(subPayload).where(eq(subscriptions.tenantId, tenantId));
       } else {
-        await db.insert(subscriptions).values({ tenantId, ...subPayload });
+        await db.insert(subscriptions).values({ tenantId, planId: resolvedPlanId, ...subPayload });
       }
     }
 

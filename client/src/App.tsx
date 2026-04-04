@@ -3,17 +3,21 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { CookieConsent } from "./components/CookieConsent";
-import { DataEncryptionConsent } from "./components/DataEncryptionConsent";
 import { LiveUpdateBanner } from "./components/LiveUpdateBanner";
-import { LocaleOnboardingModal } from "./components/LanguageSelector";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LocaleProvider } from "./contexts/LocaleContext";
 import { SkillLevelProvider } from "./contexts/SkillLevelContext";
 import { lazy, Suspense, useEffect } from "react";
 import { AuthGuard } from "./components/layout/AuthGuard";
-import { GlobalAIChat } from "./components/chat/GlobalAIChat";
 import { captureAttribution } from "./lib/attribution";
+
+// Deferred shell overlays — not needed for initial paint
+// Fallback to null component if blocked by ad-blocker or CSP
+const noop = () => null;
+const CookieConsent = lazy(() => import("./components/CookieConsent").then(m => ({ default: m.CookieConsent })).catch(() => ({ default: noop })));
+const DataEncryptionConsent = lazy(() => import("./components/DataEncryptionConsent").then(m => ({ default: m.DataEncryptionConsent })).catch(() => ({ default: noop })));
+const LocaleOnboardingModal = lazy(() => import("./components/LanguageSelector").then(m => ({ default: m.LocaleOnboardingModal })).catch(() => ({ default: noop })));
+const GlobalAIChat = lazy(() => import("./components/chat/GlobalAIChat").then(m => ({ default: m.GlobalAIChat })).catch(() => ({ default: noop })));
 
 // Lazy load heavy components for code splitting
 const Home = lazy(() => import("@/pages/Home"));
@@ -448,6 +452,9 @@ function App() {
 
   return (
     <ErrorBoundary>
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[9999] focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:rounded-md focus:text-sm focus:font-medium">
+        Skip to main content
+      </a>
       <LiveUpdateBanner />
       <ThemeProvider defaultTheme="corporate">
         <LocaleProvider>
@@ -455,7 +462,9 @@ function App() {
             <Toaster richColors position="top-right" />
             <SkillLevelProvider>
               <Suspense fallback={<AppSkeleton />}>
-                <Router />
+                <main id="main-content">
+                  <Router />
+                </main>
                 <GlobalAIChat />
                 <LocaleOnboardingModal />
                 <CookieConsent />

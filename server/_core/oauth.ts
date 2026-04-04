@@ -236,7 +236,7 @@ export function registerOAuthRoutes(app: Express) {
         openId,
         name: name?.trim() || email.split("@")[0],
         email: normalizedEmail,
-        loginMethod: "local",
+        loginMethod: "email" as const,
         passwordHash,
         accountType: accountType === 'referral' ? 'referral' : 'business',
         lastSignedIn: new Date(),

@@ -10,7 +10,7 @@ import { publicProcedure, router } from '../_core/trpc';
 import { stripeConnectService } from '../services/stripe-connect.service';
 import { TRPCError } from '@trpc/server';
 import { getDb } from '../db';
-import { users, subscriptions, billingInvoices, tenants, systemErrorLogs } from '../../drizzle/schema';
+import { users, subscriptions, billingInvoices, tenants, systemErrorLogs, plans } from '../../drizzle/schema';
 import { EmailService } from '../services/email.service';
 import { logger } from '../_core/logger';
 
@@ -291,10 +291,17 @@ async function handleCheckoutSessionCompleted(session: any) {
         trialEndsAt: sub?.trial_end ? new Date(sub.trial_end * 1000) : undefined,
         updatedAt: new Date(),
       };
+      // Resolve planId from Stripe price or fall back to existing/default
+      const priceId = sub?.items?.data?.[0]?.price?.id;
+      let resolvedPlanId = existing[0]?.planId ?? 1;
+      if (priceId) {
+        const [matchedPlan] = await db.select({ id: plans.id }).from(plans).where(eq(plans.stripePriceId, priceId)).limit(1);
+        if (matchedPlan) resolvedPlanId = matchedPlan.id;
+      }
       if (existing[0]) {
         await db.update(subscriptions).set(payload).where(eq(subscriptions.tenantId, tenantId));
       } else {
-        await db.insert(subscriptions).values({ tenantId, ...payload });
+        await db.insert(subscriptions).values({ tenantId, planId: resolvedPlanId, ...payload });
       }
     }
 

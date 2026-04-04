@@ -46,10 +46,10 @@ export async function getDb() {
       });
 
       // Prevent unhandled 'error' events from crashing Node
-      _pool.on("error", (err) => {
+      (_pool as any).on("error", (err: any) => {
         logger.error("MySQL pool error (non-fatal, pool will self-heal)", {
-          error: err.message,
-          code: (err as any).code,
+          error: err?.message ?? String(err),
+          code: err?.code,
         });
       });
 

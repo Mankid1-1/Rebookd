@@ -159,7 +159,7 @@ export const authRouter = router({
       }
       const passwordHash = await bcrypt.hash(input.password, 12);
       const openId = randomUUID();
-      await UserService.createUser(db, { openId, email: input.email, name: input.name, passwordHash, loginMethod: "password", accountType: requestedType, role: "user", active: true });
+      await UserService.createUser(db, { openId, email: input.email, name: input.name, passwordHash, loginMethod: "email" as const, accountType: requestedType, role: "user", active: true });
       const created = await UserService.getUserByOpenId(db, openId);
       if (!created) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create user" });
 
@@ -259,14 +259,14 @@ export const authRouter = router({
         const db = await getDb();
         if (db) {
           await db.insert(adminAuditLogs).values({
-            userId: ctx.user.id,
+            adminUserId: ctx.user.id,
             action: "admin_impersonate",
-            detail: JSON.stringify({
+            metadata: {
               adminEmail: ctx.user.email,
               targetUserId: input.targetUserId || "self",
               accountTypeView: input.accountTypeView,
               ip: ctx.req.ip || ctx.req.socket?.remoteAddress,
-            }),
+            },
           });
         }
       } catch { /* audit logging is best-effort */ }

@@ -1,4 +1,3 @@
-import * as Sentry from "@sentry/react";
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -10,14 +9,23 @@ import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
 
-// ─── Sentry (client-side error tracking) ─────────────────────────────────────
-Sentry.init({
-  dsn: "https://453e71c19f8e1bc6d6de07f366260a32@o4511089469947904.ingest.us.sentry.io/4511089470930944",
-  environment: import.meta.env.MODE,
-  tracesSampleRate: 0.2,
-  replaysSessionSampleRate: 0,
-  replaysOnErrorSampleRate: 0.5,
-});
+// ─── Sentry (deferred — load after first paint to reduce initial JS) ────────
+const initSentry = () =>
+  import("@sentry/react").then((Sentry) => {
+    Sentry.init({
+      dsn: "https://453e71c19f8e1bc6d6de07f366260a32@o4511089469947904.ingest.us.sentry.io/4511089470930944",
+      environment: import.meta.env.MODE,
+      tracesSampleRate: 0.2,
+      replaysSessionSampleRate: 0,
+      replaysOnErrorSampleRate: 0.5,
+    });
+  });
+
+if ("requestIdleCallback" in window) {
+  requestIdleCallback(() => initSentry());
+} else {
+  setTimeout(initSentry, 2000);
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -85,6 +93,9 @@ const trpcClient = trpc.createClient({
     }),
   ],
 });
+
+// Core Web Vitals — lazy load to avoid blocking initial render
+import("@/lib/webVitals").then((m) => m.initWebVitals()).catch(() => {});
 
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>

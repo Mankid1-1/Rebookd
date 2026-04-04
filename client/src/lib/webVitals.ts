@@ -7,19 +7,25 @@
 import type { Metric } from "web-vitals";
 
 function reportMetric(metric: Metric) {
-  // Fire-and-forget beacon to the sentinel metrics endpoint
+  // Endpoint expects { category, metrics: [{ metric, value, detail }] }
   const body = JSON.stringify({
-    source: "web-vitals",
-    metric: metric.name,
-    value: metric.value,
-    rating: metric.rating, // "good" | "needs-improvement" | "poor"
-    delta: metric.delta,
-    id: metric.id,
-    url: window.location.pathname,
+    category: "web-vitals",
+    metrics: [{
+      metric: metric.name,
+      value: metric.value,
+      detail: {
+        rating: metric.rating,
+        delta: metric.delta,
+        id: metric.id,
+        url: window.location.pathname,
+      },
+    }],
   });
 
+  // sendBeacon must use a Blob to set Content-Type; plain string sends as text/plain
+  // which bypasses Express's JSON body parser and arrives as empty req.body
   if (navigator.sendBeacon) {
-    navigator.sendBeacon("/api/system/sentinel-metric", body);
+    navigator.sendBeacon("/api/system/sentinel-metric", new Blob([body], { type: "application/json" }));
   } else {
     fetch("/api/system/sentinel-metric", {
       method: "POST",

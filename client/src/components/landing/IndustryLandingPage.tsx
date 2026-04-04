@@ -8,6 +8,7 @@ import { IndustryTestimonials } from "./IndustryTestimonials";
 import { IndustryCTA } from "./IndustryCTA";
 import { IndustryFAQ } from "./IndustryFAQ";
 import { RelatedIndustries } from "./RelatedIndustries";
+import { RelatedBlogPosts } from "./RelatedBlogPosts";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { JsonLd, REBOOKED_ORGANIZATION, buildBreadcrumbJsonLd } from "@/components/seo/JsonLd";
 import { trackFunnelEvent } from "@/lib/funnelEvents";
@@ -49,6 +50,7 @@ export function IndustryLandingPage({ config }: IndustryLandingPageProps) {
       <IndustryFeatures config={config} />
       <IndustryTestimonials config={config} />
       {config.faq && config.faq.length > 0 && <IndustryFAQ config={config} />}
+      <RelatedBlogPosts industrySlug={config.slug} />
       <RelatedIndustries currentSlug={config.slug} />
       <IndustryCTA config={config} />
     </div>

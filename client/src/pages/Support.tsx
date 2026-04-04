@@ -1,12 +1,90 @@
 import { Link } from "wouter";
-import { ArrowLeft, LifeBuoy, Mail, Clock, MessageSquare, BookOpen, HelpCircle } from "lucide-react";
+import { ArrowLeft, LifeBuoy, Mail, Clock, MessageSquare, BookOpen, HelpCircle, Send } from "lucide-react";
 import { usePageMeta } from "@/hooks/usePageMeta";
+import { useState } from "react";
+
+function ContactForm() {
+  const [form, setForm] = useState({ name: "", email: "", category: "general", message: "" });
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.email || !form.message) return;
+    setStatus("sending");
+    try {
+      const res = await fetch("/api/support-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      setStatus(res.ok ? "sent" : "error");
+      if (res.ok) setForm({ name: "", email: "", category: "general", message: "" });
+    } catch {
+      setStatus("error");
+    }
+  };
+
+  if (status === "sent") {
+    return (
+      <div className="rounded-xl border border-border/50 bg-card p-8 text-center">
+        <div className="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
+          <Send className="w-6 h-6 text-success" />
+        </div>
+        <h3 className="text-lg font-semibold mb-2">Message sent!</h3>
+        <p className="text-sm text-muted-foreground">I'll get back to you within 24 hours. Check your email for a confirmation.</p>
+        <button onClick={() => setStatus("idle")} className="mt-4 text-sm text-primary hover:underline">Send another message</button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-6">
+        <MessageSquare className="w-5 h-5 text-primary" />
+        <h2 className="text-xl font-semibold">Send a Message</h2>
+      </div>
+      <form onSubmit={handleSubmit} className="rounded-xl border border-border/50 bg-card p-6 space-y-4">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="support-name" className="block text-sm font-medium mb-1.5">Name</label>
+            <input id="support-name" type="text" placeholder="Your name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+          </div>
+          <div>
+            <label htmlFor="support-email" className="block text-sm font-medium mb-1.5">Email <span className="text-destructive">*</span></label>
+            <input id="support-email" type="email" required placeholder="you@example.com" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+          </div>
+        </div>
+        <div>
+          <label htmlFor="support-category" className="block text-sm font-medium mb-1.5">Category</label>
+          <select id="support-category" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+            <option value="general">General Question</option>
+            <option value="billing">Billing & Payments</option>
+            <option value="technical">Technical Issue</option>
+            <option value="automations">Automations & SMS</option>
+            <option value="integrations">Calendar Integrations</option>
+            <option value="feedback">Feature Request / Feedback</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="support-message" className="block text-sm font-medium mb-1.5">Message <span className="text-destructive">*</span></label>
+          <textarea id="support-message" required rows={4} placeholder="How can I help?" value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y" />
+        </div>
+        {status === "error" && <p className="text-sm text-destructive">Something went wrong. Please try emailing rebooked@rebooked.org directly.</p>}
+        <button type="submit" disabled={status === "sending"} className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium text-sm hover:bg-primary/90 transition-colors disabled:opacity-50">
+          <Send className="w-4 h-4" />
+          {status === "sending" ? "Sending..." : "Send Message"}
+        </button>
+      </form>
+    </div>
+  );
+}
 
 export default function Support() {
   usePageMeta({
     title: "Support — Rebooked",
     description: "Get help with Rebooked. Contact support, browse FAQs, and find resources for the AI-powered SMS revenue recovery platform.",
     ogUrl: "https://rebooked.org/support",
+    canonical: "https://rebooked.org/support",
   });
 
   return (
@@ -177,13 +255,16 @@ export default function Support() {
             </div>
           </div>
 
+          {/* Contact Form */}
+          <ContactForm />
+
           {/* Contact CTA */}
           <div className="text-center rounded-xl border border-border/50 bg-card p-8">
-            <h3 className="text-lg font-semibold mb-2">Still need help?</h3>
-            <p className="text-sm text-muted-foreground mb-4">Our team is ready to assist you with any questions or concerns.</p>
+            <h3 className="text-lg font-semibold mb-2">Prefer email?</h3>
+            <p className="text-sm text-muted-foreground mb-4">You can also reach us directly at any time.</p>
             <a href="mailto:rebooked@rebooked.org" className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium text-sm hover:bg-primary/90 transition-colors">
               <Mail className="w-4 h-4" />
-              Contact Support
+              rebooked@rebooked.org
             </a>
           </div>
         </div>
@@ -192,13 +273,13 @@ export default function Support() {
       <footer className="border-t border-border/50 py-6 px-6">
         <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
           <p>&copy; 2026 Rebooked. All rights reserved.</p>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
             <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
-            <span className="text-border">|</span>
+            <span className="text-border hidden sm:inline">|</span>
             <Link href="/terms" className="hover:text-foreground transition-colors">Terms</Link>
-            <span className="text-border">|</span>
+            <span className="text-border hidden sm:inline">|</span>
             <Link href="/tcpa" className="hover:text-foreground transition-colors">TCPA</Link>
-            <span className="text-border">|</span>
+            <span className="text-border hidden sm:inline">|</span>
             <Link href="/support" className="text-foreground font-medium">Support</Link>
           </div>
         </div>

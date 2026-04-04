@@ -413,7 +413,7 @@ async function executeStep(db: Db, step: any, event: EventPayload, tenantId: num
                 ${JSON.stringify({
                   tenantId,
                   leadId,
-                  automationKey: automation?.key || null,
+                  automationKey: automationKey || null,
                   provider: res.provider,
                 })},
                 ${null},

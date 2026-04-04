@@ -9,6 +9,7 @@ export default function TCPACompliance() {
     title: "TCPA Compliance — Rebooked",
     description: "How Rebooked ensures full TCPA compliance for automated SMS messaging. Consent management, opt-out handling, and regulatory adherence.",
     ogUrl: "https://rebooked.org/tcpa",
+    canonical: "https://rebooked.org/tcpa",
   });
 
   return (

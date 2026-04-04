@@ -76,8 +76,8 @@ export async function deleteAutomation(db: Db, tenantId: number, automationId: n
 
 export async function upsertAutomationByKey(db: Db, tenantId: number, key: string, data: {
   name?: string;
-  category?: "follow_up" | "reactivation" | "appointment" | "welcome" | "custom" | "no_show" | "cancellation" | "loyalty";
-  triggerType?: "new_lead" | "inbound_message" | "status_change" | "time_delay" | "appointment_reminder";
+  category?: "follow_up" | "reactivation" | "appointment" | "welcome" | "custom" | "no_show" | "cancellation" | "loyalty" | "review" | "rescheduling" | "waiting_list" | "lead_capture";
+  triggerType?: "new_lead" | "inbound_message" | "status_change" | "time_delay" | "appointment_reminder" | "missed_call" | "cancellation_flurry" | "win_back" | "birthday" | "loyalty_milestone" | "review_request" | "waitlist_slot_opened" | "rescheduling";
   triggerConfig?: Record<string, unknown>;
   conditions?: Array<Record<string, unknown>>;
   actions?: Array<Record<string, unknown>>;

@@ -6,6 +6,7 @@ export type EnvConfig = {
   cookieSecret: string;
   forgeApiUrl: string;
   forgeApiKey: string;
+  anthropicApiKey: string;
   sendGridApiKey: string;
   emailFromAddress: string;
   encryptionKey: string;
@@ -83,6 +84,7 @@ export const ENV: EnvConfig = {
   })(),
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? process.env.FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? process.env.FORGE_API_KEY ?? "",
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   sendGridApiKey: process.env.SENDGRID_API_KEY ?? "",
   emailFromAddress: process.env.EMAIL_FROM_ADDRESS ?? "hello@rebooked.com",
   encryptionKey: process.env.ENCRYPTION_KEY ?? "",

@@ -100,6 +100,18 @@ export const bookingPageRouter = router({
     return BookingPageService.getMetrics(ctx.db, ctx.tenantId);
   }),
 
+  // ─── Get embed code snippet for the tenant's booking page ─────────────────
+  getEmbedCode: tenantProcedure.query(async ({ ctx }) => {
+    const page = await BookingPageService.getBookingPage(ctx.db, ctx.tenantId);
+    if (!page) {
+      return { embedCode: null, slug: null };
+    }
+    const baseUrl = process.env.APP_URL || "https://app.rebooked.org";
+    const brandColor = page.brandColor || "#00A896";
+    const embedCode = `<script src="${baseUrl}/widget.js" data-slug="${page.slug}" data-color="${brandColor}"></script>`;
+    return { embedCode, slug: page.slug, brandColor };
+  }),
+
   // ─── Public: get booking page by slug (no auth) ───────────────────────────
   bySlug: publicProcedure
     .input(z.object({ slug: z.string().min(1).max(100) }))

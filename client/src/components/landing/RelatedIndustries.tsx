@@ -4,18 +4,24 @@ import { INDUSTRIES, type IndustryConfig } from "@/data/industries";
 
 /** Map each industry slug to 3-4 related industry slugs for cross-linking */
 const RELATED_MAP: Record<string, string[]> = {
-  salons: ["nail-salons", "spa", "tattoo"],
-  dental: ["chiropractic", "therapy", "spa"],
-  spa: ["salons", "nail-salons", "fitness"],
-  fitness: ["chiropractic", "spa", "photography"],
-  tattoo: ["salons", "nail-salons", "photography"],
-  "pet-grooming": ["auto-detailing", "spa", "tutoring"],
-  therapy: ["chiropractic", "dental", "fitness"],
-  chiropractic: ["therapy", "dental", "fitness"],
-  photography: ["tattoo", "auto-detailing", "fitness"],
-  "auto-detailing": ["pet-grooming", "photography", "fitness"],
-  tutoring: ["therapy", "photography", "pet-grooming"],
-  "nail-salons": ["salons", "spa", "tattoo"],
+  salons: ["nail-salons", "barber", "spa"],
+  dental: ["chiropractic", "veterinary", "counseling"],
+  spa: ["massage-therapy", "aesthetics", "med-spa"],
+  fitness: ["chiropractic", "massage-therapy", "photography"],
+  tattoo: ["salons", "barber", "photography"],
+  "pet-grooming": ["veterinary", "auto-detailing", "tutoring"],
+  therapy: ["counseling", "chiropractic", "massage-therapy"],
+  chiropractic: ["therapy", "dental", "massage-therapy"],
+  photography: ["tattoo", "auto-detailing", "aesthetics"],
+  "auto-detailing": ["pet-grooming", "barber", "photography"],
+  tutoring: ["therapy", "counseling", "pet-grooming"],
+  "nail-salons": ["salons", "aesthetics", "spa"],
+  veterinary: ["pet-grooming", "dental", "chiropractic"],
+  "massage-therapy": ["spa", "chiropractic", "fitness"],
+  aesthetics: ["nail-salons", "med-spa", "spa"],
+  counseling: ["therapy", "chiropractic", "massage-therapy"],
+  "med-spa": ["aesthetics", "spa", "dental"],
+  barber: ["salons", "tattoo", "nail-salons"],
 };
 
 interface RelatedIndustriesProps {
