@@ -11,6 +11,7 @@ import { encrypt } from "./crypto";
 import { hashPhoneNumber, normalizePhoneNumber } from "./phone";
 import { sendSMS } from "./sms";
 import { getCorrelationId } from "./requestContext";
+import { autoTransitionOnInbound, recordStatusChange } from "../services/lead-status-engine.service";
 
 const STOP_KEYWORDS = new Set(["stop", "unsubscribe", "quit", "cancel", "end", "stopall"]);
 const START_KEYWORDS = new Set(["start", "yes", "unstop"]);
@@ -194,15 +195,18 @@ async function handleInbound(msg: InboundMessage) {
   }
 
   if (STOP_KEYWORDS.has(bodyNorm)) {
+    const previousStatus = lead.status;
     await db
       .update(leads)
       .set({ status: "unsubscribed", updatedAt: new Date(), lastInboundAt: new Date() })
       .where(eq(leads.id, lead.id));
+    await recordStatusChange(db as any, tenantId, lead.id, previousStatus ?? "new", "unsubscribed", "stop_keyword", "webhook");
   } else if (START_KEYWORDS.has(bodyNorm) && lead.status === "unsubscribed") {
     await db
       .update(leads)
       .set({ status: "new", updatedAt: new Date(), lastInboundAt: new Date() })
       .where(eq(leads.id, lead.id));
+    await recordStatusChange(db as any, tenantId, lead.id, "unsubscribed", "new", "start_keyword", "webhook");
   }
 
   await db.insert(messages).values({
@@ -219,6 +223,13 @@ async function handleInbound(msg: InboundMessage) {
     .update(leads)
     .set({ lastInboundAt: new Date(), lastMessageAt: new Date(), updatedAt: new Date() })
     .where(eq(leads.id, lead.id));
+
+  // Auto-transition on non-keyword inbound messages
+  if (!STOP_KEYWORDS.has(bodyNorm) && !HELP_KEYWORDS.has(bodyNorm) && !START_KEYWORDS.has(bodyNorm)) {
+    await autoTransitionOnInbound(db as any, tenantId, lead.id).catch((err) =>
+      logger.warn("Auto-transition on inbound failed", { error: String(err) }),
+    );
+  }
 
   if (STOP_KEYWORDS.has(bodyNorm)) {
     const stopText =

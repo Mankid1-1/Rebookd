@@ -20,13 +20,13 @@ module.exports = {
       node_args: "--max-old-space-size=768",
       cwd: __dirname,
 
-      // Fork mode: single instance for stability.
-      // Switch to cluster mode once port-sharing is verified.
-      instances: 1,
-      exec_mode: "fork",
+      // Cluster mode: 4 instances across available cores for horizontal scaling.
+      // PM2 handles port sharing via SO_REUSEPORT in cluster mode.
+      instances: 4,
+      exec_mode: "cluster",
 
       autorestart: true,
-      max_memory_restart: "900M",
+      max_memory_restart: "1500M",
 
       // Graceful shutdown: PM2 sends SIGINT, waits for listen_timeout,
       // then kills after kill_timeout.

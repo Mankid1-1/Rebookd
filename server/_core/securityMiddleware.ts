@@ -36,49 +36,19 @@ declare global {
 // SECURITY HEADERS MIDDLEWARE
 // ============================================================================
 
+// NOTE: CSP is set by security.ts (the canonical source). This middleware only
+// sets non-CSP headers to avoid conflicting directives.
 export const securityHeaders = (req: Request, res: Response, next: NextFunction) => {
-  // Prevent clickjacking
   res.setHeader('X-Frame-Options', 'DENY');
-  
-  // Prevent MIME type sniffing
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  
-  // Enable XSS protection
   res.setHeader('X-XSS-Protection', '1; mode=block');
-  
-  // Force HTTPS in production
   if (process.env.NODE_ENV === 'production') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   }
-  
-  // Content Security Policy
-  const csp = [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://alb.reddit.com https://www.redditstatic.com",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: https:",
-    "connect-src 'self' https://api.stripe.com",
-    "frame-ancestors 'none'",
-  ].join('; ');
-  
-  res.setHeader('Content-Security-Policy', csp);
-  
-  // Referrer policy
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  
-  // Permissions policy
-  res.setHeader('Permissions-Policy', 
-    'geolocation=(), ' +
-    'microphone=(), ' +
-    'camera=(), ' +
-    'payment=(), ' +
-    'usb=(), ' +
-    'magnetometer=(), ' +
-    'gyroscope=(), ' +
-    'accelerometer=()'
+  res.setHeader('Permissions-Policy',
+    'geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()'
   );
-  
   next();
 };
 

@@ -1,7 +1,7 @@
 import { eq, and, desc, sql, or } from "drizzle-orm";
 import { leads, messages } from "../../drizzle/schema";
 import { decrypt, encryptIfNeeded } from "../_core/crypto";
-import { hashPhoneNumber, normalizePhoneNumber } from "../_core/phone";
+import { hashPhoneNumber, normalizePhoneNumber, hashEmail } from "../_core/phone";
 import { logger } from "../_core/logger";
 import type { Db } from "../_core/context";
 import * as UsageService from "./usage.service";
@@ -9,6 +9,7 @@ import * as TcpaComplianceService from "./tcpa-compliance.service";
 import { withQueryTimeout, withQueryRetry, QueryPerformanceMonitor } from "../_core/query-timeout.service";
 import { searchLeads, getLeadByIdOptimized, getSearchMemoryStats } from "./lead-search-optimization.service";
 import { encryptMessage, decryptMessage, messageEncryption } from "../_core/message-encryption";
+import { autoTransitionOnOutbound } from "./lead-status-engine.service";
 
 function presentLead<T extends Record<string, any> | undefined>(lead: T): T {
   if (!lead) return lead;
@@ -115,6 +116,7 @@ export async function createLead(db: Db, data: {
     phoneHash,
     name: encryptIfNeeded(data.name) ?? undefined,
     email: encryptIfNeeded(data.email) ?? undefined,
+    emailHash: data.email ? hashEmail(data.email) : undefined,
     source: data.source,
     notes: data.notes,
   });
@@ -135,7 +137,10 @@ export async function updateLead(
   if (typeof data.notes !== "undefined") updatePayload.notes = data.notes;
   if (typeof data.appointmentAt !== "undefined") updatePayload.appointmentAt = data.appointmentAt;
   if (typeof data.name !== "undefined") updatePayload.name = encryptIfNeeded(data.name);
-  if (typeof data.email !== "undefined") updatePayload.email = encryptIfNeeded(data.email || null);
+  if (typeof data.email !== "undefined") {
+    updatePayload.email = encryptIfNeeded(data.email || null);
+    updatePayload.emailHash = data.email ? hashEmail(data.email) : null;
+  }
   if (typeof data.phone !== "undefined") {
     const normalizedPhone = normalizePhoneNumber(data.phone);
     updatePayload.phone = encryptIfNeeded(normalizedPhone);
@@ -197,7 +202,10 @@ export async function createMessage(db: Db, data: {
 }) {
   // Check if encryption is configured
   if (!messageEncryption.isConfigured()) {
-    logger.warn('Message encryption not configured, storing plain text');
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('ENCRYPTION_KEY is required in production. Cannot store messages without encryption.');
+    }
+    logger.warn('Message encryption not configured — storing plain text (development only)');
   }
 
   // Encrypt message body if encryption is available
@@ -241,6 +249,11 @@ export async function createMessage(db: Db, data: {
       .where(and(eq(leads.id, data.leadId), eq(leads.tenantId, data.tenantId)));
 
     if (data.direction === "outbound" && data.status !== "failed") {
+      // Auto-transition: new → contacted when first outbound SMS sent
+      await autoTransitionOnOutbound(tx as Db, data.tenantId, data.leadId).catch((err) =>
+        logger.warn("Auto-transition on outbound failed", { error: String(err) }),
+      );
+
       const incremented = await UsageService.incrementOutboundUsageIfAllowed(tx as Db, data.tenantId);
       if (!incremented) {
         logger.error("Usage counter could not be incremented — cap race, missing usage row, or plan mismatch", {

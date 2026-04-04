@@ -144,13 +144,17 @@ export async function removePhoneNumber(db: Db, tenantId: number, id: number) {
 }
 
 export async function setDefaultPhoneNumber(db: Db, tenantId: number, id: number) {
-  await db.update(phoneNumbers).set({ isDefault: false }).where(and(eq(phoneNumbers.tenantId, tenantId), isNull(phoneNumbers.deletedAt)));
-  await db.update(phoneNumbers).set({ isDefault: true }).where(and(eq(phoneNumbers.id, id), eq(phoneNumbers.tenantId, tenantId), isNull(phoneNumbers.deletedAt)));
+  await db.transaction(async (tx) => {
+    await tx.update(phoneNumbers).set({ isDefault: false }).where(and(eq(phoneNumbers.tenantId, tenantId), isNull(phoneNumbers.deletedAt)));
+    await tx.update(phoneNumbers).set({ isDefault: true }).where(and(eq(phoneNumbers.id, id), eq(phoneNumbers.tenantId, tenantId), isNull(phoneNumbers.deletedAt)));
+  });
 }
 
 export async function setInboundPhoneNumber(db: Db, tenantId: number, id: number) {
-  await db.update(phoneNumbers).set({ isInbound: false }).where(and(eq(phoneNumbers.tenantId, tenantId), isNull(phoneNumbers.deletedAt)));
-  await db.update(phoneNumbers).set({ isInbound: true }).where(and(eq(phoneNumbers.id, id), eq(phoneNumbers.tenantId, tenantId), isNull(phoneNumbers.deletedAt)));
+  await db.transaction(async (tx) => {
+    await tx.update(phoneNumbers).set({ isInbound: false }).where(and(eq(phoneNumbers.tenantId, tenantId), isNull(phoneNumbers.deletedAt)));
+    await tx.update(phoneNumbers).set({ isInbound: true }).where(and(eq(phoneNumbers.id, id), eq(phoneNumbers.tenantId, tenantId), isNull(phoneNumbers.deletedAt)));
+  });
 }
 
 export async function getSettings(db: Db, tenantId: number): Promise<Record<string, any>> {

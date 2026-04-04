@@ -30,8 +30,9 @@ export function EncryptionBadge({ variant = "badge", className = "" }: Encryptio
               All data we receive or access via your connected accounts (Google, Outlook, Calendly, etc.)
               is <strong>tokenized and encrypted using AES-256-GCM</strong> before storage.
               Sensitive information like phone numbers, emails, and client details are never stored
-              in plain text. Payment data is handled exclusively by Stripe and never touches our servers.
-              All connections use TLS encryption in transit.
+              in plain text. Calendar tokens and credentials are encrypted at rest — raw data from
+              your connected providers is not stored on our servers. Payment data is handled
+              exclusively by Stripe and never touches our servers. All connections use TLS encryption in transit.
             </p>
             <div className="flex flex-wrap gap-2 pt-1">
               <span className="inline-flex items-center gap-1 text-[10px] font-medium text-success bg-success/10 rounded-full px-2 py-0.5">
@@ -57,7 +58,7 @@ export function EncryptionBadge({ variant = "badge", className = "" }: Encryptio
   return (
     <div className={`inline-flex items-center gap-1.5 text-xs text-muted-foreground ${className}`}>
       <Shield className="h-3.5 w-3.5 text-success" />
-      <span>All data encrypted &amp; tokenized (AES-256)</span>
+      <span>Data encrypted &amp; tokenized — not stored server-side (AES-256)</span>
     </div>
   );
 }

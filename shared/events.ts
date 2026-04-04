@@ -52,7 +52,12 @@ export type EventType =
   | "waitlist.offer_accepted"
   | "waitlist.offer_declined"
   | "waitlist.offer_expired"
-  | "waitlist.slot_filled";
+  | "waitlist.slot_filled"
+  // Auto-status engine events (Phase 1)
+  | "lead.status_changed"
+  | "lead.auto_qualified"
+  | "lead.re_engaged"
+  | "lead.stale_detected";
 
 export interface EventPayload {
   id?: string;

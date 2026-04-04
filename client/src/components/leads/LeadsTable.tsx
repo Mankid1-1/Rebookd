@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Users, Plus, Phone, Mail, Calendar, Clock } from "lucide-react";
+import { MessageSquare, Users, Plus, Phone, Mail, Calendar, Clock, Zap } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -65,6 +65,20 @@ export function LeadsTable({ leads, isLoading, onAddClick, isFiltered, onClearFi
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
     return d.toLocaleDateString();
+  };
+
+  /** Activity indicator: green (<7d), yellow (7-14d), red (>14d or never) */
+  const getActivityColor = (date: Date | string | null) => {
+    if (!date) return "bg-red-500";
+    const diffDays = Math.floor((Date.now() - new Date(date).getTime()) / 86400000);
+    if (diffDays < 7) return "bg-green-500";
+    if (diffDays < 14) return "bg-yellow-500";
+    return "bg-red-500";
+  };
+
+  const isStale = (lead: Lead) => {
+    const tags = (lead as any).tags;
+    return Array.isArray(tags) && tags.includes("stale_detected");
   };
 
   const getInitials = (name: string | null) => {
@@ -195,8 +209,13 @@ export function LeadsTable({ leads, isLoading, onAddClick, isFiltered, onClearFi
                         </span>
                       </div>
                       <div className="min-w-0">
-                        <div className="font-medium truncate">
+                        <div className="font-medium truncate flex items-center gap-1.5">
                           {lead.name || "Unknown Lead"}
+                          {isStale(lead) && (
+                            <span className="inline-flex items-center gap-0.5 px-1 py-0 rounded text-[9px] font-medium bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">
+                              Stale
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Phone className="h-3 w-3" />
@@ -236,7 +255,7 @@ export function LeadsTable({ leads, isLoading, onAddClick, isFiltered, onClearFi
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <Clock className="h-3 w-3 text-muted-foreground" />
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${getActivityColor(lead.lastMessageAt)}`} />
                       <span className="text-sm">{formatDate(lead.lastMessageAt)}</span>
                     </div>
                   </TableCell>

@@ -158,3 +158,81 @@ export async function getEssentialAutomationStatuses(
 
   return results;
 }
+
+// ─── Industry-Based Smart Defaults ─────────────────────────────────────────
+
+export const INDUSTRY_RECOMMENDATIONS: Record<string, string[]> = {
+  beauty: [
+    "appointment_confirmation_chase", "inbound_response_sla", "welcome_new_lead",
+    "reduce_no_shows", "qualified_followup_1d", "cancellation_same_day",
+    "vip_winback_90d", "birthday_promo",
+  ],
+  healthcare: [
+    "appointment_confirmation_chase", "inbound_response_sla", "welcome_new_lead",
+    "reduce_no_shows",
+  ],
+  fitness: [
+    "appointment_confirmation_chase", "inbound_response_sla", "welcome_new_lead",
+    "reduce_no_shows", "qualified_followup_1d", "vip_winback_90d",
+  ],
+  wellness: [
+    "appointment_confirmation_chase", "inbound_response_sla", "welcome_new_lead",
+    "reduce_no_shows", "qualified_followup_1d", "birthday_promo",
+  ],
+  professional_services: [
+    "appointment_confirmation_chase", "inbound_response_sla", "welcome_new_lead",
+    "qualified_followup_1d",
+  ],
+  consulting: [
+    "appointment_confirmation_chase", "inbound_response_sla", "welcome_new_lead",
+    "qualified_followup_1d",
+  ],
+  education: [
+    "appointment_confirmation_chase", "inbound_response_sla", "welcome_new_lead",
+  ],
+  other: [
+    "appointment_confirmation_chase", "inbound_response_sla", "welcome_new_lead",
+    "reduce_no_shows", "qualified_followup_1d",
+  ],
+};
+
+/**
+ * Get recommended automation keys for a given industry.
+ */
+export function getRecommendedKeys(industry: string | null): string[] {
+  return INDUSTRY_RECOMMENDATIONS[industry ?? "other"] ?? INDUSTRY_RECOMMENDATIONS.other;
+}
+
+/**
+ * Batch-enable automations by key. Used by "Smart Setup" and onboarding.
+ * Idempotent — skips keys that already have automations.
+ */
+export async function batchEnableAutomations(
+  db: Db,
+  tenantId: number,
+  keys: string[],
+): Promise<{ enabled: number; skipped: number }> {
+  let enabled = 0;
+  let skipped = 0;
+
+  for (const key of keys) {
+    const template = automationTemplates.find(t => t.key === key);
+    if (!template) { skipped++; continue; }
+
+    const existing = await AutomationService.getAutomationByKey(db, tenantId, key);
+    if (existing) { skipped++; continue; }
+
+    await AutomationService.upsertAutomationByKey(db, tenantId, key, {
+      name: template.name,
+      category: template.category as any,
+      triggerType: (TRIGGER_MAPPING[template.trigger] || "custom") as any,
+      triggerConfig: {},
+      conditions: [],
+      actions: template.steps as any,
+      enabled: true,
+    });
+    enabled++;
+  }
+
+  return { enabled, skipped };
+}

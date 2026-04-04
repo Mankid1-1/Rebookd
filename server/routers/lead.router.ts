@@ -1,14 +1,18 @@
 import { z } from "zod";
+import { and, eq, desc, not, like } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createLeadSchema, updateLeadSchema, updateLeadStatusSchema, sendMessageSchema } from "../../shared/schemas/leads";
-import { tenantProcedure, router } from "../_core/trpc";
+import { tenantProcedure, router, createTrpcRateLimit } from "../_core/trpc";
 import { rewriteInTone } from "../_core/messageRewriter";
 import type { Tone } from "../_core/messageTemplates";
 import * as LeadService from "../services/lead.service";
 import * as BroadcastService from "../services/broadcast.service";
+import { leadStatusLog, leads as leadsTable } from "../../drizzle/schema";
+import { decrypt } from "../_core/crypto";
 import { scoreLead } from "../services/lead-scoring.service";
 import { emitEvent } from "../services/event-bus.service";
 import { isAppError } from "../_core/appErrors";
+import { recordStatusChange } from "../services/lead-status-engine.service";
 
 export const leadsRouter = router({
   list: tenantProcedure
@@ -67,6 +71,10 @@ export const leadsRouter = router({
   updateStatus: tenantProcedure
     .input(updateLeadStatusSchema)
     .mutation(async ({ ctx, input }) => {
+      const lead = await LeadService.getLeadById(ctx.db, ctx.tenantId, input.leadId);
+      if (lead) {
+        await recordStatusChange(ctx.db, ctx.tenantId, input.leadId, lead.status, input.status, "manual", `user:${ctx.user.id}`);
+      }
       await LeadService.updateLeadStatus(ctx.db, ctx.tenantId, input.leadId, input.status);
       return { success: true };
     }),
@@ -78,6 +86,7 @@ export const leadsRouter = router({
     }),
 
   sendMessage: tenantProcedure
+    .use(createTrpcRateLimit(30, 60_000, (ctx) => `sms:tenant:${ctx.tenantId}`))
     .input(sendMessageSchema)
     .mutation(async ({ ctx, input }) => {
       let finalBody = input.body;
@@ -104,6 +113,7 @@ export const leadsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const lead = await LeadService.getLeadById(ctx.db, ctx.tenantId, input.leadId);
       if (!lead) throw new TRPCError({ code: "NOT_FOUND" });
+      await recordStatusChange(ctx.db, ctx.tenantId, input.leadId, lead.status, "lost", "manual_no_show", `user:${ctx.user.id}`);
       await LeadService.updateLeadStatus(ctx.db, ctx.tenantId, input.leadId, "lost");
       await LeadService.addLeadTags(ctx.db, ctx.tenantId, input.leadId, ["no_show"]);
       await emitEvent({ type: "appointment.no_show", tenantId: ctx.tenantId, data: { leadId: input.leadId, appointmentTime: input.appointmentTime ?? lead.appointmentAt, phone: lead.phone, name: lead.name }, userId: ctx.user.id, timestamp: new Date() });
@@ -120,6 +130,7 @@ export const leadsRouter = router({
       const newVisitCount = ((lead as any).visitCount ?? 0) + 1;
       const loyaltyTier = newVisitCount >= 15 ? 'platinum' : newVisitCount >= 10 ? 'gold' : newVisitCount >= 5 ? 'silver' : newVisitCount >= 3 ? 'bronze' : null;
 
+      await recordStatusChange(ctx.db, ctx.tenantId, input.leadId, lead.status, "booked", "manual_booked", `user:${ctx.user.id}`);
       await LeadService.updateLead(ctx.db, ctx.tenantId, input.leadId, {
         status: "booked",
         appointmentAt: input.appointmentTime,
@@ -142,6 +153,7 @@ export const leadsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const lead = await LeadService.getLeadById(ctx.db, ctx.tenantId, input.leadId);
       if (!lead) throw new TRPCError({ code: "NOT_FOUND" });
+      await recordStatusChange(ctx.db, ctx.tenantId, input.leadId, lead.status, "contacted", "manual_cancelled", `user:${ctx.user.id}`);
       await LeadService.updateLeadStatus(ctx.db, ctx.tenantId, input.leadId, "contacted");
       await LeadService.addLeadTags(ctx.db, ctx.tenantId, input.leadId, ["cancelled"]);
 
@@ -250,4 +262,52 @@ export const leadsRouter = router({
   recentBroadcasts: tenantProcedure.query(async ({ ctx }) => {
     return BroadcastService.getRecentBroadcasts(ctx.db, ctx.tenantId);
   }),
+
+  // ─── Status History (auto-status engine) ─────────────────────────────────────
+
+  statusHistory: tenantProcedure
+    .input(z.object({ leadId: z.number(), limit: z.number().int().min(1).max(50).default(10) }))
+    .query(async ({ ctx, input }) => {
+      const rows = await ctx.db
+        .select()
+        .from(leadStatusLog)
+        .where(and(
+          eq(leadStatusLog.tenantId, ctx.tenantId),
+          eq(leadStatusLog.leadId, input.leadId),
+        ))
+        .orderBy(desc(leadStatusLog.createdAt))
+        .limit(input.limit);
+      return rows;
+    }),
+
+  recentAutoTransitions: tenantProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(50).default(20) }).optional())
+    .query(async ({ ctx, input }) => {
+      const limit = input?.limit ?? 20;
+      const rows = await ctx.db
+        .select({
+          id: leadStatusLog.id,
+          leadId: leadStatusLog.leadId,
+          leadName: leadsTable.name,
+          fromStatus: leadStatusLog.fromStatus,
+          toStatus: leadStatusLog.toStatus,
+          trigger: leadStatusLog.trigger,
+          triggeredBy: leadStatusLog.triggeredBy,
+          createdAt: leadStatusLog.createdAt,
+        })
+        .from(leadStatusLog)
+        .leftJoin(leadsTable, eq(leadStatusLog.leadId, leadsTable.id))
+        .where(and(
+          eq(leadStatusLog.tenantId, ctx.tenantId),
+          not(like(leadStatusLog.triggeredBy, "user:%")),
+        ))
+        .orderBy(desc(leadStatusLog.createdAt))
+        .limit(limit);
+
+      // Decrypt lead names for display
+      return rows.map(r => ({
+        ...r,
+        leadName: r.leadName ? (() => { try { return decrypt(r.leadName); } catch { return r.leadName; } })() : null,
+      }));
+    }),
 });

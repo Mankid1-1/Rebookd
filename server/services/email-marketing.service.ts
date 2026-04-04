@@ -31,31 +31,31 @@ const SEQUENCES: Record<string, SequenceStep[]> = {
       delayDays: 0, // Immediate
       subject: "Your personalized ROI breakdown from Rebooked",
       buildHtml: (ctx) => roiReportEmail(ctx),
-      buildText: (ctx) => `Hi ${ctx.name || "there"},\n\nHere's your personalized ROI breakdown:\n\nPotential monthly recovery: $${ctx.grossRevenue || 0}\nEstimated ROI: ${ctx.roi || 0}%\n\nClaim your free spot: https://rebooked.org/login\n\n— Brendan, Rebooked`,
+      buildText: (ctx) => `Hi ${ctx.name || "there"},\n\nHere's your personalized ROI breakdown:\n\nPotential monthly recovery: $${ctx.grossRevenue || 0}\nEstimated ROI: ${ctx.roi || 0}%\n\nClaim your free spot: https://rebooked.org/login\n\n— Aman, Rebooked`,
     },
     {
       delayDays: 2,
       subject: "How a salon recovered $2,400/month (without lifting a finger)",
       buildHtml: (ctx) => caseStudyEmail(ctx),
-      buildText: (ctx) => `Hi ${ctx.name || "there"},\n\nKayla from Studio K Hair Lounge recovered 11 no-shows in her first month — that's $700 back without doing anything.\n\nSee how it works: https://rebooked.org\n\n— Brendan, Rebooked`,
+      buildText: (ctx) => `Hi ${ctx.name || "there"},\n\nKayla from Studio K Hair Lounge recovered 11 no-shows in her first month — that's $700 back without doing anything.\n\nSee how it works: https://rebooked.org\n\n— Aman, Rebooked`,
     },
     {
       delayDays: 5,
       subject: "The real cost of doing nothing about no-shows",
       buildHtml: (ctx) => painAmplificationEmail(ctx),
-      buildText: (ctx) => `Hi ${ctx.name || "there"},\n\nEvery no-show costs you about $${ctx.avgValue || 80}. At ${ctx.noShows || 15} no-shows per month, that's $${(ctx.avgValue || 80) * (ctx.noShows || 15)} walking out the door.\n\nRebooked recovers 40% of those automatically.\n\nTry it free: https://rebooked.org/login\n\n— Brendan, Rebooked`,
+      buildText: (ctx) => `Hi ${ctx.name || "there"},\n\nEvery no-show costs you about $${ctx.avgValue || 80}. At ${ctx.noShows || 15} no-shows per month, that's $${(ctx.avgValue || 80) * (ctx.noShows || 15)} walking out the door.\n\nRebooked recovers 40% of those automatically.\n\nTry it free: https://rebooked.org/login\n\n— Aman, Rebooked`,
     },
     {
       delayDays: 9,
       subject: "Your free 35-day trial is waiting",
       buildHtml: (ctx) => trialInviteEmail(ctx),
-      buildText: (ctx) => `Hi ${ctx.name || "there"},\n\nRebooked is completely free for 35 days. If you don't see positive ROI, you don't pay. Simple as that.\n\nStart now: https://rebooked.org/login\n\n— Brendan, Rebooked`,
+      buildText: (ctx) => `Hi ${ctx.name || "there"},\n\nRebooked is completely free for 35 days. If you don't see positive ROI, you don't pay. Simple as that.\n\nStart now: https://rebooked.org/login\n\n— Aman, Rebooked`,
     },
     {
       delayDays: 14,
       subject: "Only a few Founder Spots left",
       buildHtml: (ctx) => urgencyEmail(ctx),
-      buildText: (ctx) => `Hi ${ctx.name || "there"},\n\nFounder Spots give you Rebooked completely free — forever. No monthly fee, no revenue share. We only have 10 and they're filling up.\n\nClaim yours: https://rebooked.org/login\n\n— Brendan, Rebooked`,
+      buildText: (ctx) => `Hi ${ctx.name || "there"},\n\nFounder Spots give you Rebooked completely free — forever. No monthly fee, no revenue share. We only have 10 and they're filling up.\n\nClaim yours: https://rebooked.org/login\n\n— Aman, Rebooked`,
     },
   ],
   "onboarding-nudge": [
@@ -63,19 +63,19 @@ const SEQUENCES: Record<string, SequenceStep[]> = {
       delayDays: 1,
       subject: "You're 2 minutes from your first recovered appointment",
       buildHtml: (ctx) => nudgeEmail(ctx, 1),
-      buildText: (ctx) => `Hi ${ctx.name || "there"},\n\nYou signed up for Rebooked but haven't finished setup yet. It takes about 2 minutes.\n\nFinish setup: https://rebooked.org/onboarding\n\n— Brendan, Rebooked`,
+      buildText: (ctx) => `Hi ${ctx.name || "there"},\n\nYou signed up for Rebooked but haven't finished setup yet. It takes about 2 minutes.\n\nFinish setup: https://rebooked.org/onboarding\n\n— Aman, Rebooked`,
     },
     {
       delayDays: 3,
       subject: "Quick question about your setup",
       buildHtml: (ctx) => nudgeEmail(ctx, 2),
-      buildText: (ctx) => `Hi ${ctx.name || "there"},\n\nNoticed you haven't finished setting up Rebooked. Is something blocking you? Reply to this email — I read every one.\n\n— Brendan, Rebooked`,
+      buildText: (ctx) => `Hi ${ctx.name || "there"},\n\nNoticed you haven't finished setting up Rebooked. Is something blocking you? Reply to this email — I read every one.\n\n— Aman, Rebooked`,
     },
     {
       delayDays: 7,
       subject: "Last chance: your Rebooked setup is waiting",
       buildHtml: (ctx) => nudgeEmail(ctx, 3),
-      buildText: (ctx) => `Hi ${ctx.name || "there"},\n\nYour Rebooked account is set up and ready. All you need to do is connect your calendar and choose your automations.\n\nFinish setup: https://rebooked.org/onboarding\n\n— Brendan, Rebooked`,
+      buildText: (ctx) => `Hi ${ctx.name || "there"},\n\nYour Rebooked account is set up and ready. All you need to do is connect your calendar and choose your automations.\n\nFinish setup: https://rebooked.org/onboarding\n\n— Aman, Rebooked`,
     },
   ],
 };
@@ -116,14 +116,15 @@ export async function enrollInSequence(
  * Called by the background worker on a 5-minute interval.
  */
 export async function processEmailSequenceQueue(db: MySql2Database<any>): Promise<number> {
-  // Fetch up to 20 pending items that are due
+  const batchLimit = parseInt(process.env.EMAIL_BATCH_LIMIT || "10", 10);
+  // Fetch pending items that are due
   const rows = await db.execute(sql`SELECT q.id, q.subscriberId, q.sequenceName, q.stepIndex,
                  s.email, s.name, s.roiData, s.industry, s.status as subStatus
           FROM email_sequence_queue q
           JOIN email_subscribers s ON s.id = q.subscriberId
           WHERE q.status = 'pending' AND q.scheduledAt <= NOW()
           ORDER BY q.scheduledAt ASC
-          LIMIT 20`);
+          LIMIT ${batchLimit}`);
 
   const items = (Array.isArray(rows) ? rows[0] : rows) as unknown as any[];
   if (!items?.length) return 0;
@@ -153,12 +154,17 @@ export async function processEmailSequenceQueue(db: MySql2Database<any>): Promis
         subject: step.subject,
         text: step.buildText(ctx),
         html: step.buildHtml(ctx),
+        type: "marketing",
       });
 
       const status = result.success ? "sent" : "failed";
       await db.execute(sql`UPDATE email_sequence_queue SET status = ${status}, sentAt = NOW() WHERE id = ${item.id}`);
 
-      if (result.success) sent++;
+      if (result.success) {
+        sent++;
+        // Throttle: 3-second delay between marketing emails to avoid burst sending
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
     } catch (err) {
       logger.error("Failed to send sequence email", { id: item.id, error: String(err) });
       await db.execute(sql`UPDATE email_sequence_queue SET status = 'failed', sentAt = NOW() WHERE id = ${item.id}`);
@@ -195,7 +201,8 @@ const brandStyles = {
   white: "#ffffff",
 };
 
-function emailWrapper(content: string): string {
+function emailWrapper(content: string, recipientEmail: string): string {
+  const unsubUrl = `https://rebooked.org/api/email/unsubscribe?email=${encodeURIComponent(recipientEmail)}`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -209,7 +216,7 @@ function emailWrapper(content: string): string {
     </div>
     <div style="text-align:center;margin-top:24px;font-size:12px;color:#9ca3af;">
       <p>Rebooked &middot; AI-powered SMS revenue recovery</p>
-      <p><a href="https://rebooked.org/unsubscribe?email={{email}}" style="color:#9ca3af;">Unsubscribe</a></p>
+      <p><a href="${unsubUrl}" style="color:#9ca3af;">Unsubscribe</a></p>
     </div>
   </div>
 </body>
@@ -241,7 +248,7 @@ function roiReportEmail(ctx: Record<string, any>): string {
     <p style="color:#6b7280;font-size:13px;">Based on 40% no-show recovery and 55% cancellation rebook rate.</p>
     ${ctaButton("Claim your free spot", "https://rebooked.org/login")}
     <p style="color:#9ca3af;font-size:12px;text-align:center;">No credit card required. 35-day ROI guarantee.</p>
-  `);
+  `, ctx.email || '');
 }
 
 function caseStudyEmail(ctx: Record<string, any>): string {
@@ -254,7 +261,7 @@ function caseStudyEmail(ctx: Record<string, any>): string {
     </blockquote>
     <p style="color:#374151;font-size:14px;">The best part? She was on a Founder Spot — completely free.</p>
     ${ctaButton("See how it works", "https://rebooked.org")}
-  `);
+  `, ctx.email || '');
 }
 
 function painAmplificationEmail(ctx: Record<string, any>): string {
@@ -267,7 +274,7 @@ function painAmplificationEmail(ctx: Record<string, any>): string {
     <p style="color:#374151;font-size:14px;line-height:1.6;">At $${avgValue} per appointment and ${noShows} no-shows a month, you're leaving <strong>$${monthlyCost.toLocaleString()}</strong> on the table. Every month. That's <strong>$${(monthlyCost * 12).toLocaleString()}</strong> a year.</p>
     <p style="color:#374151;font-size:14px;line-height:1.6;">Rebooked recovers 40% of those no-shows automatically with a single text sent at exactly the right time.</p>
     ${ctaButton("Stop the bleeding — try free", "https://rebooked.org/login")}
-  `);
+  `, ctx.email || '');
 }
 
 function trialInviteEmail(ctx: Record<string, any>): string {
@@ -282,8 +289,8 @@ function trialInviteEmail(ctx: Record<string, any>): string {
       <li>Set up in under 5 minutes</li>
     </ul>
     ${ctaButton("Start your free trial", "https://rebooked.org/login")}
-    <p style="color:#6b7280;font-size:13px;text-align:center;">— Brendan, founder of Rebooked</p>
-  `);
+    <p style="color:#6b7280;font-size:13px;text-align:center;">— Aman, founder of Rebooked</p>
+  `, ctx.email || '');
 }
 
 function urgencyEmail(ctx: Record<string, any>): string {
@@ -296,7 +303,7 @@ function urgencyEmail(ctx: Record<string, any>): string {
     </div>
     <p style="color:#374151;font-size:14px;">Once they're gone, the next tier is $199/month + 15% revenue share (still with the 35-day guarantee).</p>
     ${ctaButton("Claim your Founder Spot", "https://rebooked.org/login")}
-  `);
+  `, ctx.email || '');
 }
 
 function nudgeEmail(ctx: Record<string, any>, step: number): string {
@@ -314,6 +321,6 @@ function nudgeEmail(ctx: Record<string, any>, step: number): string {
     <p style="color:#6b7280;font-size:14px;">Hi ${ctx.name || "there"},</p>
     ${messages[step] || ""}
     ${ctaButton("Finish setup", "https://rebooked.org/onboarding")}
-    <p style="color:#6b7280;font-size:13px;text-align:center;">— Brendan, Rebooked</p>
-  `);
+    <p style="color:#6b7280;font-size:13px;text-align:center;">— Aman, Rebooked</p>
+  `, ctx.email || '');
 }

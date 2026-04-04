@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { eq, and, sql, gte, lte, desc, isNull } from "drizzle-orm";
 import { paginationSchema } from "../../shared/schemas/leads";
-import { tenants, subscriptions, users, leads, automations } from "../../drizzle/schema";
+import { tenants, subscriptions, users, leads, automations, plans } from "../../drizzle/schema";
 import type { Db } from "../_core/context";
 import { adminProcedure, router } from "../_core/trpc";
 import * as TenantService from "../services/tenant.service";
@@ -108,6 +108,29 @@ export const adminRouter = router({
           currentPeriodEnd: sql`DATE_ADD(NOW(), INTERVAL 30 DAY)`,
         });
       }
+
+      // Sync plan change to Stripe if a Stripe subscription exists
+      const stripeSubId = existingSub?.stripeId || existingSub?.stripeSubscriptionId;
+      if (stripeSubId) {
+        try {
+          const { stripe } = await import("../_core/stripe");
+          const [plan] = await ctx.db.select({ stripePriceId: plans.stripePriceId })
+            .from(plans).where(eq(plans.id, input.planId)).limit(1);
+          if (plan?.stripePriceId) {
+            const stripeSub = await stripe.subscriptions.retrieve(stripeSubId);
+            const itemId = stripeSub.items.data[0]?.id;
+            if (itemId) {
+              await stripe.subscriptions.update(stripeSubId, {
+                items: [{ id: itemId, price: plan.stripePriceId }],
+                proration_behavior: 'create_prorations',
+              });
+            }
+          }
+        } catch (err) {
+          console.error("Failed to sync plan change to Stripe (local DB updated):", err);
+        }
+      }
+
       await auditAdminRead(ctx, "admin.changePlan", { tenantId: input.tenantId, planId: input.planId });
       return { success: true };
     }),

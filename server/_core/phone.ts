@@ -15,3 +15,8 @@ export function normalizePhoneNumber(input: string): string {
 export function hashPhoneNumber(normalizedPhone: string): string {
   return createHash("sha256").update(normalizedPhone).digest("hex");
 }
+
+export function hashEmail(email: string): string {
+  const normalized = email.trim().toLowerCase();
+  return createHash("sha256").update(normalized).digest("hex");
+}

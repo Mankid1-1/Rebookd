@@ -24,7 +24,7 @@ import { AcuityProvider } from "./acuity.provider";
 import { emitEvent } from "../event-bus.service";
 import { createLead } from "../lead.service";
 import { encrypt, decrypt, encryptIfNeeded } from "../../_core/crypto";
-import { hashPhoneNumber, normalizePhoneNumber } from "../../_core/phone";
+import { hashPhoneNumber, normalizePhoneNumber, hashEmail } from "../../_core/phone";
 
 // Provider registry
 const providers: Record<string, CalendarProvider> = {
@@ -399,13 +399,13 @@ async function matchEventToLead(
     }
   }
 
-  // Try email match via encrypted comparison
+  // Try email match via deterministic hash (encrypted values are non-deterministic)
   if (event.attendeeEmail) {
-    const encEmail = encryptIfNeeded(event.attendeeEmail);
+    const eHash = hashEmail(event.attendeeEmail);
     const [lead] = await db
       .select({ id: leads.id })
       .from(leads)
-      .where(and(eq(leads.tenantId, tenantId), eq(leads.email, encEmail)))
+      .where(and(eq(leads.tenantId, tenantId), eq(leads.emailHash, eHash)))
       .limit(1);
     if (lead) return lead.id;
   }

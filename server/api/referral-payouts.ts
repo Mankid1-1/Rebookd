@@ -71,8 +71,8 @@ export const referralPayoutsRouter = {
         throw new Error("Unauthorized: You can only view your own payout timeline");
       }
 
-      const timeline = await getUserPayoutTimeline(input.userId);
-      
+      const timeline = await getUserPayoutTimeline(Number(input.userId));
+
       return {
         success: true,
         timeline,
@@ -84,7 +84,7 @@ export const referralPayoutsRouter = {
   // Get current user's payout timeline (protected - no input needed)
   getMyPayoutTimeline: protectedProcedure
     .query(async ({ ctx }) => {
-      const timeline = await getUserPayoutTimeline(ctx.user.id.toString());
+      const timeline = await getUserPayoutTimeline(ctx.user.id);
       
       return {
         success: true,

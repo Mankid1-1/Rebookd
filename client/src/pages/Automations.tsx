@@ -1114,6 +1114,8 @@ export default function Automations() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {/* Smart Setup: industry-based batch enable */}
+            <SmartSetupButton />
             {/* Beginner: "Enable All Recommended" batch button */}
             {skillLevel === "beginner" && recommendedOneClick.length > 0 && (
               <div className="flex items-center gap-1">
@@ -1261,5 +1263,66 @@ export default function Automations() {
         />
       )}
     </DashboardLayout>
+  );
+}
+
+function SmartSetupButton() {
+  const [open, setOpen] = useState(false);
+  const { data } = trpc.automations.getRecommendedAutomations.useQuery(undefined, { enabled: open });
+  const utils = trpc.useUtils();
+  const batchEnable = trpc.automations.batchQuickEnable.useMutation({
+    onSuccess: (result) => {
+      toast.success(`Enabled ${result.enabled} automations${result.skipped ? ` (${result.skipped} already active)` : ""}`);
+      setOpen(false);
+      utils.automations.list.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)} className="gap-1.5">
+        <Zap className="w-3.5 h-3.5 text-amber-500" /> Smart Setup
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-amber-500" /> Smart Setup
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Based on your industry ({data?.industry ?? "..."}), we recommend enabling these automations:
+            </p>
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {data?.recommended?.map((r: any) => (
+                <div key={r.key} className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+                  <Star className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{r.name}</p>
+                    <p className="text-xs text-muted-foreground">{r.category}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  if (data?.recommended) {
+                    batchEnable.mutate({ keys: data.recommended.map((r: any) => r.key) });
+                  }
+                }}
+                disabled={batchEnable.isPending || !data?.recommended?.length}
+              >
+                {batchEnable.isPending ? "Enabling..." : `Enable ${data?.recommended?.length ?? 0} automations`}
+              </Button>
+              <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

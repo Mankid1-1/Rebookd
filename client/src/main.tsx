@@ -37,7 +37,8 @@ const queryClient = new QueryClient({
 });
 
 // Public routes that should never auto-redirect to login
-const PUBLIC_PATHS = ["/", "/login", "/signup", "/privacy", "/terms", "/tcpa", "/support"];
+const PUBLIC_PATHS = ["/", "/login", "/signup", "/privacy", "/terms", "/tcpa", "/support", "/lostrevenuecalculator"];
+const PUBLIC_PREFIXES = ["/for/", "/blog"];
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
@@ -48,7 +49,7 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   // Don't redirect if already on a public page
   const path = window.location.pathname;
-  if (PUBLIC_PATHS.includes(path) || path === getLoginUrl()) return;
+  if (PUBLIC_PATHS.includes(path) || PUBLIC_PREFIXES.some(p => path.startsWith(p)) || path === getLoginUrl()) return;
 
   window.location.href = getLoginUrl();
 };
@@ -96,6 +97,28 @@ const trpcClient = trpc.createClient({
 
 // Core Web Vitals — lazy load to avoid blocking initial render
 import("@/lib/webVitals").then((m) => m.initWebVitals()).catch(() => {});
+
+// Reddit Pixel — deferred to avoid render-blocking (was inline in <head>)
+const initRedditPixel = () => {
+  if ((window as any).rdt) return;
+  const p = ((window as any).rdt = function (...args: any[]) {
+    p.sendEvent ? p.sendEvent(...args) : p.callQueue.push(args);
+  }) as any;
+  p.callQueue = [];
+  const t = document.createElement("script");
+  t.src = "https://www.redditstatic.com/ads/pixel.js";
+  t.async = true;
+  document.head.appendChild(t);
+  t.onload = () => {
+    (window as any).rdt("init", "a2_iqth093j5tj0");
+    (window as any).rdt("track", "PageVisit");
+  };
+};
+if ("requestIdleCallback" in window) {
+  requestIdleCallback(() => initRedditPixel());
+} else {
+  setTimeout(initRedditPixel, 2000);
+}
 
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>

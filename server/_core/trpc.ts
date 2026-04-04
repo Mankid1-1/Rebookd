@@ -81,3 +81,48 @@ const requireAdmin = t.middleware(async ({ ctx, next }) => {
 
 export const adminProcedure = t.procedure.use(requireAdmin);
 
+// ─── In-memory rate limiter for tRPC procedures ────────────────────────────
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+
+// Cleanup expired entries every 60 seconds
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitStore) {
+    if (entry.resetAt <= now) rateLimitStore.delete(key);
+  }
+}, 60_000);
+
+/**
+ * Creates a tRPC middleware that rate-limits by a key derived from context.
+ * @param maxRequests max requests per window
+ * @param windowMs window duration in milliseconds
+ * @param keyFn function to derive rate-limit key from context (default: userId)
+ */
+export function createTrpcRateLimit(
+  maxRequests: number,
+  windowMs: number,
+  keyFn?: (ctx: any, path: string) => string,
+) {
+  return t.middleware(async ({ ctx, next, path }) => {
+    const key = keyFn
+      ? keyFn(ctx, path)
+      : `trpc:${path}:user:${(ctx as any).user?.id ?? 'anon'}`;
+
+    const now = Date.now();
+    const entry = rateLimitStore.get(key);
+
+    if (entry && entry.resetAt > now) {
+      if (entry.count >= maxRequests) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Rate limit exceeded. Please try again shortly.",
+        });
+      }
+      entry.count++;
+    } else {
+      rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
+    }
+
+    return next();
+  });
+}

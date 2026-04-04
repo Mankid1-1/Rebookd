@@ -20,6 +20,18 @@ export function AuthGuard({ children, adminOnly = false, tenantOnly = false, fal
   const [, navigate] = useLocation();
   const [redirecting, setRedirecting] = useState(false);
 
+  // Prevent search engines from indexing any authenticated page
+  useEffect(() => {
+    let meta = document.querySelector('meta[name="robots"]') as HTMLMetaElement | null;
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.setAttribute("name", "robots");
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute("content", "noindex, nofollow");
+    return () => { meta?.remove(); };
+  }, []);
+
   useEffect(() => {
     if (!isLoading && !user && !redirecting) {
       setRedirecting(true);

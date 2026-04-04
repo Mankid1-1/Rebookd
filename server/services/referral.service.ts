@@ -82,7 +82,7 @@ function generateCode(userId: number): string {
   const signature = createHmac("sha256", REFERRAL_HMAC_SECRET)
     .update(`${userId}:${randomPart}`)
     .digest("hex")
-    .slice(0, 4)
+    .slice(0, 8)
     .toUpperCase();
 
   return `RB-${randomPart}${signature}`;
@@ -91,21 +91,27 @@ function generateCode(userId: number): string {
 /**
  * Verify that a referral code has a valid HMAC signature for the claimed owner.
  * Returns true if the code's signature matches the userId it was generated for.
+ * Supports both new 8-char signatures and legacy 4-char signatures.
  */
 export function verifyCodeSignature(code: string, userId: number): boolean {
-  // Extract parts: RB-<randomPart(10)><signature(4)>
   const body = code.replace("RB-", "");
   if (body.length < 6) return false;
-  const randomPart = body.slice(0, -4);
-  const claimedSig = body.slice(-4);
 
-  const expectedSig = createHmac("sha256", REFERRAL_HMAC_SECRET)
-    .update(`${userId}:${randomPart}`)
-    .digest("hex")
-    .slice(0, 4)
-    .toUpperCase();
+  // Try 8-char signature (new format), then 4-char (legacy)
+  for (const sigLen of [8, 4]) {
+    if (body.length < sigLen + 1) continue;
+    const randomPart = body.slice(0, -sigLen);
+    const claimedSig = body.slice(-sigLen);
 
-  return claimedSig === expectedSig;
+    const expectedSig = createHmac("sha256", REFERRAL_HMAC_SECRET)
+      .update(`${userId}:${randomPart}`)
+      .digest("hex")
+      .slice(0, sigLen)
+      .toUpperCase();
+
+    if (claimedSig === expectedSig) return true;
+  }
+  return false;
 }
 
 function getReferralLink(code: string): string {
@@ -275,7 +281,7 @@ export async function completeReferral(
 
   const now = new Date();
   const firstPayoutDate = new Date(now);
-  firstPayoutDate.setMonth(firstPayoutDate.getMonth()); // Immediate first payout
+  firstPayoutDate.setMonth(firstPayoutDate.getMonth() + 1); // First payout 30 days after completion
 
   await db
     .update(referrals)
@@ -283,7 +289,7 @@ export async function completeReferral(
       status: "completed",
       subscriptionId,
       completedAt: now,
-      payoutScheduledAt: firstPayoutDate, // Schedule first payout immediately
+      payoutScheduledAt: firstPayoutDate, // Schedule first payout 30 days from completion
       metadata: {
         ...(referral.metadata as any ?? {}),
         monthsPayedOut: 0,

@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { safeLocalRedirect } from "@/utils/safeRedirect";
+import { EncryptionBadge } from "@/components/ui/EncryptionBadge";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -329,9 +330,10 @@ export default function Setup() {
           />
           {expandedSection === "calendar" && (
             <CardContent className="pt-0 pb-4 px-4">
-              <p className="text-sm text-muted-foreground mb-3">
+              <p className="text-sm text-muted-foreground mb-2">
                 Connect your calendar so we can detect no-shows and send reminders.
               </p>
+              <EncryptionBadge variant="badge" className="mb-3" />
 
               {/* Connected calendars */}
               {calendarConnections && calendarConnections.length > 0 && (

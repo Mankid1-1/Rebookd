@@ -104,3 +104,47 @@
   background-color: var(--destructive);
   color: white;
 }
+
+/* ── ROI Calculator slider thumbs ────────────────────────────────────────── */
+.slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: white;
+  border: 3px solid currentColor;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 0 0 0 4px rgba(0, 168, 150, 0.1);
+  cursor: grab;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.slider-input::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2), 0 0 0 6px rgba(0, 168, 150, 0.15);
+}
+
+.slider-input::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.1);
+}
+
+.slider-input::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: white;
+  border: 3px solid currentColor;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  cursor: grab;
+  transition: transform 0.15s ease;
+}
+
+.slider-input::-moz-range-thumb:hover {
+  transform: scale(1.15);
+}
+
+.slider-input::-moz-range-track {
+  height: 12px;
+  border-radius: 9999px;
+}

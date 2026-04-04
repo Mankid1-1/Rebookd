@@ -4,11 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Phone, User, Mail, Calendar, MessageSquare, CalendarCheck, Clock, Activity } from "lucide-react";
+import { Phone, User, Mail, Calendar, MessageSquare, CalendarCheck, Clock, Activity, Zap, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import type { Lead } from "../../../../shared/interfaces";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const tierConfig = {
   cold: { label: "Cold", color: "bg-gray-500/10 text-gray-400 border-gray-500/20" },
@@ -263,6 +264,7 @@ export function LeadInfoSidebar({ lead, outboundCount, inboundCount }: LeadInfoS
       </Card>
 
       <LeadScoreCard leadId={lead.id} />
+      <StatusHistoryCard leadId={lead.id} />
     </div>
   );
 }
@@ -326,6 +328,75 @@ function LeadScoreCard({ leadId }: { leadId: number }) {
           ))}
         </div>
       </CardContent>
+    </Card>
+  );
+}
+
+const STATUS_NAMES: Record<string, string> = {
+  new: "New", contacted: "Contacted", qualified: "Qualified",
+  booked: "Booked", lost: "Lost", unsubscribed: "Unsubscribed",
+};
+const TRIGGER_LABELS: Record<string, string> = {
+  outbound_sms: "Outbound SMS", inbound_sms: "Inbound reply",
+  stop_keyword: "STOP keyword", start_keyword: "START keyword",
+  worker_stale: "Stale detected", manual: "Manual",
+  manual_no_show: "No-show", manual_booked: "Booked",
+  manual_cancelled: "Cancelled",
+};
+
+function StatusHistoryCard({ leadId }: { leadId: number }) {
+  const [open, setOpen] = useState(false);
+  const { data: history = [], isLoading } = trpc.leads.statusHistory.useQuery(
+    { leadId, limit: 5 },
+    { enabled: !!leadId },
+  );
+
+  if (isLoading || history.length === 0) return null;
+
+  function timeAgo(date: string | Date) {
+    const diff = Date.now() - new Date(date).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  }
+
+  return (
+    <Card className="border-border bg-card">
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <CollapsibleTrigger asChild>
+          <CardHeader className="pb-3 border-b border-border cursor-pointer hover:bg-muted/30 transition-colors">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-amber-500" /> Status History
+              </CardTitle>
+              {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+            </div>
+          </CardHeader>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent className="p-4">
+            <div className="space-y-2.5">
+              {history.map((entry) => {
+                const isAuto = !entry.triggeredBy?.startsWith("user:");
+                return (
+                  <div key={entry.id} className="flex items-start gap-2 text-xs">
+                    <div className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${isAuto ? "bg-amber-500" : "bg-muted-foreground"}`} />
+                    <div className="flex-1 min-w-0">
+                      <span className="font-medium">{STATUS_NAMES[entry.toStatus] ?? entry.toStatus}</span>
+                      <span className="text-muted-foreground"> from {STATUS_NAMES[entry.fromStatus] ?? entry.fromStatus}</span>
+                      <div className="text-muted-foreground mt-0.5">
+                        {TRIGGER_LABELS[entry.trigger] ?? entry.trigger} &middot; {timeAgo(entry.createdAt)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </CollapsibleContent>
+      </Collapsible>
     </Card>
   );
 }

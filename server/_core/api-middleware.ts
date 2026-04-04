@@ -17,34 +17,15 @@ export function requestIdMiddleware(req: Request, res: Response, next: NextFunct
 }
 
 // ─── Security Headers Middleware ──────────────────────────────────────────────
+// NOTE: CSP is set by security.ts (the canonical source). This middleware only
+// sets non-CSP headers to avoid conflicting directives.
 export function securityHeadersMiddleware(req: Request, res: Response, next: NextFunction) {
-  // Prevent clickjacking
   res.setHeader('X-Frame-Options', 'DENY');
-  
-  // Prevent MIME type sniffing
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  
-  // Enable XSS protection
   res.setHeader('X-XSS-Protection', '1; mode=block');
-  
-  // Content Security Policy — no unsafe-inline for scripts (styles still need it for CSS-in-JS)
-  res.setHeader(
-    'Content-Security-Policy',
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.stripe.com https://js.stripe.com; font-src 'self' https://fonts.gstatic.com; frame-src https://js.stripe.com;"
-  );
-  
-  // Referrer Policy
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  
-  // Feature Policy (Permissions Policy)
-  res.setHeader(
-    'Permissions-Policy',
-    'camera=(), microphone=(), geolocation=(), payment=()'
-  );
-  
-  // HSTS (Strict Transport Security)
-  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-  
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   next();
 }
 

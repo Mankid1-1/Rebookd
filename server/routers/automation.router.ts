@@ -195,6 +195,28 @@ export const automationsRouter = router({
 
       return { success: true };
     }),
+
+  // ─── Smart Setup: Industry-Based Batch Enable ──────────────────────────────
+
+  getRecommendedAutomations: tenantProcedure.query(async ({ ctx }) => {
+    const { getRecommendedKeys, INDUSTRY_RECOMMENDATIONS } = await import("../services/essential-automations.service");
+    const tenant = await TenantService.getTenantById(ctx.db, ctx.tenantId);
+    const industry = tenant?.industry ?? "other";
+    const keys = getRecommendedKeys(industry);
+    const recommended = keys.map(key => {
+      const template = automationTemplates.find(t => t.key === key);
+      return template ? { key, name: template.name, category: template.category } : null;
+    }).filter(Boolean);
+    return { industry, recommended };
+  }),
+
+  batchQuickEnable: tenantProcedure
+    .input(z.object({ keys: z.array(z.string()).min(1).max(20) }))
+    .mutation(async ({ ctx, input }) => {
+      const { batchEnableAutomations } = await import("../services/essential-automations.service");
+      const result = await batchEnableAutomations(ctx.db, ctx.tenantId, input.keys);
+      return result;
+    }),
 });
 
 export const aiRouter = router({

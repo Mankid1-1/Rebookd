@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import { EncryptionBadge } from "@/components/ui/EncryptionBadge";
 import { useTheme } from "@/contexts/ThemeContext";
 import ROIGuaranteeTracker from "@/components/dashboard/ROIGuaranteeTracker";
 import { BestSendTimeCard } from "@/components/dashboard/DashboardStats";
@@ -197,6 +198,7 @@ function CalendarSyncWidget() {
                   ? `Last synced ${new Date(lastSync).toLocaleTimeString()}`
                   : "Auto-import contacts from appointments"}
               </p>
+              <EncryptionBadge variant="badge" className="mt-1" />
             </div>
           </div>
           <Button variant="outline" size="sm" onClick={() => navigate("/calendar-integration")}>
@@ -1559,6 +1561,9 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
 
+              {/* Auto-Status Activity Feed */}
+              <AutoActivityFeed />
+
               {/* Recent Activity Feed */}
               <Card className="lg:col-span-3 border-border/50 bg-card/80 backdrop-blur-sm">
                 <CardHeader className="pb-2 flex flex-row items-center justify-between">
@@ -1780,5 +1785,71 @@ export default function Dashboard() {
         </Dialog>
       </div>
     </DashboardLayout>
+  );
+}
+
+const AUTO_STATUS_LABELS: Record<string, string> = {
+  new: "New", contacted: "Contacted", qualified: "Qualified",
+  booked: "Booked", lost: "Lost", unsubscribed: "Unsubscribed",
+};
+const AUTO_TRIGGER_LABELS: Record<string, string> = {
+  outbound_sms: "outbound SMS", inbound_sms: "replied to SMS",
+  stop_keyword: "replied STOP", start_keyword: "replied START",
+  worker_stale: "no activity detected",
+};
+
+function AutoActivityFeed() {
+  const { data: transitions = [], isLoading } = trpc.leads.recentAutoTransitions.useQuery(
+    { limit: 8 },
+    { refetchInterval: 60_000 },
+  );
+  const [, setLocation] = useLocation();
+
+  if (isLoading || transitions.length === 0) return null;
+
+  function timeAgo(date: string | Date) {
+    const diff = Date.now() - new Date(date).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  }
+
+  return (
+    <Card className="lg:col-span-3 border-border/50 bg-card/80 backdrop-blur-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <Zap className="w-4 h-4 text-amber-500" /> Auto-Status Activity
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-1.5 max-h-[260px] overflow-y-auto pr-1 scrollbar-thin">
+          {transitions.map((t: any) => (
+            <div
+              key={t.id}
+              className="flex items-start gap-2.5 p-2.5 rounded-lg bg-muted/10 hover:bg-muted/30 transition-colors cursor-pointer"
+              onClick={() => setLocation(`/leads/${t.leadId}` as any)}
+            >
+              <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                <Zap className="w-3 h-3 text-amber-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium">
+                    {t.leadName || `Lead #${t.leadId}`}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">{timeAgo(t.createdAt)}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {AUTO_STATUS_LABELS[t.fromStatus] ?? t.fromStatus} &rarr; {AUTO_STATUS_LABELS[t.toStatus] ?? t.toStatus}
+                  {" "}&middot; {AUTO_TRIGGER_LABELS[t.trigger] ?? t.trigger}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

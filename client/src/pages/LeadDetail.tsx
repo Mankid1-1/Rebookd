@@ -3,12 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Zap } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { LeadInfoSidebar } from "@/components/leads/LeadInfoSidebar";
 import { LeadConversation } from "@/components/leads/LeadConversation";
 import { LeadMessageComposer } from "@/components/leads/LeadMessageComposer";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const STATUS_STYLES: Record<string, string> = {
   new: "bg-info/20 text-info border-info/30",
@@ -42,10 +43,31 @@ export default function LeadDetail() {
     { enabled: !!leadId && !!lead, refetchInterval: 25_000, refetchIntervalInBackground: false }
   );
 
+  const { data: statusHistory = [] } = trpc.leads.statusHistory.useQuery(
+    { leadId, limit: 1 },
+    { enabled: !!leadId && !!lead },
+  );
+
+  const lastTransition = statusHistory[0];
+  const isAutoSet = lastTransition && !lastTransition.triggeredBy?.startsWith("user:");
+
+  const TRIGGER_LABELS: Record<string, string> = {
+    outbound_sms: "outbound SMS sent",
+    inbound_sms: "inbound reply received",
+    stop_keyword: "STOP keyword received",
+    start_keyword: "START keyword received",
+    worker_stale: "no activity detected",
+    manual: "manually updated",
+    manual_no_show: "marked as no-show",
+    manual_booked: "marked as booked",
+    manual_cancelled: "marked as cancelled",
+  };
+
   const updateStatus = trpc.leads.updateStatus.useMutation({
     onSuccess: () => {
       utils.leads.list.invalidate();
       utils.leads.get.invalidate({ leadId });
+      utils.leads.statusHistory.invalidate({ leadId });
     },
     onError: (err) => toast.error(err.message),
   });
@@ -107,19 +129,35 @@ export default function LeadDetail() {
               )}
             </div>
           </div>
-          <Select
-            value={lead.status}
-            onValueChange={(v) => updateStatus.mutate({ leadId, status: v as any })}
-          >
-            <SelectTrigger className={`w-36 h-8 text-xs border ${STATUS_STYLES[lead.status] ?? ""}`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(STATUS_LABELS).map(([val, label]) => (
-                <SelectItem key={val} value={val}>{label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-1.5">
+            {isAutoSet && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                      <Zap className="w-3 h-3" /> Auto
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[220px] text-xs">
+                    Auto-updated: {TRIGGER_LABELS[lastTransition.trigger] ?? lastTransition.trigger}. You can change this manually.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            <Select
+              value={lead.status}
+              onValueChange={(v) => updateStatus.mutate({ leadId, status: v as any })}
+            >
+              <SelectTrigger className={`w-36 h-8 text-xs border ${STATUS_STYLES[lead.status] ?? ""}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(STATUS_LABELS).map(([val, label]) => (
+                  <SelectItem key={val} value={val}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-5">

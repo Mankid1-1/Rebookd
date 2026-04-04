@@ -35,37 +35,12 @@
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800&family=Space+Grotesk:wght@400;500;600;700&display=swap" />
     <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800&family=Space+Grotesk:wght@400;500;600;700&display=swap" />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800&family=Space+Grotesk:wght@400;500;600;700&display=swap" /></noscript>
-    <!-- DNS prefetch for key third-party origins -->
+    <!-- DNS prefetch / preconnect for key third-party origins -->
+    <link rel="preconnect" href="https://js.stripe.com" crossorigin />
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
     <link rel="dns-prefetch" href="https://www.redditstatic.com" />
-    <link rel="dns-prefetch" href="https://connect.facebook.net" />
     <!-- Umami Analytics — free, cookie-free, GDPR-compliant -->
-    <!-- Sign up at https://cloud.umami.is, add your site, and replace YOUR_WEBSITE_ID below -->
     <script defer src="https://cloud.umami.is/script.js" data-website-id="57500d62-29f5-4761-87be-e96cb4b1174f"></script>
-
-    <!-- Reddit Pixel -->
-    <script>
-    !function(w,d){if(!w.rdt){var p=w.rdt=function(){p.sendEvent?p.sendEvent.apply(p,arguments):p.callQueue.push(arguments)};p.callQueue=[];var t=d.createElement("script");t.src="https://www.redditstatic.com/ads/pixel.js",t.async=!0;var s=d.getElementsByTagName("script")[0];s.parentNode.insertBefore(t,s)}}(window,document);
-    rdt('init','a2_iqth093j5tj0');
-    rdt('track', 'PageVisit');
-    </script>
-
-    <!-- Meta Pixel (Facebook) — replace YOUR_PIXEL_ID with your actual numeric Pixel ID -->
-    <script>
-    !function(f,b,e,v,n,t,s)
-    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-    n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];
-    s.parentNode.insertBefore(t,s)}(window, document,'script',
-    'https://connect.facebook.net/en_US/fbevents.js');
-    var _metaPixelId = 'YOUR_PIXEL_ID';
-    if (_metaPixelId && /^\d+$/.test(_metaPixelId)) {
-      fbq('init', _metaPixelId);
-      fbq('track', 'PageView');
-    }
-    </script>
 
     <!-- Google Ads / GA4 -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-VN080MDS1J"></script>
@@ -88,9 +63,6 @@
   </head>
 
   <body>
-    <!-- Meta Pixel noscript fallback (must be in body, not head) -->
-    <!-- Meta Pixel noscript fallback: only renders once YOUR_PIXEL_ID is replaced with a real numeric ID -->
-    <!-- <noscript><img height="1" width="1" style="display:none" alt="" src="https://www.facebook.com/tr?id=YOUR_PIXEL_ID&ev=PageView&noscript=1"/></noscript> -->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
 

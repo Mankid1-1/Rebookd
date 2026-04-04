@@ -4,7 +4,7 @@
  */
 
 import Stripe from 'stripe';
-import { eq } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { getDb } from '../db';
 import { TRPCError } from '@trpc/server';
 import { ENV } from '../_core/env';
@@ -67,6 +67,23 @@ export async function createCheckoutSession(data: CheckoutSessionData): Promise<
     }
 
     const planType = data.planType || 'flex';
+
+    // Enforce founder slot limit (max 20 founder spots)
+    if (planType === 'founder') {
+      const db = await getDb();
+      const [countResult] = await db.select({ c: sql<number>`count(*)` })
+        .from(subscriptions)
+        .where(and(
+          eq(subscriptions.isPromotional, true),
+          eq(subscriptions.status, 'active'),
+        ));
+      if (Number(countResult?.c) >= 20) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'All 20 Founder Spots have been claimed. Please choose the Flex plan instead.',
+        });
+      }
+    }
 
     // Build line items based on plan type
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];

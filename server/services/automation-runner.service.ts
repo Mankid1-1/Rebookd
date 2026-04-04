@@ -218,6 +218,10 @@ function eventToTriggerTypes(eventType: EventPayload["type"]): string[] {
       "lead.loyalty_milestone": ["loyalty_milestone"],
       "review.requested": ["review_request"],
       "waitlist.slot_opened": ["waitlist_slot_opened", "cancellation_flurry"],
+      "lead.status_changed": ["status_change"],
+      "lead.auto_qualified": ["status_change"],
+      "lead.re_engaged": ["status_change"],
+      "lead.stale_detected": ["status_change"],
     } as Record<string, string[]>)[eventType] ?? (() => {
       logger.warn("Unmapped event type in eventToTriggerTypes — no automations will fire", { eventType });
       return [] as string[];

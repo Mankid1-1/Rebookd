@@ -421,10 +421,11 @@ export const subscriptions = mysqlTable("subscriptions", {
   stripeIdIdx: uniqueIndex("subscriptions_stripe_id_idx").on(t.stripeId),
   stripeSubscriptionIdIdx: uniqueIndex("subscriptions_stripe_subscription_id_idx").on(t.stripeSubscriptionId),
   statusIdx: index("subscriptions_status_idx").on(t.status),
-  
+
   // Composite indexes
   tenantStatusIdx: index("subscriptions_tenant_status_idx").on(t.tenantId, t.status),
   billingPeriodIdx: index("subscriptions_billing_period_idx").on(t.currentPeriodStart, t.currentPeriodEnd),
+  statusPeriodEndIdx: index("idx_subscriptions_status_period_end").on(t.status, t.currentPeriodEnd),
 }));
 
 export type Subscription = typeof subscriptions.$inferSelect;
@@ -514,10 +515,11 @@ export type PhoneNumber = typeof phoneNumbers.$inferSelect;
 export const leads = mysqlTable("leads", {
   id: int("id").autoincrement().primaryKey(),
   tenantId: int("tenantId").notNull().references(() => tenants.id),
-  phone: varchar("phone", { length: 500 }).notNull(),
+  phone: varchar("phone", { length: 200 }).notNull(), // stores AES-256-GCM encrypted data (~96 chars)
   phoneHash: varchar("phoneHash", { length: 64 }).notNull(),
   name: varchar("name", { length: 255 }),
   email: varchar("email", { length: 320 }),
+  emailHash: varchar("emailHash", { length: 64 }),
   status: mysqlEnum("status", ["new", "contacted", "qualified", "booked", "lost", "unsubscribed"]).default("new").notNull(),
   source: varchar("source", { length: 100 }),
   tags: json("tags").$type<string[]>(),
@@ -545,7 +547,9 @@ export const leads = mysqlTable("leads", {
   tenantIdIdx: index("leads_tenant_id_idx").on(t.tenantId),
   phoneHashIdx: uniqueIndex("leads_phone_hash_idx").on(t.tenantId, t.phoneHash),
   statusIdx: index("leads_status_idx").on(t.tenantId, t.status),
+  tenantStatusUpdatedIdx: index("idx_leads_tenant_status_updated").on(t.tenantId, t.status, t.updatedAt),
   createdAtIdx: index("leads_created_at_idx").on(t.tenantId, t.createdAt),
+  emailHashIdx: index("leads_email_hash_idx").on(t.tenantId, t.emailHash),
   searchIdx: index("leads_search_idx").on(t.tenantId, t.name, t.email),
   consentIdx: index("leads_consent_idx").on(t.tenantId, t.smsConsentAt),
   birthdayIdx: index("leads_birthday_idx").on(t.tenantId, t.birthday),
@@ -583,6 +587,7 @@ export const messages = mysqlTable("messages", {
   tenantLeadIdx: index("messages_tenant_lead_idx").on(t.tenantId, t.leadId),
   createdAtIdx: index("messages_created_at_idx").on(t.tenantId, t.createdAt),
   idempotencyKeyIdx: uniqueIndex("messages_idempotency_key_idx").on(t.tenantId, t.idempotencyKey),
+  tenantLeadStatusIdx: index("idx_messages_tenant_lead_status").on(t.tenantId, t.leadId, t.status),
 }));
 
 export type Message = typeof messages.$inferSelect;
@@ -682,7 +687,9 @@ export const automationJobs = mysqlTable("automation_jobs", {
   lastError: text("lastError"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (t) => ({
+  statusNextRunIdx: index("idx_automation_jobs_status_next_run").on(t.status, t.nextRunAt),
+}));
 
 export type AutomationJob = typeof automationJobs.$inferSelect;
 
@@ -1437,3 +1444,22 @@ export const waitlistOffers = mysqlTable("waitlist_offers", {
 }));
 
 export type WaitlistOffer = typeof waitlistOffers.$inferSelect;
+
+// ─── Lead Status Log ─────────────────────────────────────────────────────────
+
+export const leadStatusLog = mysqlTable("lead_status_log", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().references(() => tenants.id),
+  leadId: int("leadId").notNull().references(() => leads.id),
+  fromStatus: varchar("fromStatus", { length: 20 }).notNull(),
+  toStatus: varchar("toStatus", { length: 20 }).notNull(),
+  trigger: varchar("trigger", { length: 100 }).notNull(),
+  triggeredBy: varchar("triggeredBy", { length: 50 }).notNull(),
+  metadata: json("metadata"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => ({
+  tenantLeadIdx: index("idx_lsl_tenant_lead").on(t.tenantId, t.leadId),
+  tenantCreatedIdx: index("idx_lsl_tenant_created").on(t.tenantId, t.createdAt),
+}));
+
+export type LeadStatusLog = typeof leadStatusLog.$inferSelect;

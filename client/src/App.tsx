@@ -67,6 +67,7 @@ const Setup = lazy(() => import("@/pages/Setup"));
 
 // Industry landing pages
 const IndustryLanding = lazy(() => import("@/pages/IndustryLanding"));
+const ROICalculator = lazy(() => import("@/pages/ROICalculator"));
 
 // Blog pages - lazy loaded
 const Blog = lazy(() => import("@/pages/Blog"));
@@ -137,6 +138,7 @@ function Router() {
 
       {/* Industry-specific landing pages */}
       <Route path="/for/:industry" component={IndustryLanding} />
+      <Route path="/lostrevenuecalculator" component={ROICalculator} />
 
       {/* Blog */}
       <Route path="/blog" component={Blog} />

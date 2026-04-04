@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { phoneSchema } from "../../shared/schemas/leads";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { subscriptions, tenants, users, tenantInvitations } from "../../drizzle/schema";
-import { sendEmail } from "../_core/email";
+import { sendEmail, transactionalWrapper } from "../_core/email";
 import { protectedProcedure, tenantProcedure, router } from "../_core/trpc";
 import { randomUUID } from "crypto";
 import * as TenantService from "../services/tenant.service";
@@ -58,6 +58,29 @@ export const tenantRouter = router({
         ...coreFields,
         ...(Object.keys(settingsFields).length > 0 ? { settings: settingsFields } : {}),
       });
+      return { success: true };
+    }),
+
+  // ─── Auto-Status Settings ────────────────────────────────────────────────────
+
+  getAutoStatusSettings: tenantProcedure.query(async ({ ctx }) => {
+    const tenant = await TenantService.getTenantById(ctx.db, ctx.tenantId);
+    const s = (tenant?.settings ?? {}) as Record<string, any>;
+    return {
+      autoStatusTransitions: s.autoStatusTransitions !== false, // default ON
+      autoArchiveStaleLeads: s.autoArchiveStaleLeads === true,  // default OFF
+      staleDaysThreshold: typeof s.staleDaysThreshold === "number" ? s.staleDaysThreshold : 14,
+    };
+  }),
+
+  updateAutoStatusSettings: tenantProcedure
+    .input(z.object({
+      autoStatusTransitions: z.boolean().optional(),
+      autoArchiveStaleLeads: z.boolean().optional(),
+      staleDaysThreshold: z.number().int().min(3).max(90).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await TenantService.updateTenant(ctx.db, ctx.tenantId, { settings: input });
       return { success: true };
     }),
 
@@ -321,7 +344,14 @@ export const tenantRouter = router({
           to: input.email,
           subject: `You've been invited to join ${businessName} on Rebooked`,
           text: `You've been invited to join ${businessName} as an employee on Rebooked. Click here to accept: ${inviteUrl}`,
-          html: `<p>You've been invited to join <strong>${escapeHtml(businessName)}</strong> as an employee on Rebooked.</p><p><a href="${escapeHtml(inviteUrl)}">Accept Invitation</a></p><p>This invitation expires in 7 days.</p>`,
+          html: transactionalWrapper(`
+            <h2 style="color:#0D1B2A;font-size:20px;margin:0 0 12px;">You're invited!</h2>
+            <p style="color:#374151;font-size:14px;line-height:1.6;">You've been invited to join <strong>${escapeHtml(businessName)}</strong> as an employee on Rebooked.</p>
+            <div style="text-align:center;margin:24px 0;">
+              <a href="${escapeHtml(inviteUrl)}" style="display:inline-block;padding:12px 32px;background:#00A896;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Accept Invitation</a>
+            </div>
+            <p style="color:#9ca3af;font-size:12px;">This invitation expires in 7 days.</p>
+          `),
         });
 
         return { success: true };
@@ -402,7 +432,14 @@ export const tenantRouter = router({
           to: invitation.email,
           subject: `Reminder: You've been invited to join ${businessName} on Rebooked`,
           text: `You've been invited to join ${businessName} as an employee on Rebooked. Click here to accept: ${inviteUrl}`,
-          html: `<p>Reminder: You've been invited to join <strong>${escapeHtml(businessName)}</strong> as an employee on Rebooked.</p><p><a href="${escapeHtml(inviteUrl)}">Accept Invitation</a></p><p>This invitation expires in 7 days.</p>`,
+          html: transactionalWrapper(`
+            <h2 style="color:#0D1B2A;font-size:20px;margin:0 0 12px;">Reminder: You're invited!</h2>
+            <p style="color:#374151;font-size:14px;line-height:1.6;">You've been invited to join <strong>${escapeHtml(businessName)}</strong> as an employee on Rebooked.</p>
+            <div style="text-align:center;margin:24px 0;">
+              <a href="${escapeHtml(inviteUrl)}" style="display:inline-block;padding:12px 32px;background:#00A896;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Accept Invitation</a>
+            </div>
+            <p style="color:#9ca3af;font-size:12px;">This invitation expires in 7 days.</p>
+          `),
         });
 
         return { success: true };

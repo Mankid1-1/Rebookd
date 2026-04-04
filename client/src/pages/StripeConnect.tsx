@@ -21,10 +21,13 @@ const StripeConnect: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
-                  <img 
-                    className="h-8 w-8" 
-                    src="https://img.icons8.com/color/48/stripe.png" 
+                  <img
+                    className="h-8 w-8"
+                    src="https://img.icons8.com/color/48/stripe.png"
                     alt="Stripe Connect"
+                    loading="lazy"
+                    width={32}
+                    height={32}
                   />
                 </div>
                 <div className="ml-4">

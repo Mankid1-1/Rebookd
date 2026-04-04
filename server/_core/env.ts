@@ -57,6 +57,11 @@ export type EnvConfig = {
   phoneserviceApiKey: string;
   // TextLinkSMS (primary SMS provider — textlinksms.com)
   textLinkSmsApiKey: string;
+  // Email deliverability
+  dkimPrivateKey: string;
+  dkimSelector: string;
+  emailMarketingFromAddress: string;
+  emailBatchLimit: number;
   // n8n workflow automation
   n8nBaseUrl: string;
   n8nApiKey: string;
@@ -133,6 +138,11 @@ export const ENV: EnvConfig = {
   phoneserviceApiKey: process.env.PHONESERVICE_API_KEY ?? "",
   // TextLinkSMS
   textLinkSmsApiKey: process.env.TEXTLINKSMS_API_KEY ?? "",
+  // Email deliverability
+  dkimPrivateKey: process.env.DKIM_PRIVATE_KEY ?? "",
+  dkimSelector: process.env.DKIM_SELECTOR ?? "mail",
+  emailMarketingFromAddress: process.env.EMAIL_MARKETING_FROM ?? "aman@rebooked.org",
+  emailBatchLimit: parseInt(process.env.EMAIL_BATCH_LIMIT ?? "10"),
   // n8n
   n8nBaseUrl: process.env.N8N_BASE_URL ?? "http://localhost:5678",
   n8nApiKey: process.env.N8N_API_KEY ?? "",

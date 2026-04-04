@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import { EncryptionBadge } from "@/components/ui/EncryptionBadge";
 import { trpc } from "@/lib/trpc";
 import { useState, useEffect } from "react";
 import { useLocale } from "@/contexts/LocaleContext";
@@ -282,6 +283,7 @@ export default function Leads() {
                       ? `Last synced ${new Date(lastSyncAt).toLocaleString()}`
                       : "Connect your booking software to auto-import contacts"}
                   </p>
+                  <EncryptionBadge variant="badge" className="mt-1" />
                 </div>
               </div>
               <Button

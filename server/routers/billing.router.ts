@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import Stripe from "stripe";
 import { eq } from "drizzle-orm";
 import { subscriptions } from "../../drizzle/schema";
-import { tenantProcedure, publicProcedure, router } from "../_core/trpc";
+import { tenantProcedure, publicProcedure, router, createTrpcRateLimit } from "../_core/trpc";
 import type { Db } from "../_core/context";
 import * as TenantService from "../services/tenant.service";
 import * as BillingService from "../services/billing.service";
@@ -26,8 +26,12 @@ async function auditAdminRead(
   });
 }
 
+const checkoutRateLimit = createTrpcRateLimit(5, 60_000); // 5 per minute
+const planChangeRateLimit = createTrpcRateLimit(3, 60_000); // 3 per minute
+
 export const billingRouter = router({
   createCheckoutSession: tenantProcedure
+    .use(checkoutRateLimit)
     .input(z.object({
       priceId: z.string().optional(),
       planType: z.enum(['founder', 'flex']).default('flex'),
@@ -45,6 +49,7 @@ export const billingRouter = router({
     }),
 
   changePlan: tenantProcedure
+    .use(planChangeRateLimit)
     .input(z.object({ priceId: z.string(), prorateImmediately: z.boolean().default(true) }))
     .mutation(async ({ ctx, input }) => {
       // Check if this is an admin operation and audit it

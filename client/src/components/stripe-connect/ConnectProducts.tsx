@@ -53,10 +53,13 @@ const ProductCard: React.FC<{ product: ConnectProduct }> = ({ product }) => {
     <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
       <div className="p-6">
         <div className="flex items-center mb-4">
-          <img 
-            src={product.image} 
+          <img
+            src={product.image}
             alt={product.name}
             className="w-16 h-16 object-cover rounded-lg"
+            loading="lazy"
+            width={64}
+            height={64}
           />
           <div className="ml-4 flex-1">
             <h3 className="text-lg font-semibold text-foreground">{product.name}</h3>

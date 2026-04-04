@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import { EncryptionBadge } from "@/components/ui/EncryptionBadge";
 import { trpc } from "@/lib/trpc";
 import { useState, useCallback, useRef } from "react";
 import { HelpTooltip, HelpIcon } from "@/components/ui/HelpTooltip";
@@ -214,6 +215,7 @@ export default function ContactImport() {
                     <p className="text-xs text-muted-foreground">
                       Contacts from calendar appointments are automatically imported as leads when you connect your booking software.
                     </p>
+                    <EncryptionBadge variant="badge" className="mt-1" />
                   </div>
                   <Button variant="outline" size="sm" onClick={() => (window.location.href = "/calendar-integration")}>
                     <Link2 className="h-4 w-4 mr-1" />

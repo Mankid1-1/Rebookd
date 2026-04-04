@@ -682,6 +682,9 @@ export default function Settings() {
             <TabsTrigger value="team" className="gap-1.5 text-xs sm:text-sm flex-shrink-0">
               <Users className="w-3.5 h-3.5 hidden sm:inline" /> {t('settings.team')}
             </TabsTrigger>
+            <TabsTrigger value="auto-status" className="gap-1.5 text-xs sm:text-sm flex-shrink-0">
+              <Zap className="w-3.5 h-3.5 hidden sm:inline" /> Auto-Status
+            </TabsTrigger>
           </TabsList>
 
           {/* ═══════════════════════ APPEARANCE TAB ═══════════════════════ */}
@@ -1599,6 +1602,7 @@ export default function Settings() {
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Connect Google Calendar or Outlook to sync appointments
                       </p>
+                      <EncryptionBadge variant="badge" className="mt-1" />
                     </div>
                   </div>
                   <Button variant="outline" size="sm" disabled>
@@ -2198,8 +2202,124 @@ export default function Settings() {
               </Card>
             )}
           </TabsContent>
+          {/* ═══════════════════════ AUTO-STATUS TAB ═══════════════════════ */}
+          <TabsContent value="auto-status" className="space-y-6">
+            <AutoStatusSettings />
+          </TabsContent>
         </Tabs>
       </div>
     </DashboardLayout>
+  );
+}
+
+function AutoStatusSettings() {
+  const { data, isLoading } = trpc.tenant.getAutoStatusSettings.useQuery();
+  const utils = trpc.useUtils();
+  const update = trpc.tenant.updateAutoStatusSettings.useMutation({
+    onSuccess: () => {
+      toast.success("Auto-status settings saved");
+      utils.tenant.getAutoStatusSettings.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  if (isLoading || !data) return null;
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+            <Zap className="w-4 h-4 text-amber-500" /> Auto-Status Engine
+          </CardTitle>
+          <CardDescription>
+            Lead statuses update automatically based on activity. You can always override them manually.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label className="text-sm font-medium">Auto-update lead statuses</Label>
+              <p className="text-xs text-muted-foreground">
+                Automatically move leads through the pipeline when SMS is sent or received
+              </p>
+            </div>
+            <Switch
+              checked={data.autoStatusTransitions}
+              onCheckedChange={(checked) => update.mutate({ autoStatusTransitions: checked })}
+            />
+          </div>
+
+          <Separator />
+
+          <div className="space-y-4">
+            <h4 className="text-sm font-medium">How it works</h4>
+            <div className="grid gap-3">
+              {[
+                { from: "New", to: "Contacted", desc: "When you send an outbound SMS" },
+                { from: "New / Contacted", to: "Qualified", desc: "When the lead replies to your message" },
+                { from: "Lost", to: "Contacted", desc: "When a lost lead texts you back (re-engagement)" },
+                { from: "Any", to: "Unsubscribed", desc: "When lead replies STOP" },
+              ].map(({ from, to, desc }) => (
+                <div key={`${from}-${to}`} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-1.5 text-xs font-medium shrink-0 mt-0.5">
+                    <span className="px-1.5 py-0.5 rounded bg-muted">{from}</span>
+                    <span className="text-muted-foreground">&rarr;</span>
+                    <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary">{to}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+            <Clock className="w-4 h-4 text-orange-500" /> Stale Lead Detection
+          </CardTitle>
+          <CardDescription>
+            Automatically flag leads that haven't had any activity
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label className="text-sm font-medium">Auto-archive stale leads</Label>
+              <p className="text-xs text-muted-foreground">
+                Automatically move inactive leads to "Lost" after the threshold period
+              </p>
+            </div>
+            <Switch
+              checked={data.autoArchiveStaleLeads}
+              onCheckedChange={(checked) => update.mutate({ autoArchiveStaleLeads: checked })}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Days until stale</Label>
+            <div className="flex items-center gap-3">
+              <Input
+                type="number"
+                min={3}
+                max={90}
+                value={data.staleDaysThreshold}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  if (val >= 3 && val <= 90) update.mutate({ staleDaysThreshold: val });
+                }}
+                className="w-24 h-8 text-sm"
+              />
+              <span className="text-sm text-muted-foreground">days of no activity</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Leads with no messages for this many days will be flagged as "stale"
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </>
   );
 }

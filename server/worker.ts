@@ -36,6 +36,7 @@ import { gracefulShutdown } from "./_core/graceful-shutdown";
 import { triggerPayoutProcessing } from "./jobs/process-referral-payouts";
 import { syncAllDueConnections } from "./services/calendar/calendar-sync.service";
 import { processEmailSequenceQueue } from "./services/email-marketing.service";
+import { autoTransitionStale, recordStatusChange } from "./services/lead-status-engine.service";
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -999,6 +1000,57 @@ async function detectReviewOpportunities(db: Db) {
   }
 }
 
+/**
+ * Detect leads with no message activity for 14+ days (configurable per tenant).
+ * Tags them "stale_detected" and optionally auto-archives to "lost".
+ */
+async function detectStaleLeads(db: Db) {
+  const DEFAULT_STALE_DAYS = 14;
+
+  try {
+    // Find leads in "new" or "contacted" with no activity for 14+ days
+    // that haven't already been tagged as stale
+    const cutoff = new Date(Date.now() - DEFAULT_STALE_DAYS * 24 * 60 * 60 * 1000);
+
+    const staleLeads = await db.select({
+      id: leads.id,
+      tenantId: leads.tenantId,
+      status: leads.status,
+      lastMessageAt: leads.lastMessageAt,
+      createdAt: leads.createdAt,
+    })
+      .from(leads)
+      .where(and(
+        sql`${leads.status} IN ('new', 'contacted')`,
+        sql`(${leads.lastMessageAt} IS NULL AND ${leads.createdAt} < ${cutoff}) OR (${leads.lastMessageAt} IS NOT NULL AND ${leads.lastMessageAt} < ${cutoff})`,
+        sql`JSON_SEARCH(COALESCE(${leads.tags}, JSON_ARRAY()), 'one', 'stale_detected') IS NULL`,
+      ))
+      .limit(50);
+
+    for (const lead of staleLeads) {
+      try {
+        await LeadService.addLeadTags(db, lead.tenantId, lead.id, ['stale_detected']);
+
+        // Check tenant setting for auto-archive
+        const tenantRows = await db.select({ settings: tenants.settings })
+          .from(tenants).where(eq(tenants.id, lead.tenantId)).limit(1);
+        const settings = tenantRows[0]?.settings as Record<string, any> | null;
+        const autoArchive = settings?.autoArchiveStaleLeads === true;
+
+        await autoTransitionStale(db, lead.tenantId, lead.id, lead.status, autoArchive);
+      } catch (err) {
+        logger.error(`Worker: stale lead processing failed for lead ${lead.id}`, { error: String(err) });
+      }
+    }
+
+    if (staleLeads.length > 0) {
+      logger.info(`Worker: Stale lead detection found ${staleLeads.length} leads`);
+    }
+  } catch (err) {
+    logger.error("Worker: detectStaleLeads failed", { error: String(err) });
+  }
+}
+
 async function runCycleInner() {
   const db = await getDb();
   if (!db) { logger.warn("Worker: DB unavailable, skipping cycle"); writeWorkerHeartbeat("db_unavailable"); return; }
@@ -1035,16 +1087,23 @@ async function runCycleInner() {
     logger.error("Worker: detectBirthdays failed", { error: String(err) });
   }
 
-  // Process incoming emails from POP3
-  try {
-    const emailResult = await EmailService.processIncomingEmails(db);
-    if (emailResult.success && emailResult.messagesProcessed && emailResult.messagesProcessed > 0) {
-      logger.info("Worker: Processed incoming emails", { 
-        count: emailResult.messagesProcessed 
-      });
+  // Detect stale leads (no activity 14+ days) and optionally auto-archive
+  try { await detectStaleLeads(db); } catch (err) {
+    logger.error("Worker: detectStaleLeads failed", { error: String(err) });
+  }
+
+  // Process incoming emails from POP3 (skip entirely if not configured to avoid log spam)
+  if (process.env.POP3_USER && process.env.POP3_PASSWORD) {
+    try {
+      const emailResult = await EmailService.processIncomingEmails(db);
+      if (emailResult.success && emailResult.messagesProcessed && emailResult.messagesProcessed > 0) {
+        logger.info("Worker: Processed incoming emails", {
+          count: emailResult.messagesProcessed
+        });
+      }
+    } catch (error) {
+      logger.warn("Worker: Email processing failed", { error: String(error) });
     }
-  } catch (error) {
-    logger.warn("Worker: Email processing failed", { error: String(error) });
   }
 
   // Sync calendars that are due

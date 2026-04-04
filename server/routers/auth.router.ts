@@ -5,7 +5,7 @@ import { sql, and, eq, gte } from "drizzle-orm";
 import { authRateLimits, users } from "../../drizzle/schema";
 import { COOKIE_NAME } from "../../shared/const";
 import { getSessionCookieOptions } from "../_core/cookies";
-import { sendEmail } from "../_core/email";
+import { sendEmail, transactionalWrapper } from "../_core/email";
 import type { Db } from "../_core/context";
 import { protectedProcedure, tenantProcedure, publicProcedure, router } from "../_core/trpc";
 import bcrypt from "bcryptjs";
@@ -48,7 +48,14 @@ async function sendVerificationEmail(email: string, token: string) {
     to: email,
     subject: "Verify your Rebooked email",
     text: `Verify your email to activate your account: ${verifyUrl}`,
-    html: `<p>Verify your email to activate your account.</p><p><a href="${verifyUrl}">Verify email</a></p>`,
+    html: transactionalWrapper(`
+      <h2 style="color:#0D1B2A;font-size:20px;margin:0 0 12px;">Verify your email</h2>
+      <p style="color:#374151;font-size:14px;line-height:1.6;">Click the button below to activate your Rebooked account.</p>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="${verifyUrl}" style="display:inline-block;padding:12px 32px;background:#00A896;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Verify email</a>
+      </div>
+      <p style="color:#9ca3af;font-size:12px;">If you didn't create a Rebooked account, you can ignore this email.</p>
+    `),
   });
 }
 
@@ -59,7 +66,14 @@ async function sendPasswordResetEmail(email: string, token: string) {
     to: email,
     subject: "Reset your Rebooked password",
     text: `Reset your password using this secure link: ${resetUrl}`,
-    html: `<p>Reset your password using this secure link.</p><p><a href="${resetUrl}">Reset password</a></p>`,
+    html: transactionalWrapper(`
+      <h2 style="color:#0D1B2A;font-size:20px;margin:0 0 12px;">Reset your password</h2>
+      <p style="color:#374151;font-size:14px;line-height:1.6;">Click the button below to set a new password for your Rebooked account.</p>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="${resetUrl}" style="display:inline-block;padding:12px 32px;background:#00A896;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Reset password</a>
+      </div>
+      <p style="color:#9ca3af;font-size:12px;">If you didn't request a password reset, you can ignore this email. This link expires in 1 hour.</p>
+    `),
   });
 }
 
@@ -96,9 +110,9 @@ async function checkAuthRateLimit(db: Db, email: string): Promise<boolean> {
 
     return true;
   } catch (error) {
-    // If table doesn't exist, fall back to simple check
-    console.warn("Auth rate limit table error:", error);
-    return true;
+    // Fail-closed: deny the attempt if rate limit check fails
+    console.error("Auth rate limit check failed — denying attempt (fail-closed):", error);
+    return false;
   }
 }
 

@@ -55,11 +55,11 @@ function buildCsp(): string {
   // Base directives safe for production
   const directives: Record<string, string[]> = {
     "default-src": ["'self'"],
-    "script-src": ["'self'", "'unsafe-inline'", "https://www.redditstatic.com", "https://alb.reddit.com", "https://cloud.umami.is", "https://connect.facebook.net", "https://www.googletagmanager.com", "https://www.google-analytics.com", "https://static.cloudflareinsights.com"],
+    "script-src": ["'self'", "'unsafe-inline'", "https://www.redditstatic.com", "https://alb.reddit.com", "https://cloud.umami.is", "https://www.googletagmanager.com", "https://www.google-analytics.com", "https://static.cloudflareinsights.com"],
     "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-    "img-src": ["'self'", "data:", "https:", "https://www.redditstatic.com", "https://www.facebook.com", "https://www.google-analytics.com", "https://www.googletagmanager.com"],
+    "img-src": ["'self'", "data:", "https:", "https://www.redditstatic.com", "https://www.google-analytics.com", "https://www.googletagmanager.com"],
     "font-src": ["'self'", "data:", "https://fonts.gstatic.com"],
-    "connect-src": ["'self'", "https://api.stripe.com", "https://maps.googleapis.com", "https://alb.reddit.com", "https://www.redditstatic.com", "https://cloud.umami.is", "https://api-gateway.umami.dev", "https://pixel-config.reddit.com", "https://www.facebook.com", "https://connect.facebook.net", "https://www.google-analytics.com", "https://www.googletagmanager.com", "https://analytics.google.com", "https://cloudflareinsights.com"],
+    "connect-src": ["'self'", "https://api.stripe.com", "https://maps.googleapis.com", "https://alb.reddit.com", "https://www.redditstatic.com", "https://cloud.umami.is", "https://api-gateway.umami.dev", "https://pixel-config.reddit.com", "https://www.google-analytics.com", "https://www.googletagmanager.com", "https://analytics.google.com", "https://cloudflareinsights.com"],
     "frame-src": ["https://js.stripe.com", "https://hooks.stripe.com"],
     "object-src": ["'none'"],
     "base-uri": ["'self'"],
@@ -321,6 +321,9 @@ const rateLimitStores = {
   api: new Map<string, RateLimitEntry>(),
   webhook: new Map<string, RateLimitEntry>(),
   upload: new Map<string, RateLimitEntry>(),
+  sms: new Map<string, RateLimitEntry>(),
+  export: new Map<string, RateLimitEntry>(),
+  ai: new Map<string, RateLimitEntry>(),
 };
 
 // Periodically clean up expired entries every 5 minutes
@@ -501,6 +504,94 @@ export function uploadRateLimit(
     return;
   }
 
+  next();
+}
+
+/** SMS sending: 10 requests per minute per tenant (prevents abuse) */
+export function smsRateLimit(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (!req.path.match(/\/(send-sms|messages\.send|sms\.send)/i)) {
+    return next();
+  }
+  if (req.method !== "POST") return next();
+
+  const tenantId = (req as any).user?.tenantId || req.ip || "unknown";
+  const key = `sms:${tenantId}`;
+  const windowMs = 60 * 1000; // 1 minute
+  const maxRequests = 10;
+  const result = checkRateLimit(rateLimitStores.sms, key, windowMs, maxRequests);
+
+  sendRateLimitHeaders(res, maxRequests, result.remaining, result.retryAfter);
+
+  if (!result.allowed) {
+    logger.warn("SMS rate limit exceeded", { tenantId, path: req.path });
+    res.status(429).json({
+      error: "SMS sending rate limit exceeded. Please try again later.",
+      retryAfter: result.retryAfter,
+    });
+    return;
+  }
+  next();
+}
+
+/** Data export: 5 requests per minute per tenant */
+export function exportRateLimit(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (!req.path.match(/\/(export|download|csv)/i)) {
+    return next();
+  }
+
+  const tenantId = (req as any).user?.tenantId || req.ip || "unknown";
+  const key = `export:${tenantId}`;
+  const windowMs = 60 * 1000;
+  const maxRequests = 5;
+  const result = checkRateLimit(rateLimitStores.export, key, windowMs, maxRequests);
+
+  sendRateLimitHeaders(res, maxRequests, result.remaining, result.retryAfter);
+
+  if (!result.allowed) {
+    logger.warn("Export rate limit exceeded", { tenantId, path: req.path });
+    res.status(429).json({
+      error: "Export rate limit exceeded. Please try again later.",
+      retryAfter: result.retryAfter,
+    });
+    return;
+  }
+  next();
+}
+
+/** AI endpoints: 20 requests per minute per tenant */
+export function aiRateLimit(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (!req.path.match(/\/ai\./i) && !req.path.match(/\/trpc\/ai\./i)) {
+    return next();
+  }
+
+  const tenantId = (req as any).user?.tenantId || req.ip || "unknown";
+  const key = `ai:${tenantId}`;
+  const windowMs = 60 * 1000;
+  const maxRequests = 20;
+  const result = checkRateLimit(rateLimitStores.ai, key, windowMs, maxRequests);
+
+  sendRateLimitHeaders(res, maxRequests, result.remaining, result.retryAfter);
+
+  if (!result.allowed) {
+    logger.warn("AI rate limit exceeded", { tenantId, path: req.path });
+    res.status(429).json({
+      error: "AI request rate limit exceeded. Please try again later.",
+      retryAfter: result.retryAfter,
+    });
+    return;
+  }
   next();
 }
 
@@ -856,6 +947,9 @@ export function registerSecurityMiddleware(app: Express): void {
   app.use(apiRateLimit);
   app.use(webhookRateLimit);
   app.use(uploadRateLimit);
+  app.use(smsRateLimit);
+  app.use(exportRateLimit);
+  app.use(aiRateLimit);
 
   // 7. Audit logging for authentication, admin, and data-access events
   app.use(auditLoggingMiddleware);

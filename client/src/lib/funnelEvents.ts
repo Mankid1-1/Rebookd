@@ -3,10 +3,9 @@
  *
  * Unified dispatcher that sends conversion events to:
  * 1. Umami (cookie-free analytics — always on)
- * 2. Meta Pixel (if loaded and consent given)
- * 3. Google Ads / GA4 (if loaded and consent given)
- * 4. Reddit Pixel (if loaded)
- * 5. Internal beacon API (for funnel analytics dashboard)
+ * 2. Google Ads / GA4 (if loaded and consent given)
+ * 3. Reddit Pixel (if loaded)
+ * 4. Internal beacon API (for funnel analytics dashboard)
  */
 
 import { getAttribution } from "./attribution";
@@ -51,29 +50,7 @@ export function trackFunnelEvent(event: FunnelEvent, properties?: EventPropertie
     // ignore
   }
 
-  // 2. Meta Pixel — only if loaded
-  try {
-    const fbq = (window as any).fbq;
-    if (typeof fbq === "function") {
-      // Map funnel events to Meta standard/custom events
-      const metaMap: Partial<Record<FunnelEvent, string>> = {
-        signup_completed: "CompleteRegistration",
-        email_capture_submitted: "Lead",
-        onboarding_completed: "StartTrial",
-        roi_calculator_used: "ViewContent",
-      };
-      const metaEvent = metaMap[event];
-      if (metaEvent) {
-        fbq("track", metaEvent, props);
-      } else {
-        fbq("trackCustom", event, props);
-      }
-    }
-  } catch {
-    // ignore
-  }
-
-  // 3. Google Ads / GA4 — only if loaded
+  // 2. Google Ads / GA4 — only if loaded
   try {
     const gtag = (window as any).gtag;
     if (typeof gtag === "function") {
@@ -88,7 +65,7 @@ export function trackFunnelEvent(event: FunnelEvent, properties?: EventPropertie
     // ignore
   }
 
-  // 4. Reddit Pixel — only if loaded
+  // 3. Reddit Pixel — only if loaded
   try {
     const rdt = (window as any).rdt;
     if (typeof rdt === "function") {
@@ -126,7 +103,7 @@ export function trackFunnelEvent(event: FunnelEvent, properties?: EventPropertie
     // ignore
   }
 
-  // 5. Internal beacon — fire-and-forget to server
+  // 4. Internal beacon — fire-and-forget to server
   try {
     const attribution = getAttribution();
     const payload = {

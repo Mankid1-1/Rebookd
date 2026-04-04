@@ -8,6 +8,8 @@ interface PageMeta {
   ogImage?: string;
   ogUrl?: string;
   canonical?: string;
+  /** Set to true for authenticated/app pages to prevent search engine indexing */
+  noindex?: boolean;
 }
 
 /**
@@ -63,5 +65,14 @@ export function usePageMeta(meta: PageMeta): void {
 
     // og:url should also always reflect the canonical
     setMeta("og:url", meta.ogUrl || canonicalHref);
-  }, [meta.title, meta.description, meta.ogTitle, meta.ogDescription, meta.ogImage, meta.ogUrl, meta.canonical]);
+
+    // Robots — prevent indexing of authenticated/app pages
+    if (meta.noindex) {
+      setMeta("robots", "noindex, nofollow", "name");
+    } else {
+      // Remove noindex if navigating from an app page to a public page
+      const existing = document.querySelector('meta[name="robots"]');
+      if (existing) existing.remove();
+    }
+  }, [meta.title, meta.description, meta.ogTitle, meta.ogDescription, meta.ogImage, meta.ogUrl, meta.canonical, meta.noindex]);
 }

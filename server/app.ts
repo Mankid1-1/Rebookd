@@ -60,6 +60,10 @@ app.use(createRateLimitMiddleware(60 * 1000, 100));
 // ─── Health Check ────────────────────────────────────────────────────────────
 app.use(healthCheckMiddleware);
 
+// ─── Email Unsubscribe (must be before tRPC so /api/email/* is handled) ──────
+import { emailUnsubscribeRouter } from './api/email-unsubscribe';
+app.use('/api/email', emailUnsubscribeRouter);
+
 // ─── API Routes ──────────────────────────────────────────────────────────────
 app.use(
   '/api/trpc',
