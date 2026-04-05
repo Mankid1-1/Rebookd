@@ -10,6 +10,17 @@
 
 import { getAttribution } from "./attribution";
 
+// Dedup guard — prevents the same event from firing twice within 1 second
+const _lastEvent: { key: string; ts: number } = { key: "", ts: 0 };
+function isDuplicate(event: string, provider: string): boolean {
+  const key = `${provider}:${event}`;
+  const now = Date.now();
+  if (key === _lastEvent.key && now - _lastEvent.ts < 1000) return true;
+  _lastEvent.key = key;
+  _lastEvent.ts = now;
+  return false;
+}
+
 // Standard funnel events
 export type FunnelEvent =
   | "page_view_landing"
@@ -70,34 +81,29 @@ export function trackFunnelEvent(event: FunnelEvent, properties?: EventPropertie
     const rdt = (window as any).rdt;
     if (typeof rdt === "function") {
       const redditMap: Partial<Record<FunnelEvent, [string, string?]>> = {
-        // Page views
+        // Page views — one PageVisit per navigation
         page_view_landing:          ["PageVisit"],
         page_view_industry:         ["PageVisit"],
         // Interest signals
         roi_calculator_used:        ["ViewContent"],
         email_capture_shown:        ["ViewContent"],
+        referral_prompt_shown:      ["ViewContent"],
+        // Intent — CTA clicks
         cta_click_pricing:          ["AddToCart"],
         cta_click_hero:             ["AddToCart"],
         cta_click_referral:         ["AddToCart"],
-        // Lead capture
+        // Lead capture — actual form submissions only
         email_capture_submitted:    ["Lead"],
-        signup_started:             ["Lead"],
-        // Conversions
-        signup_completed:           ["SignUp"],
-        onboarding_started:         ["SignUp"],
-        onboarding_completed:       ["SignUp"],
-        first_automation_enabled:   ["SignUp"],
-        // Revenue
-        first_recovery_sent:        ["Purchase"],
-        // Referral
-        referral_prompt_shown:      ["ViewContent"],
         referral_shared:            ["Lead"],
+        // Conversion — single SignUp per user (not onboarding steps)
+        signup_completed:           ["SignUp"],
+        // Revenue — first real recovery
+        first_recovery_sent:        ["Purchase"],
       };
       const mapped = redditMap[event];
-      if (mapped) {
+      if (mapped && !isDuplicate(mapped[0], "rdt")) {
         rdt("track", mapped[0], props);
       }
-      // No fallback Custom call — unmapped events are intentionally ignored
     }
   } catch {
     // ignore

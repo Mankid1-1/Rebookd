@@ -27,7 +27,8 @@ export function IndustryLandingPage({ config }: IndustryLandingPageProps) {
 
   useEffect(() => {
     trackFunnelEvent("page_view_industry", { industry: config.slug });
-  }, [config.slug]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
