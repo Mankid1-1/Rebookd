@@ -4,6 +4,7 @@
  */
 
 import { logger } from "./logger";
+import v8 from "v8";
 
 export enum TrafficLevel {
   NORMAL = "normal",
@@ -63,8 +64,11 @@ class TrafficMonitor {
       this.eventLoopLagMs = Math.max(0, now - this.lastSampleTime - 500);
 
       const mem = process.memoryUsage();
-      this.heapUsagePercent = mem.heapTotal > 0
-        ? Math.round((mem.heapUsed / mem.heapTotal) * 100)
+      // Use the actual heap limit (--max-old-space-size), NOT heapTotal
+      // which is just the currently allocated portion and is always ~90%+ used.
+      const heapLimit = v8.getHeapStatistics().heap_size_limit;
+      this.heapUsagePercent = heapLimit > 0
+        ? Math.round((mem.heapUsed / heapLimit) * 100)
         : 0;
 
       // Log level transitions
