@@ -11,6 +11,7 @@ import { getSessionCookieOptions } from "./cookies";
 import { sendEmail } from "./email";
 import { sdk } from "./sdk";
 import { ENV } from "./env";
+import * as RedditCAPI from "../services/reddit-conversions.service";
 
 function legacyHashPassword(password: string): string {
   return createHash("sha256")
@@ -111,6 +112,10 @@ export function registerOAuthRoutes(app: Express) {
         return;
       }
       await UserService.verifyUserEmail(database, user.id);
+      // Reddit Conversions API — server-side SignUp event
+      if (user.email) {
+        RedditCAPI.trackSignUp(user.email, req.ip, req.get("user-agent"));
+      }
       res.redirect(302, "/login?status=verify-success");
     } catch (error) {
       console.error("[Auth] Verify email failed", error);

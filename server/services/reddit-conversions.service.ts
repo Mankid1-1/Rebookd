@@ -1,0 +1,188 @@
+/**
+ * REDDIT CONVERSIONS API — Server-side event tracking
+ *
+ * Sends conversion events to Reddit's Conversions API for server-side attribution.
+ * Uses the same conversionId format as the client-side pixel for dedup.
+ *
+ * Endpoint: POST https://ads-api.reddit.com/api/v2.0/conversions/events/{pixel_id}
+ * Auth: Bearer {conversion_access_token}
+ * Docs: https://business.reddithelp.com/s/article/send-conversion-events-with-the-API
+ */
+
+import crypto from "crypto";
+import { logger } from "../_core/logger";
+
+const PIXEL_ID = process.env.REDDIT_PIXEL_ID || "";
+const ACCESS_TOKEN = process.env.REDDIT_CONVERSION_TOKEN || "";
+const API_URL = `https://ads-api.reddit.com/api/v2.0/conversions/events/${PIXEL_ID}`;
+
+// Standard Reddit event types
+type RedditEventType =
+  | "PageVisit"
+  | "ViewContent"
+  | "Search"
+  | "AddToCart"
+  | "AddToWishlist"
+  | "Lead"
+  | "SignUp"
+  | "Purchase"
+  | "Custom";
+
+interface RedditConversionEvent {
+  event_at: string; // ISO 8601
+  event_type: { tracking_type: RedditEventType };
+  user: {
+    email?: string;       // SHA256 lowercase trimmed
+    external_id?: string; // SHA256 hashed
+    ip_address?: string;
+    user_agent?: string;
+  };
+  event_metadata?: {
+    item_count?: number;
+    value_decimal?: number;
+    currency?: string;
+    conversion_id?: string;
+    products?: Array<{ id?: string; name?: string; category?: string }>;
+  };
+}
+
+function isEnabled(): boolean {
+  return !!(PIXEL_ID && ACCESS_TOKEN);
+}
+
+/**
+ * SHA256 hash a value after trimming and lowercasing (Reddit's requirement).
+ */
+function hashForMatching(value: string): string {
+  return crypto
+    .createHash("sha256")
+    .update(value.trim().toLowerCase())
+    .digest("hex");
+}
+
+/**
+ * Generate a conversionId matching the client-side format for dedup.
+ */
+function makeConversionId(eventName: string): string {
+  return `${eventName}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * Send conversion event(s) to the Reddit Conversions API.
+ * Fire-and-forget — never blocks the caller.
+ */
+async function sendEvents(events: RedditConversionEvent[]): Promise<void> {
+  if (!isEnabled()) {
+    logger.debug("Reddit CAPI disabled (no token/pixel)");
+    return;
+  }
+
+  try {
+    const body = JSON.stringify({
+      test_mode: false,
+      events,
+    });
+
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${ACCESS_TOKEN}`,
+      },
+      body,
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      logger.warn("Reddit CAPI error", {
+        status: res.status,
+        body: text.slice(0, 500),
+      });
+    } else {
+      logger.info("Reddit CAPI event sent", {
+        count: events.length,
+        types: events.map((e) => e.event_type.tracking_type),
+      });
+    }
+  } catch (err: any) {
+    logger.warn("Reddit CAPI request failed", { error: err?.message });
+  }
+}
+
+// ─── Public API ─────────────────────────────────────────────────────────────
+
+/**
+ * Track a SignUp event (user completes registration + email verification).
+ */
+export function trackSignUp(email: string, ipAddress?: string, userAgent?: string): void {
+  if (!isEnabled()) return;
+
+  const event: RedditConversionEvent = {
+    event_at: new Date().toISOString(),
+    event_type: { tracking_type: "SignUp" },
+    user: {
+      email: hashForMatching(email),
+      ...(ipAddress && { ip_address: ipAddress }),
+      ...(userAgent && { user_agent: userAgent }),
+    },
+    event_metadata: {
+      conversion_id: makeConversionId("signup_completed"),
+    },
+  };
+
+  // Fire-and-forget
+  sendEvents([event]).catch(() => {});
+}
+
+/**
+ * Track a Lead event (email capture, referral share).
+ */
+export function trackLead(email: string, source?: string): void {
+  if (!isEnabled()) return;
+
+  const event: RedditConversionEvent = {
+    event_at: new Date().toISOString(),
+    event_type: { tracking_type: "Lead" },
+    user: {
+      email: hashForMatching(email),
+    },
+    event_metadata: {
+      conversion_id: makeConversionId("lead_captured"),
+      ...(source && { products: [{ category: source }] }),
+    },
+  };
+
+  sendEvents([event]).catch(() => {});
+}
+
+/**
+ * Track a Purchase event (recovery revenue realized — payment captured).
+ */
+export function trackPurchase(opts: {
+  email?: string;
+  externalId?: string;
+  revenueCents: number;
+  currency?: string;
+  ipAddress?: string;
+}): void {
+  if (!isEnabled()) return;
+
+  const event: RedditConversionEvent = {
+    event_at: new Date().toISOString(),
+    event_type: { tracking_type: "Purchase" },
+    user: {
+      ...(opts.email && { email: hashForMatching(opts.email) }),
+      ...(opts.externalId && { external_id: hashForMatching(opts.externalId) }),
+      ...(opts.ipAddress && { ip_address: opts.ipAddress }),
+    },
+    event_metadata: {
+      conversion_id: makeConversionId("first_recovery_sent"),
+      value_decimal: opts.revenueCents / 100,
+      currency: opts.currency || "USD",
+      item_count: 1,
+    },
+  };
+
+  sendEvents([event]).catch(() => {});
+}

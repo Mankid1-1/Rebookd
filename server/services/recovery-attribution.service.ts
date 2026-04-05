@@ -19,6 +19,7 @@ import { eq, and, sql, desc, gte, lte, isNull, isNotNull, inArray } from "drizzl
 import { recoveryEvents, leads, messages, automations, subscriptions, plans } from "../../drizzle/schema";
 import type { Db } from "../_core/context";
 import { logger } from "../_core/logger";
+import * as RedditCAPI from "./reddit-conversions.service";
 
 const DEFAULT_COMMISSION_RATE = 0.15;
 
@@ -242,6 +243,22 @@ export async function markRecoveryRealized(
     realizedRevenue: data.realizedRevenue,
     commissionAmount,
   });
+
+  // Reddit Conversions API — server-side Purchase event
+  try {
+    const [lead] = await db
+      .select({ email: leads.email })
+      .from(leads)
+      .where(and(eq(leads.id, leadId), eq(leads.tenantId, tenantId)))
+      .limit(1);
+    RedditCAPI.trackPurchase({
+      email: lead?.email || undefined,
+      externalId: String(leadId),
+      revenueCents: data.realizedRevenue,
+    });
+  } catch {
+    // Non-fatal — don't break recovery flow for analytics
+  }
 }
 
 // FIX #22: Threshold above which manual recoveries require notes (fraud prevention)
