@@ -17,7 +17,7 @@ module.exports = {
     {
       name: "rebooked-app",
       script: "dist/index.js",
-      node_args: "--max-old-space-size=768",
+      node_args: "--max-old-space-size=1024",
       cwd: __dirname,
 
       // Cluster mode: 4 instances across available cores for horizontal scaling.
