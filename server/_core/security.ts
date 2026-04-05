@@ -111,6 +111,8 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
   // - HTML pages use "cross-origin" so third-party pixels (Reddit, Meta, etc.) can operate
   const corp = req.path.startsWith("/api/") ? "same-site" : "cross-origin";
   res.setHeader("Cross-Origin-Resource-Policy", corp);
+  // Explicit COOP: allow Reddit Event Setup Tool popup communication
+  res.setHeader("Cross-Origin-Opener-Policy", "unsafe-none");
   res.setHeader("X-Permitted-Cross-Domain-Policies", "none");
 
   // Cache-Control for API responses (prevent caching sensitive data)
