@@ -120,7 +120,7 @@ export default function Login() {
           <RebookedLogo size={36} />
         </div>
         <p className="text-sm text-muted-foreground">Revenue recovery for appointment-based businesses</p>
-        <button onClick={() => setLocation("/")} className="text-xs text-muted-foreground hover:text-foreground mt-1 inline-flex items-center gap-1">
+        <button onClick={() => setLocation("/")} className="text-xs text-muted-foreground hover:text-foreground mt-1 inline-flex items-center gap-1 py-2 px-2 min-h-[44px] rounded-md">
           <ArrowLeft className="w-3 h-3" /> Back to Home
         </button>
       </div>
@@ -134,7 +134,7 @@ export default function Login() {
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={`flex-1 py-3 text-sm font-medium transition-colors ${
+              className={`flex-1 py-3 min-h-[44px] text-sm font-medium transition-colors ${
                 tab === key
                   ? "text-foreground bg-muted/30 border-b-2 border-primary"
                   : "text-muted-foreground hover:text-foreground"
@@ -178,7 +178,7 @@ function MiniThemePicker() {
             <button
               key={key}
               onClick={() => { setTheme(key); setOpen(false); }}
-              className={`h-7 w-7 rounded-full border-2 transition-all ${
+              className={`h-9 w-9 rounded-full border-2 transition-all ${
                 theme === key ? "border-primary scale-110" : "border-transparent hover:scale-105"
               }`}
               style={{ backgroundColor: THEME_DOTS[key] }}
@@ -189,7 +189,7 @@ function MiniThemePicker() {
       )}
       <button
         onClick={() => setOpen(!open)}
-        className="h-9 w-9 rounded-full bg-card border border-border shadow-md flex items-center justify-center hover:bg-muted transition-colors"
+        className="h-11 w-11 rounded-full bg-card border border-border shadow-md flex items-center justify-center hover:bg-muted transition-colors"
         title="Change theme"
       >
         <Palette className="h-4 w-4 text-foreground" />
@@ -263,7 +263,7 @@ function SignInForm() {
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
@@ -301,6 +301,13 @@ function SignUpForm({ onSuccess }: { onSuccess: () => void }) {
   const signupMutation = trpc.auth.signup.useMutation({
     onSuccess: (data) => {
       trackFunnelEvent("signup_completed", { hasReferral: !!referralCode });
+      // Reddit advanced matching — re-init with hashed email for conversion attribution
+      try {
+        const rdt = (window as any).rdt;
+        if (typeof rdt === "function" && email) {
+          rdt("init", "a2_iqth093j5tj0", { email });
+        }
+      } catch { /* non-fatal */ }
       if (data.pendingVerification) {
         setSuccess("Check your email for a verification link. Once verified, you can sign in.");
       } else {
@@ -365,7 +372,7 @@ function SignUpForm({ onSuccess }: { onSuccess: () => void }) {
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>

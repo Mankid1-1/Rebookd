@@ -81,9 +81,7 @@ export function trackFunnelEvent(event: FunnelEvent, properties?: EventPropertie
     const rdt = (window as any).rdt;
     if (typeof rdt === "function") {
       const redditMap: Partial<Record<FunnelEvent, [string, string?]>> = {
-        // Page views — one PageVisit per navigation
-        page_view_landing:          ["PageVisit"],
-        page_view_industry:         ["PageVisit"],
+        // PageVisit fires from the official snippet in index.html — don't duplicate
         // Interest signals
         roi_calculator_used:        ["ViewContent"],
         email_capture_shown:        ["ViewContent"],
@@ -102,7 +100,9 @@ export function trackFunnelEvent(event: FunnelEvent, properties?: EventPropertie
       };
       const mapped = redditMap[event];
       if (mapped && !isDuplicate(mapped[0], "rdt")) {
-        rdt("track", mapped[0], props);
+        // Unique conversionId for Conversions API dedup
+        const conversionId = `${event}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        rdt("track", mapped[0], { ...props, conversionId });
       }
     }
   } catch {
