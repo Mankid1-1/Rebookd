@@ -38,7 +38,8 @@ const corsOrigins = [
   ...process.env.ALLOWED_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) ?? [],
 ].filter((v, i, a) => a.indexOf(v) === i);
 
-const WORKER_HEARTBEAT_FILE = process.env.WORKER_HEARTBEAT_FILE || `${require("os").tmpdir()}/worker-heartbeat.json`;
+import { tmpdir as _tmpdir } from "os";
+const WORKER_HEARTBEAT_FILE = process.env.WORKER_HEARTBEAT_FILE || `${_tmpdir()}/worker-heartbeat.json`;
 const WORKER_STALE_MS = 2 * 60_000;
 
 function isPortAvailable(port: number): Promise<boolean> {

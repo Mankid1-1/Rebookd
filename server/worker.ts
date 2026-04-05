@@ -46,7 +46,8 @@ const REFERRAL_PAYOUT_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 let lastDlqReprocessRun: Date | null = null;
 const DLQ_REPROCESS_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_RETRY_ATTEMPTS = 3;
-const HEARTBEAT_FILE = process.env.WORKER_HEARTBEAT_FILE || `${require("os").tmpdir()}/worker-heartbeat.json`;
+import { tmpdir as _osTmpdir } from "os";
+const HEARTBEAT_FILE = process.env.WORKER_HEARTBEAT_FILE || `${_osTmpdir()}/worker-heartbeat.json`;
 
 // ─── Time helpers ─────────────────────────────────────────────────────────────
 
