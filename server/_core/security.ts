@@ -64,7 +64,7 @@ function buildCsp(): string {
     "object-src": ["'none'"],
     "base-uri": ["'self'"],
     "form-action": ["'self'"],
-    "frame-ancestors": ["'none'"],
+    "frame-ancestors": ["'self'", "https://ads.reddit.com", "https://www.reddit.com"],
     "upgrade-insecure-requests": [],
   };
 
@@ -87,8 +87,9 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
   // Prevent MIME-type sniffing
   res.setHeader("X-Content-Type-Options", "nosniff");
 
-  // Clickjacking protection
-  res.setHeader("X-Frame-Options", "DENY");
+  // Clickjacking protection — SAMEORIGIN allows Reddit Ads Event Setup Tool
+  // (X-Frame-Options is legacy; CSP frame-ancestors is the real gate)
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
 
   // XSS filter (legacy browsers)
   res.setHeader("X-XSS-Protection", "1; mode=block");
