@@ -51,9 +51,38 @@ function isEnabled(): boolean {
 }
 
 /**
- * SHA256 hash a value after trimming and lowercasing (Reddit's requirement).
+ * Canonicalize an email per Reddit's spec before hashing:
+ * 1. Lowercase
+ * 2. Strip alias (everything between first + and @)
+ * 3. Remove non-alphanumeric chars from username
+ * 4. SHA256 → lowercase hex
  */
-function hashForMatching(value: string): string {
+function canonicalizeEmail(email: string): string {
+  const lower = email.trim().toLowerCase();
+  const [username, domain] = lower.split("@");
+  if (!username || !domain) return lower;
+  // Strip alias: remove everything from first + to end of username
+  const noAlias = username.replace(/\+.*$/, "");
+  // Remove non-alphanumeric from username
+  const clean = noAlias.replace(/[^a-z0-9]/g, "");
+  return `${clean}@${domain}`;
+}
+
+/**
+ * SHA256 hash a value after canonicalization (Reddit's requirement).
+ * For emails, applies Reddit's full canonicalization spec.
+ */
+function hashEmail(email: string): string {
+  return crypto
+    .createHash("sha256")
+    .update(canonicalizeEmail(email))
+    .digest("hex");
+}
+
+/**
+ * SHA256 hash a generic value (external IDs, etc).
+ */
+function hashValue(value: string): string {
   return crypto
     .createHash("sha256")
     .update(value.trim().toLowerCase())
@@ -122,7 +151,7 @@ export function trackSignUp(email: string, ipAddress?: string, userAgent?: strin
     event_at: new Date().toISOString(),
     event_type: { tracking_type: "SignUp" },
     user: {
-      email: hashForMatching(email),
+      email: hashEmail(email),
       ...(ipAddress && { ip_address: ipAddress }),
       ...(userAgent && { user_agent: userAgent }),
     },
@@ -145,7 +174,7 @@ export function trackLead(email: string, source?: string): void {
     event_at: new Date().toISOString(),
     event_type: { tracking_type: "Lead" },
     user: {
-      email: hashForMatching(email),
+      email: hashEmail(email),
     },
     event_metadata: {
       conversion_id: makeConversionId("lead_captured"),
@@ -172,8 +201,8 @@ export function trackPurchase(opts: {
     event_at: new Date().toISOString(),
     event_type: { tracking_type: "Purchase" },
     user: {
-      ...(opts.email && { email: hashForMatching(opts.email) }),
-      ...(opts.externalId && { external_id: hashForMatching(opts.externalId) }),
+      ...(opts.email && { email: hashEmail(opts.email) }),
+      ...(opts.externalId && { external_id: hashValue(opts.externalId) }),
       ...(opts.ipAddress && { ip_address: opts.ipAddress }),
     },
     event_metadata: {
