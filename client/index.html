@@ -5,10 +5,13 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>__SEO_TITLE__</title>
     <meta name="description" content="__SEO_DESC__" />
     <meta name="theme-color" content="#0D1B2A" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Rebooked" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
@@ -27,6 +30,7 @@
     <link rel="canonical" href="__SEO_CANONICAL__" />
     <!-- __SEO_JSONLD__ -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/site.webmanifest" />
     <link rel="apple-touch-icon" href="/logo.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -41,6 +45,13 @@
     <link rel="dns-prefetch" href="https://www.redditstatic.com" />
     <!-- Umami Analytics — free, cookie-free, GDPR-compliant -->
     <script defer src="https://cloud.umami.is/script.js" data-website-id="57500d62-29f5-4761-87be-e96cb4b1174f"></script>
+
+    <!-- Reddit Pixel -->
+    <script>
+    !function(w,d){if(!w.rdt){var p=w.rdt=function(){p.sendEvent?p.sendEvent.apply(p,arguments):p.callQueue.push(arguments)};p.callQueue=[];var t=d.createElement("script");t.src="https://www.redditstatic.com/ads/pixel.js";t.async=!0;d.head.appendChild(t)}}(window,document);
+    rdt('init','a2_iqth093j5tj0');
+    rdt('track','PageVisit');
+    </script>
 
     <!-- Google Ads / GA4 -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-VN080MDS1J"></script>
